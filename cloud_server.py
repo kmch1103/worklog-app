@@ -21,31 +21,54 @@ def db_conn():
     return psycopg.connect(DATABASE_URL)
 
 # ── DB 초기화 (테이블 없으면 생성) ──
+
 def init_db():
-    conn = db_conn(); cur = conn.cursor()
+    conn = db_conn()
+    cur = conn.cursor()
+
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS 작업일지 (
-            번호   SERIAL PRIMARY KEY,
-            날짜   TEXT, 종료날짜 TEXT, 날씨 TEXT, 작물 TEXT,
-            작업내용 TEXT, 인건비 INTEGER DEFAULT 0,
-            남자수 INTEGER DEFAULT 0, 남자단가 INTEGER DEFAULT 0,
-            여자수 INTEGER DEFAULT 0, 여자단가 INTEGER DEFAULT 0,
-            기타수 INTEGER DEFAULT 0, 기타단가 INTEGER DEFAULT 0,
-            시작시간 TEXT, 종료시간 TEXT, 작업시간 REAL DEFAULT 0,
-            사용기계 TEXT, 사용자재 TEXT, 적용병충해 TEXT,
-            비고 TEXT, 생성시각 TEXT, 수정시각 TEXT,
-            인력내역 TEXT, 작업목록 TEXT
-        )
+    CREATE TABLE IF NOT EXISTS 작업일지 (
+        번호 INTEGER PRIMARY KEY,
+        날짜 TEXT,
+        날씨 TEXT,
+        작물 TEXT,
+        작업내용 TEXT,
+        인건비 INTEGER,
+        남자수 INTEGER,
+        남자단가 INTEGER,
+        여자수 INTEGER,
+        여자단가 INTEGER,
+        기타수 INTEGER,
+        기타단가 INTEGER,
+        시작시간 TEXT,
+        종료시간 TEXT,
+        작업시간 REAL,
+        사용기계 TEXT,
+        사용자재 TEXT,
+        적용병충해 TEXT,
+        비고 TEXT,
+        생성시각 TEXT,
+        수정시각 TEXT,
+        인력내역 TEXT
+    )
     """)
+
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS 자재 (
-            자재명 TEXT PRIMARY KEY, 단위 TEXT, 가격 INTEGER DEFAULT 0, 재고 REAL DEFAULT 0
-        )
+    CREATE TABLE IF NOT EXISTS 자재 (
+        id SERIAL PRIMARY KEY,
+        자재명 TEXT,
+        단위 TEXT,
+        가격 NUMERIC,
+        재고 NUMERIC
+    )
     """)
+
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS 병충해 (
-            이름 TEXT PRIMARY KEY, 권장약제 TEXT, 증상 TEXT
-        )
+    CREATE TABLE IF NOT EXISTS 병충해 (
+        id SERIAL PRIMARY KEY,
+        이름 TEXT,
+        설명 TEXT
+    )
     """)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS 구입 (

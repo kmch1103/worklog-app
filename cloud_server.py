@@ -6,7 +6,7 @@ import os, json
 from datetime import datetime, date, timedelta
 from flask import Flask, request, jsonify, render_template_string
 import psycopg
-import psycopg.extras
+
 
 app = Flask(__name__)
 
@@ -18,7 +18,7 @@ _TRS = "§"
 
 def db_conn():
     """PostgreSQL 연결"""
-    return psycopg.connect(DATABASE_URL, cursor_factory=psycopg.extras.RealDictCursor)
+    return psycopg.connect(DATABASE_URL)
 
 # ── DB 초기화 (테이블 없으면 생성) ──
 def init_db():

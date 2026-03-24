@@ -6,7 +6,7 @@ import os, json
 from datetime import datetime, date, timedelta
 from flask import Flask, request, jsonify, render_template_string
 import psycopg
-import psycopg2.extras
+import psycopg.extras
 
 app = Flask(__name__)
 

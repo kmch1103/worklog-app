@@ -449,103 +449,114 @@ def api_stats():
 @app.route("/api/migrate", methods=["POST"])
 def api_migrate():
     """기존 SQLite 데이터를 PostgreSQL로 이전"""
-    data = request.json or {}
-    conn = db_conn()
-    cur = conn.cursor()
-    inserted = 0
+    try:
+        data = request.get_json(silent=True) or {}
+        print("migrate payload keys:", list(data.keys()))
 
-    for w in data.get("works", []):
-        try:
-            cur.execute("""
-                INSERT INTO "작업일지" (
-                    "번호","날짜","종료날짜","날씨","작물","작업내용","인건비",
-                    "남자수","남자단가","여자수","여자단가","기타수","기타단가",
-                    "시작시간","종료시간","작업시간","사용기계","사용자재","적용병충해",
-                    "비고","생성시각","수정시각","인력내역","작업목록"
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT ("번호") DO NOTHING
-            """, (
-                w.get("번호"),
-                w.get("날짜"),
-                w.get("종료날짜") or w.get("날짜"),
-                w.get("날씨"),
-                w.get("작물"),
-                w.get("작업내용"),
-                parse_int_safe(w.get("인건비", 0)),
-                parse_int_safe(w.get("남자수", 0)),
-                parse_int_safe(w.get("남자단가", 0)),
-                parse_int_safe(w.get("여자수", 0)),
-                parse_int_safe(w.get("여자단가", 0)),
-                parse_int_safe(w.get("기타수", 0)),
-                parse_int_safe(w.get("기타단가", 0)),
-                w.get("시작시간"),
-                w.get("종료시간"),
-                parse_float_safe(w.get("작업시간", 0)),
-                w.get("사용기계"),
-                w.get("사용자재"),
-                w.get("적용병충해"),
-                w.get("비고"),
-                w.get("생성시각"),
-                w.get("수정시각"),
-                w.get("인력내역"),
-                w.get("작업목록", "")
-            ))
-            inserted += 1
-        except Exception as e:
-            print(f"migrate work error: {e}")
+        conn = db_conn()
+        cur = conn.cursor()
+        inserted = 0
 
-    for m in data.get("materials", []):
-        try:
-            cur.execute("""
-                INSERT INTO "자재" ("자재명","단위","가격","재고")
-                VALUES (%s,%s,%s,%s)
-                ON CONFLICT ("자재명") DO UPDATE
-                SET "단위"=EXCLUDED."단위",
-                    "가격"=EXCLUDED."가격",
-                    "재고"=EXCLUDED."재고"
-            """, (
-                m.get("자재명") or m.get("name"),
-                m.get("단위") or m.get("unit"),
-                parse_float_safe(m.get("가격", m.get("price", 0))),
-                parse_float_safe(m.get("재고", m.get("stock", 0))),
-            ))
-        except Exception as e:
-            print(f"migrate material error: {e}")
-
-    for p in data.get("pests", []):
-        try:
-            cur.execute("""
-                INSERT INTO "병충해" ("이름","권장약제","증상")
-                VALUES (%s,%s,%s)
-                ON CONFLICT ("이름") DO UPDATE
-                SET "권장약제"=EXCLUDED."권장약제",
-                    "증상"=EXCLUDED."증상"
-            """, (
-                p.get("이름") or p.get("name"),
-                p.get("권장약제", ""),
-                p.get("증상", p.get("설명", "")),
-            ))
-        except Exception as e:
-            print(f"migrate pest error: {e}")
-
-    for tbl, items in data.get("options", {}).items():
-        if tbl not in ("옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"):
-            continue
-        for item in items:
+        for w in data.get("works", []):
             try:
-                value = item
-                if isinstance(item, dict):
-                    value = item.get("항목") or item.get("이름") or item.get("name") or ""
-                if value:
-                    cur.execute(f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT ("항목") DO NOTHING', (value,))
+                cur.execute("""
+                    INSERT INTO "작업일지" (
+                        "번호","날짜","종료날짜","날씨","작물","작업내용","인건비",
+                        "남자수","남자단가","여자수","여자단가","기타수","기타단가",
+                        "시작시간","종료시간","작업시간","사용기계","사용자재","적용병충해",
+                        "비고","생성시각","수정시각","인력내역","작업목록"
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT ("번호") DO NOTHING
+                """, (
+                    w.get("번호"),
+                    w.get("날짜"),
+                    w.get("종료날짜") or w.get("날짜"),
+                    w.get("날씨"),
+                    w.get("작물"),
+                    w.get("작업내용"),
+                    parse_int_safe(w.get("인건비", 0)),
+                    parse_int_safe(w.get("남자수", 0)),
+                    parse_int_safe(w.get("남자단가", 0)),
+                    parse_int_safe(w.get("여자수", 0)),
+                    parse_int_safe(w.get("여자단가", 0)),
+                    parse_int_safe(w.get("기타수", 0)),
+                    parse_int_safe(w.get("기타단가", 0)),
+                    w.get("시작시간"),
+                    w.get("종료시간"),
+                    parse_float_safe(w.get("작업시간", 0)),
+                    w.get("사용기계"),
+                    w.get("사용자재"),
+                    w.get("적용병충해"),
+                    w.get("비고"),
+                    w.get("생성시각"),
+                    w.get("수정시각"),
+                    w.get("인력내역"),
+                    w.get("작업목록", "")
+                ))
+                inserted += 1
             except Exception as e:
-                print(f"migrate option error ({tbl}): {e}")
+                print("migrate work error:", e, w)
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    return jsonify({"ok": True, "inserted": inserted, "works_count": inserted})
+        for m in data.get("materials", []):
+            try:
+                cur.execute("""
+                    INSERT INTO "자재" ("자재명","단위","가격","재고")
+                    VALUES (%s,%s,%s,%s)
+                    ON CONFLICT ("자재명") DO UPDATE
+                    SET "단위"=EXCLUDED."단위",
+                        "가격"=EXCLUDED."가격",
+                        "재고"=EXCLUDED."재고"
+                """, (
+                    m.get("자재명") or m.get("name"),
+                    m.get("단위") or m.get("unit"),
+                    parse_float_safe(m.get("가격", m.get("price", 0))),
+                    parse_float_safe(m.get("재고", m.get("stock", 0))),
+                ))
+            except Exception as e:
+                print("migrate material error:", e, m)
+
+        for p in data.get("pests", []):
+            try:
+                cur.execute("""
+                    INSERT INTO "병충해" ("이름","권장약제","증상")
+                    VALUES (%s,%s,%s)
+                    ON CONFLICT ("이름") DO UPDATE
+                    SET "권장약제"=EXCLUDED."권장약제",
+                        "증상"=EXCLUDED."증상"
+                """, (
+                    p.get("이름") or p.get("name"),
+                    p.get("권장약제", ""),
+                    p.get("증상", p.get("설명", "")),
+                ))
+            except Exception as e:
+                print("migrate pest error:", e, p)
+
+        for tbl, items in data.get("options", {}).items():
+            if tbl not in ("옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"):
+                continue
+            for item in items:
+                try:
+                    value = item
+                    if isinstance(item, dict):
+                        value = item.get("항목") or item.get("이름") or item.get("name") or ""
+                    if value:
+                        cur.execute(
+                            f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT ("항목") DO NOTHING',
+                            (value,)
+                        )
+                except Exception as e:
+                    print(f"migrate option error ({tbl}):", e, item)
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True, "inserted": inserted, "works_count": inserted})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ── HTML ──

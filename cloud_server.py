@@ -453,6 +453,12 @@ async function loadPestsManage(){const r=await fetch('/api/pests');const items=a
 async function savePest(){const payload={이름:document.getElementById('pest-name').value.trim(),권장약제:document.getElementById('pest-drug').value.trim(),증상:document.getElementById('pest-symptom').value.trim()};if(!payload.이름){alert('병충해명을 입력하세요.');return;}await fetch('/api/pests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});document.getElementById('pest-name').value='';document.getElementById('pest-drug').value='';document.getElementById('pest-symptom').value='';await loadOptionsManage();}
 async function deletePest(name){if(!confirm('삭제할까요?'))return;await fetch(`/api/pests/${encodeURIComponent(name)}`,{method:'DELETE'});await loadOptionsManage();}
 buildYearMonthSelects();loadOptions();loadWorks();loadMaterials();loadOptionsManage();loadCalendarAndStats();document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');}));
+
+window.addEventListener('error', function(e) {
+  console.log("JS ERROR:", e.message);
+  alert("화면 오류 발생: " + e.message);
+
+
 </script></body></html>"""
 
 

@@ -454,6 +454,10 @@ async function savePest(){const payload={이름:document.getElementById('pest-na
 async function deletePest(name){if(!confirm('삭제할까요?'))return;await fetch(`/api/pests/${encodeURIComponent(name)}`,{method:'DELETE'});await loadOptionsManage();}
 buildYearMonthSelects();loadOptions();loadWorks();loadMaterials();loadOptionsManage();loadCalendarAndStats();document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');}));
 </script></body></html>"""
+window.addEventListener('error', function(e) {
+  console.log("JS ERROR:", e.message);
+  alert("화면 오류 발생: " + e.message);
+});
 
 @app.route("/")
 def index():

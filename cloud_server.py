@@ -496,6 +496,7 @@ def api_migrate():
                 ))
                 inserted += 1
             except Exception as e:
+                conn.rollback()
                 print("migrate work error:", e, w)
 
         for m in data.get("materials", []):
@@ -514,6 +515,7 @@ def api_migrate():
                     parse_float_safe(m.get("재고", m.get("stock", 0))),
                 ))
             except Exception as e:
+                conn.rollback()
                 print("migrate material error:", e, m)
 
         for p in data.get("pests", []):
@@ -530,6 +532,7 @@ def api_migrate():
                     p.get("증상", p.get("설명", "")),
                 ))
             except Exception as e:
+                conn.rollback()
                 print("migrate pest error:", e, p)
 
         for tbl, items in data.get("options", {}).items():
@@ -546,6 +549,7 @@ def api_migrate():
                             (value,)
                         )
                 except Exception as e:
+                    conn.rollback()
                     print(f"migrate option error ({tbl}):", e, item)
 
         conn.commit()

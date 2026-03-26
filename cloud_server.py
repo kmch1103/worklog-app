@@ -164,7 +164,7 @@ def api_options():
     for tbl in ("옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"):
         cur.execute(f'SELECT "항목" FROM "{tbl}" ORDER BY "항목"')
         opts[tbl] = [r["항목"] for r in cur.fetchall()]
-    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" ORDER BY "자재명"')
+    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" WHERE COALESCE("재고",0) > 0 ORDER BY "자재명"')
     opts["자재"] = [dict(r) for r in cur.fetchall()]
     cur.execute('SELECT "이름","권장약제","증상" FROM "병충해" ORDER BY "이름"')
     opts["병충해"] = [dict(r) for r in cur.fetchall()]
@@ -239,7 +239,7 @@ def api_delete_pest(name):
 def api_get_materials():
     conn = db_conn()
     cur = conn.cursor()
-    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" ORDER BY "자재명"')
+    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" WHERE COALESCE("재고",0) > 0 ORDER BY "자재명"')
     rows = [dict(r) for r in cur.fetchall()]
     cur.close()
     conn.close()

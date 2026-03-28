@@ -353,18 +353,34 @@ def api_payment_summary():
 
 
 @app.route("/api/works")
-def api_get_works():
-    q = request.args.get("q", "").strip()
-    limit = int(request.args.get("limit", 100))
-    conn = db_conn(); cur = conn.cursor()
-    sql = 'SELECT "번호","날짜","종료날짜","날씨","작물","작업내용","인건비","작업시간","사용기계","사용자재","적용병충해","비고","인력내역","시작시간","종료시간","업체명","자재비","수리및보수비","총금액","현금결제액","계좌이체액","카드결제액","결제정보","시즌연도",COALESCE("작업목록",\'\') AS "작업목록" FROM "작업일지"'
-    if q:
-        cur.execute(sql + ' WHERE "날짜" LIKE %s OR "작물" LIKE %s OR "작업내용" LIKE %s OR "사용자재" LIKE %s ORDER BY "날짜" DESC, "번호" DESC LIMIT %s', (f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", limit))
-    else:
-        cur.execute(sql + ' ORDER BY "날짜" DESC, "번호" DESC LIMIT %s', (limit,))
-    rows = hydrate_work_rows(cur.fetchall())
-    cur.close(); conn.close()
-    return jsonify(rows)
+from datetime import datetime
+
+def safe_parse_task_items(row):
+    try:
+        raw = row.get("작업목록", "")
+
+        # 정상 파싱 시도
+        items = parse_task_list(raw) if raw else []
+        if items:
+            return items
+
+        # fallback (작업목록 없는 경우)
+        return [{
+            "날짜": row.get("날짜", "") or "",
+            "종료날짜": row.get("종료날짜", "") or row.get("날짜", "") or "",
+            "작물": row.get("작물", "") or "작물 미선택",
+            "작업내용": row.get("작업내용", "") or "",
+            "시작시간": row.get("시작시간", "") or "",
+            "종료시간": row.get("종료시간", "") or "",
+            "작업시간": str(row.get("작업시간", "") or "시간미입력"),
+            "사용기계": row.get("사용기계", "") or "",
+            "사용자재": row.get("사용자재", "") or "",
+            "병충해": row.get("적용병충해", "") or "병충해 미선택",
+            "인력내역": row.get("인력내역", "") or "",
+            "비고": row.get("비고", "") or "",
+        }]
+    except:
+        return []
 
 
 def build_save_payload(data, cur):

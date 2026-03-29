@@ -810,7 +810,7 @@ def api_stats():
     return jsonify({"당월": {"건수": month_row["cnt"], "인건비": month_row["wage"]}, "시즌": {"건수": season_row["cnt"], "인건비": season_row["wage"]}, "season_year": season_year, "switch_date": switch_row["전환일"] if switch_row else f"{season_year+1}-03-01"})
 
 
-HTML = """<!DOCTYPE html>
+HTML = r"""<!DOCTYPE html>
 <html lang='ko'>
 <head>
 <meta charset='UTF-8'>

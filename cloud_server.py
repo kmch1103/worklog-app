@@ -247,6 +247,32 @@ def api_options():
     return jsonify(opts)
 
 
+@app.route("/api/options/<tbl>", methods=["POST"])
+def add_option(tbl):
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+
+    conn = db_conn()
+    cur = conn.cursor()
+
+    cur.execute(f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT DO NOTHING', (name,))
+    conn.commit()
+
+    cur.close(); conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/options/<tbl>/<name>", methods=["DELETE"])
+def delete_option(tbl, name):
+    conn = db_conn()
+    cur = conn.cursor()
+
+    cur.execute(f'DELETE FROM "{tbl}" WHERE "항목"=%s', (name,))
+    conn.commit()
+
+    cur.close(); conn.close()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/options/<path:tbl>", methods=["POST"])
 def api_add_option(tbl):
     allowed = {"옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"}
@@ -310,6 +336,26 @@ def api_add_material():
     conn = db_conn(); cur = conn.cursor()
     cur.execute('INSERT INTO "자재" ("자재명","단위","가격","재고") VALUES (%s,%s,%s,%s) ON CONFLICT ("자재명") DO UPDATE SET "단위"=EXCLUDED."단위","가격"=EXCLUDED."가격","재고"=EXCLUDED."재고"', (name, data.get("단위", ""), parse_float_safe(data.get("가격", 0)), parse_float_safe(data.get("재고", 0))))
     conn.commit(); cur.close(); conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/materials/<name>", methods=["PUT"])
+def api_update_material(name):
+    data = request.json or {}
+    qty = float(data.get("재고", 0))
+
+    conn = db_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        'UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s',
+        (qty, name)
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
     return jsonify({"ok": True})
 
 
@@ -761,6 +807,28 @@ document.addEventListener('click',e=>{if(e.target===qs('dayModalBg'))closeDayMod
 window.addEventListener('error',e=>alert('화면 오류: '+e.message));
 async function initApp(){buildYearMonthSelects();await loadOptions();qs('matSelect').addEventListener('change',updateMatUnit);qs('taskDate').addEventListener('change',updateEndDate);qs('dayCount').addEventListener('input',updateEndDate);qs('wageCost').addEventListener('input',recalcPaymentSummary);qs('materialCost').addEventListener('input',recalcPaymentSummary);qs('repairCost').addEventListener('input',recalcPaymentSummary);addWorkerRow();addPaymentRow();renderSelectedMaterials();await loadWorks();await loadPaymentSummary();await loadMaterials();await loadOptionsView();await loadSeasonSettings();await loadCalendarAndStats();}
 initApp();
+function addOption(tbl){
+    let name = prompt("추가할 값");
+    fetch(`/api/options/${tbl}`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({name})
+    }).then(()=>loadOptions());
+}
+
+function deleteOption(tbl, name){
+    fetch(`/api/options/${tbl}/${name}`, {method:"DELETE"})
+    .then(()=>loadOptions());
+}
+
+function updateOption(tbl, name){
+    let newName = prompt("수정", name);
+    fetch(`/api/options/${tbl}/${name}`, {
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({name:newName})
+    }).then(()=>loadOptions());
+}
 </script>
 </body>
 </html>"""

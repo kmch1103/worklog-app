@@ -898,7 +898,7 @@ function openDayModal(day){const arr=(CAL_DATA.day_map||{})[String(day)]||[];qs(
 function closeDayModal(){const bg=qs('dayModalBg');if(bg)bg.classList.remove('open');}
 document.addEventListener('click',e=>{if(e.target===qs('dayModalBg'))closeDayModal();if(e.target===qs('workSideBg'))closeWorkSide();});
 window.addEventListener('error',e=>alert('화면 오류: '+e.message));
-async async function initApp(){buildYearMonthSelects();await loadOptions();qs('matSelect').addEventListener('change',updateMatUnit);qs('taskDate').addEventListener('change',updateEndDate);qs('dayCount').addEventListener('input',updateEndDate);qs('wageCost').addEventListener('input',recalcPaymentSummary);qs('materialCost').addEventListener('input',recalcPaymentSummary);qs('repairCost').addEventListener('input',recalcPaymentSummary);addWorkerRow();addPaymentRow();renderSelectedMaterials();await loadWorks();await loadPaymentSummary();await loadMaterials();await loadOptionsView();await loadSeasonSettings();await loadCalendarAndStats();resetForm();}
+async function initApp(){buildYearMonthSelects();await loadOptions();qs('matSelect').addEventListener('change',updateMatUnit);qs('taskDate').addEventListener('change',updateEndDate);qs('dayCount').addEventListener('input',updateEndDate);qs('wageCost').addEventListener('input',recalcPaymentSummary);qs('materialCost').addEventListener('input',recalcPaymentSummary);qs('repairCost').addEventListener('input',recalcPaymentSummary);addWorkerRow();addPaymentRow();renderSelectedMaterials();await loadWorks();await loadPaymentSummary();await loadMaterials();await loadOptionsView();await loadSeasonSettings();await loadCalendarAndStats();resetForm();}
 initApp();
 </script>
 </body>

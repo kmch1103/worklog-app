@@ -555,7 +555,7 @@ def api_update_work(no):
  
 - 로컬 DB: SQLite (worklog.db)
  
-- 마이그레이션: migrate_to_cloud.py → /api/migrate POST
+#- 마이그레이션: migrate_to_cloud.py → /api/migrate POST
  
 
   

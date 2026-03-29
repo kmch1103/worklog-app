@@ -478,7 +478,7 @@ def build_save_payload(data, cur):
     card_total = sum(
     parse_float_safe(x.get("amount", 0), 0)
     for x in payment_rows
-    if x.get("method") == "카드결제"
+    if x.get("method") in ("카드결제", "카드결재")
 )
     all_crops, all_task_names, dates, end_dates, all_wages, all_pests = [], [], [], [], [], []
     for t in task_list:
@@ -515,18 +515,95 @@ def build_save_payload(data, cur):
 
 
 @app.route("/api/works", methods=["POST"])
+@app.route("/api/works", methods=["POST"])
 def api_add_work():
-    data = request.json or {}
-    if not data.get("task_items"):
-        return jsonify({"ok": False}), 400
-    conn = db_conn(); cur = conn.cursor()
-    p = build_save_payload(data, cur)
-    now_str = datetime.now().isoformat(timespec="seconds")
-    for name, info in p["mat_agg"].items():
-        cur.execute('UPDATE "자재" SET "재고" = COALESCE("재고",0) - %s WHERE "자재명"=%s', (info["qty"], name))
-    cur.execute('INSERT INTO "작업일지" ("날짜","종료날짜","날씨","작물","작업내용","인건비","시작시간","종료시간","작업시간","사용기계","사용자재","적용병충해","비고","생성시각","수정시각","인력내역","작업목록","업체명","자재비","수리및보수비","총금액","현금결제액","계좌이체액","카드결제액","결제정보","시즌연도") VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', (p["rep_start"], p["rep_end"], data.get("날씨", ""), p["all_crops"], p["all_task_names"], int(p["wage_cost"]), p["task_list"][0].get("시작시간", ""), p["task_list"][-1].get("종료시간", ""), p["total_hours_text"], p["machines"], p["rep_mats"], p["all_pests"], data.get("note", ""), now_str, now_str, p["rep_wage_detail"], serialize_task_list(p["task_list"]), data.get("vendor", ""), p["material_cost"], p["repair_cost"], p["total_amount"], p["cash_total"], p["transfer_total"], p["card_total"], json.dumps(p["payment_rows"], ensure_ascii=False), p["season_year"]))
-    conn.commit(); cur.close(); conn.close()
-    return jsonify({"ok": True})
+    conn = None
+    cur = None
+    try:
+        data = request.json or {}
+
+        task_items = data.get("task_items")
+        if not isinstance(task_items, list) or not task_items:
+            return jsonify({"ok": False, "error": "task_items가 비어있거나 형식이 올바르지 않습니다."}), 400
+
+        conn = db_conn()
+        cur = conn.cursor()
+
+        p = build_save_payload(data, cur)
+
+        if not p["task_list"]:
+            return jsonify({"ok": False, "error": "저장할 작업목록이 없습니다."}), 400
+
+        first_item = p["task_list"][0] or {}
+        last_item = p["task_list"][-1] or {}
+
+        now_str = datetime.now().isoformat(timespec="seconds")
+
+        for name, info in p["mat_agg"].items():
+            if not name:
+                continue
+            cur.execute(
+                'UPDATE "자재" SET "재고" = COALESCE("재고",0) - %s WHERE "자재명"=%s',
+                (info["qty"], name)
+            )
+
+        cur.execute(
+            '''
+            INSERT INTO "작업일지"
+            (
+                "날짜","종료날짜","날씨","작물","작업내용","인건비",
+                "시작시간","종료시간","작업시간","사용기계","사용자재",
+                "적용병충해","비고","생성시각","수정시각","인력내역",
+                "작업목록","업체명","자재비","수리및보수비","총금액",
+                "현금결제액","계좌이체액","카드결제액","결제정보","시즌연도"
+            )
+            VALUES
+            (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ''',
+            (
+                p["rep_start"],
+                p["rep_end"],
+                data.get("날씨", ""),
+                p["all_crops"],
+                p["all_task_names"],
+                int(p["wage_cost"]),
+                first_item.get("시작시간", ""),
+                last_item.get("종료시간", ""),
+                p["total_hours_text"],
+                p["machines"],
+                p["rep_mats"],
+                p["all_pests"],
+                data.get("note", ""),
+                now_str,
+                now_str,
+                p["rep_wage_detail"],
+                serialize_task_list(p["task_list"]),
+                data.get("vendor", ""),
+                p["material_cost"],
+                p["repair_cost"],
+                p["total_amount"],
+                p["cash_total"],
+                p["transfer_total"],
+                p["card_total"],
+                json.dumps(p["payment_rows"], ensure_ascii=False),
+                p["season_year"],
+            )
+        )
+
+        conn.commit()
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.exception("api_add_work failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.route("/api/works/<int:no>", methods=["PUT"])

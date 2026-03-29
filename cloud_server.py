@@ -2,7 +2,6 @@
 import json
 import os
 from datetime import date, datetime, timedelta
-from datetime import datetime
 
 from flask import Flask, jsonify, render_template_string, request
 import psycopg
@@ -381,6 +380,53 @@ def safe_parse_task_items(row):
     except:
         return []
 
+@app.route("/api/works", methods=["GET"])
+def api_get_works():
+    conn = db_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            "번호","날짜","종료날짜","날씨","작물","작업내용","인건비",
+            "시작시간","종료시간","작업시간","사용기계","사용자재",
+            "적용병충해","비고","생성시각","수정시각","인력내역",
+            "작업목록","업체명","자재비","수리및보수비","총금액",
+            "현금결제액","계좌이체액","카드결제액","결제정보","시즌연도"
+        FROM "작업일지"
+        ORDER BY "날짜" DESC, "번호" DESC
+    """)
+
+    rows = hydrate_work_rows(cur.fetchall())
+    cur.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/works/<int:no>", methods=["DELETE"])
+def api_delete_work(no):
+    conn = db_conn()
+    cur = conn.cursor()
+
+    cur.execute('SELECT * FROM "작업일지" WHERE "번호"=%s', (no,))
+    old = cur.fetchone()
+    if not old:
+        cur.close()
+        conn.close()
+        return jsonify({"ok": False}), 404
+
+    old = dict(old)
+    old_mat = aggregate_materials(parse_or_synthesize_task_items(old))
+
+    for name, info in old_mat.items():
+        cur.execute(
+            'UPDATE "자재" SET "재고" = COALESCE("재고",0) + %s WHERE "자재명"=%s',
+            (info["qty"], name)
+        )
+
+    cur.execute('DELETE FROM "작업일지" WHERE "번호"=%s', (no,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
 
 def build_save_payload(data, cur):
     task_list = data.get("task_items", [])
@@ -391,7 +437,11 @@ def build_save_payload(data, cur):
     total_amount = wage_cost + material_cost + repair_cost
     cash_total = sum(parse_float_safe(x.get("amount", 0), 0) for x in payment_rows if x.get("method") == "현금결제")
     transfer_total = sum(parse_float_safe(x.get("amount", 0), 0) for x in payment_rows if x.get("method") == "계좌이체")
-    card_total = sum(parse_float_safe(x.get("amount", 0), 0) for x in payment_rows if x.get("method") == "카드결재")
+    card_total = sum(
+    parse_float_safe(x.get("amount", 0), 0)
+    for x in payment_rows
+    if x.get("method") == "카드결제"
+)
     all_crops, all_task_names, dates, end_dates, all_wages, all_pests = [], [], [], [], [], []
     for t in task_list:
         for c in str(t.get("작물", "")).split(","):

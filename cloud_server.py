@@ -239,7 +239,7 @@ def api_options():
     for tbl in ("옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"):
         cur.execute(f'SELECT "항목" FROM "{tbl}" ORDER BY "항목"')
         opts[tbl] = [r["항목"] for r in cur.fetchall() if str(r["항목"]).strip()]
-    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" WHERE COALESCE("재고",0) > 0 ORDER BY "자재명"')
+    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" ORDER BY "자재명"')
     opts["자재"] = [dict(r) for r in cur.fetchall() if str(r["자재명"]).strip()]
     cur.execute('SELECT "이름","권장약제","증상" FROM "병충해" ORDER BY "이름"')
     opts["병충해"] = [dict(r) for r in cur.fetchall() if str(r["이름"]).strip()]
@@ -247,58 +247,70 @@ def api_options():
     return jsonify(opts)
 
 
-@app.route("/api/options/<tbl>", methods=["POST"])
-def add_option(tbl):
-    data = request.json or {}
-    name = (data.get("name") or "").strip()
+ALLOWED_OPTION_TABLES = {"옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"}
 
-    conn = db_conn()
-    cur = conn.cursor()
 
-    cur.execute(f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT DO NOTHING', (name,))
-    conn.commit()
+def is_valid_option_table(tbl: str) -> bool:
+    return tbl in ALLOWED_OPTION_TABLES
 
+
+@app.route("/api/options/<path:tbl>", methods=["GET"])
+def api_get_option_items(tbl):
+    if not is_valid_option_table(tbl):
+        return jsonify({"ok": False, "error": "허용되지 않은 옵션 테이블입니다."}), 400
+    conn = db_conn(); cur = conn.cursor()
+    cur.execute(f'SELECT "항목" FROM "{tbl}" ORDER BY "항목"')
+    rows = [r["항목"] for r in cur.fetchall() if str(r["항목"]).strip()]
     cur.close(); conn.close()
-    return jsonify({"ok": True})
-
-@app.route("/api/options/<tbl>/<name>", methods=["DELETE"])
-def delete_option(tbl, name):
-    conn = db_conn()
-    cur = conn.cursor()
-
-    cur.execute(f'DELETE FROM "{tbl}" WHERE "항목"=%s', (name,))
-    conn.commit()
-
-    cur.close(); conn.close()
-    return jsonify({"ok": True})
+    return jsonify(rows)
 
 
 @app.route("/api/options/<path:tbl>", methods=["POST"])
 def api_add_option(tbl):
-    allowed = {"옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"}
-    if tbl not in allowed:
-        return jsonify({"ok": False}), 400
-    value = (request.json or {}).get("항목", "").strip()
+    if not is_valid_option_table(tbl):
+        return jsonify({"ok": False, "error": "허용되지 않은 옵션 테이블입니다."}), 400
+    data = request.json or {}
+    value = str(data.get("항목") or data.get("name") or "").strip()
     if not value:
-        return jsonify({"ok": False}), 400
+        return jsonify({"ok": False, "error": "옵션 값이 비어 있습니다."}), 400
     conn = db_conn(); cur = conn.cursor()
     cur.execute(f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT ("항목") DO NOTHING', (value,))
     conn.commit(); cur.close(); conn.close()
     return jsonify({"ok": True})
 
 
+@app.route("/api/options/<path:tbl>/<path:value>", methods=["PUT"])
+def api_update_option(tbl, value):
+    if not is_valid_option_table(tbl):
+        return jsonify({"ok": False, "error": "허용되지 않은 옵션 테이블입니다."}), 400
+    data = request.json or {}
+    new_value = str(data.get("항목") or data.get("name") or "").strip()
+    if not new_value:
+        return jsonify({"ok": False, "error": "새 옵션 값이 비어 있습니다."}), 400
+    conn = db_conn(); cur = conn.cursor()
+    cur.execute(f'UPDATE "{tbl}" SET "항목"=%s WHERE "항목"=%s', (new_value, value))
+    conn.commit(); updated = cur.rowcount
+    cur.close(); conn.close()
+    if not updated:
+        return jsonify({"ok": False, "error": "수정할 옵션을 찾지 못했습니다."}), 404
+    return jsonify({"ok": True})
+
+
 @app.route("/api/options/<path:tbl>/<path:value>", methods=["DELETE"])
 def api_delete_option(tbl, value):
-    allowed = {"옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"}
-    if tbl not in allowed:
-        return jsonify({"ok": False}), 400
+    if not is_valid_option_table(tbl):
+        return jsonify({"ok": False, "error": "허용되지 않은 옵션 테이블입니다."}), 400
     conn = db_conn(); cur = conn.cursor()
     cur.execute(f'DELETE FROM "{tbl}" WHERE "항목"=%s', (value,))
-    conn.commit(); cur.close(); conn.close()
+    conn.commit(); deleted = cur.rowcount
+    cur.close(); conn.close()
+    if not deleted:
+        return jsonify({"ok": False, "error": "삭제할 옵션을 찾지 못했습니다."}), 404
     return jsonify({"ok": True})
 
 
 @app.route("/api/pests", methods=["POST"])
+
 def api_add_pest():
     data = request.json or {}
     name = (data.get("이름") or "").strip()
@@ -339,24 +351,23 @@ def api_add_material():
     return jsonify({"ok": True})
 
 
-@app.route("/api/materials/<name>", methods=["PUT"])
+@app.route("/api/materials/<path:name>", methods=["PUT"])
 def api_update_material(name):
     data = request.json or {}
-    qty = float(data.get("재고", 0))
+    qty = parse_float_safe(data.get("재고", 0), 0)
 
     conn = db_conn()
     cur = conn.cursor()
-
-    cur.execute(
-        'UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s',
-        (qty, name)
-    )
-
+    cur.execute('UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s', (qty, name))
     conn.commit()
+    updated = cur.rowcount
     cur.close()
     conn.close()
 
+    if not updated:
+        return jsonify({"ok": False, "error": "자재를 찾을 수 없습니다."}), 404
     return jsonify({"ok": True})
+
 
 
 @app.route("/api/season_settings")
@@ -514,6 +525,12 @@ def api_delete_work(no):
 
 def build_save_payload(data, cur):
     task_list = data.get("task_items", [])
+    today = date.today().isoformat()
+    for t in task_list:
+        if not str(t.get("날짜", "")).strip():
+            t["날짜"] = today
+        if not str(t.get("종료날짜", "")).strip():
+            t["종료날짜"] = t["날짜"]
     payment_rows = data.get("payment_rows", [])
     wage_cost = parse_float_safe(data.get("wage_cost", 0), 0)
     material_cost = parse_float_safe(data.get("material_cost", 0), 0)
@@ -668,21 +685,94 @@ def api_add_work():
 
 @app.route("/api/works/<int:no>", methods=["PUT"])
 def api_update_work(no):
-    data = request.json or {}
-    if not data.get("task_items"):
-        return jsonify({"ok": False}), 400
-    conn = db_conn(); cur = conn.cursor()
-    cur.execute('SELECT * FROM "작업일지" WHERE "번호"=%s', (no,))
-    old = cur.fetchone()
-    if not old:
-        cur.close(); conn.close()
-        return jsonify({"ok": False}), 404
-    old = dict(old)
-    
+    conn = None
+    cur = None
+    try:
+        data = request.json or {}
+        task_items = data.get("task_items")
+        if not isinstance(task_items, list) or not task_items:
+            return jsonify({"ok": False, "error": "task_items가 비어있거나 형식이 올바르지 않습니다."}), 400
 
+        conn = db_conn()
+        cur = conn.cursor()
+
+        cur.execute('SELECT * FROM "작업일지" WHERE "번호"=%s', (no,))
+        old = cur.fetchone()
+        if not old:
+            return jsonify({"ok": False, "error": "수정할 작업을 찾을 수 없습니다."}), 404
+        old = dict(old)
+
+        old_mat = aggregate_materials(safe_parse_task_items(old))
+        for name, info in old_mat.items():
+            if name:
+                cur.execute('UPDATE "자재" SET "재고" = COALESCE("재고",0) + %s WHERE "자재명"=%s', (info["qty"], name))
+
+        p = build_save_payload(data, cur)
+        now_str = datetime.now().isoformat(timespec="seconds")
+
+        for name, info in p["mat_agg"].items():
+            if name:
+                cur.execute('UPDATE "자재" SET "재고" = COALESCE("재고",0) - %s WHERE "자재명"=%s', (info["qty"], name))
+
+        start_time = p["task_list"][0].get("시작시간") or ""
+        end_time = p["task_list"][-1].get("종료시간") or ""
+        work_time = p.get("total_hours_text") or "시간미입력"
+
+        cur.execute("""
+            UPDATE "작업일지"
+            SET
+                "날짜"=%s,
+                "종료날짜"=%s,
+                "날씨"=%s,
+                "작물"=%s,
+                "작업내용"=%s,
+                "인건비"=%s,
+                "시작시간"=%s,
+                "종료시간"=%s,
+                "작업시간"=%s,
+                "사용기계"=%s,
+                "사용자재"=%s,
+                "적용병충해"=%s,
+                "비고"=%s,
+                "수정시각"=%s,
+                "인력내역"=%s,
+                "작업목록"=%s,
+                "업체명"=%s,
+                "자재비"=%s,
+                "수리및보수비"=%s,
+                "총금액"=%s,
+                "현금결제액"=%s,
+                "계좌이체액"=%s,
+                "카드결제액"=%s,
+                "결제정보"=%s,
+                "시즌연도"=%s
+            WHERE "번호"=%s
+        """, (
+            p["rep_start"], p["rep_end"], data.get("날씨", ""), p["all_crops"], p["all_task_names"],
+            int(p["wage_cost"]), start_time, end_time, work_time, p["machines"], p["rep_mats"], p["all_pests"],
+            data.get("note", ""), now_str, p["rep_wage_detail"], serialize_task_list(p["task_list"]), data.get("vendor", ""),
+            p["material_cost"], p["repair_cost"], p["total_amount"], p["cash_total"], p["transfer_total"], p["card_total"],
+            json.dumps(p["payment_rows"], ensure_ascii=False), p["season_year"], no
+        ))
+
+        conn.commit()
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.exception("api_update_work failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.route("/api/calendar/<int:year>/<int:month>")
+
 def api_calendar(year, month):
     import calendar as _cal
     month_start = date(year, month, 1); month_end = date(year, month, _cal.monthrange(year, month)[1])
@@ -789,46 +879,27 @@ function workDetailHtml(work,task){const payments=(work['결제정보_json']||[]
 async function loadWorks(){const q=qs('searchQ').value.trim();const r=await fetch('/api/works?q='+encodeURIComponent(q));CURRENT_WORKS=await r.json();const box=qs('worksList');if(!Array.isArray(CURRENT_WORKS)||!CURRENT_WORKS.length){box.className='empty';box.innerHTML='작업 내역이 없습니다.';return;}box.className='';let html='';CURRENT_WORKS.forEach((w,wi)=>{(w.task_items||[]).forEach((t,ti)=>{const dateText=`${t['날짜']||''}${t['종료날짜']&&t['종료날짜']!==t['날짜']?' ~ '+t['종료날짜']:''}`;html+=`<div class="list-card"><div><b>${t['작업내용']||''}</b></div><div class="muted">📅 ${dateText}</div><div class="muted">🌱 ${t['작물']||'작물 미선택'}</div><div class="muted">☀️ ${w['날씨']||'-'}</div><div class="muted">🔧 ${t['사용기계']||'-'}</div><div class="muted">🪣 ${t['사용자재']||'-'}</div><div class="muted">🦟 ${t['병충해']||'병충해 미선택'}</div><div class="muted">⏱ ${t['작업시간']||'시간미입력'}</div><div class="row" style="margin-top:8px"><button class="sub" onclick="openWorkSide(${wi},${ti})">상세보기</button><button class="sub" onclick="beginEdit(${wi},${ti})">수정</button><button class="sub" onclick="deleteWork(${w['번호']})">삭제</button></div></div>`;});});box.innerHTML=html;}
 function openWorkSide(workIdx,taskIdx){const w=CURRENT_WORKS[workIdx],t=(w.task_items||[])[taskIdx];const bg=qs('workSideBg'),title=qs('workSideTitle'),body=qs('workSideBody');if(!w||!t||!bg||!title||!body)return;title.textContent=t['작업내용']||'작업 상세';body.innerHTML=workDetailHtml(w,t);bg.classList.add('open');}
 function closeWorkSide(){const bg=qs('workSideBg');if(bg)bg.classList.remove('open');}
-function resetForm(){EDIT_WORK_NO=null;qs('saveBtn').textContent='저장';selectedMaterials=[];renderSelectedMaterials();qs('vendorName').value='';qs('wageCost').value='0';qs('materialCost').value='0';qs('repairCost').value='0';qs('noteText').value='';qs('taskDate').value='';qs('taskEndDate').value='';qs('dayCount').value='1';qs('startTime').value='';qs('endTime').value='';qs('paymentRows').innerHTML='';addPaymentRow();qs('workersBox').innerHTML='';addWorkerRow();[...document.querySelectorAll('#cropChips .chip,#pestChips .chip')].forEach(c=>c.classList.remove('on'));document.querySelectorAll('#cropChips .default-chip,#pestChips .default-chip').forEach(c=>c.classList.add('on'));recalcPaymentSummary();}
+function resetForm(){EDIT_WORK_NO=null;qs('saveBtn').textContent='저장';selectedMaterials=[];renderSelectedMaterials();qs('vendorName').value='';qs('wageCost').value='0';qs('materialCost').value='0';qs('repairCost').value='0';qs('noteText').value='';qs('taskDate').value=new Date().toISOString().slice(0,10);qs('taskEndDate').value=qs('taskDate').value;qs('dayCount').value='1';qs('startTime').value='';qs('endTime').value='';qs('paymentRows').innerHTML='';addPaymentRow();qs('workersBox').innerHTML='';addWorkerRow();[...document.querySelectorAll('#cropChips .chip,#pestChips .chip')].forEach(c=>c.classList.remove('on'));document.querySelectorAll('#cropChips .default-chip,#pestChips .default-chip').forEach(c=>c.classList.add('on'));updateEndDate();recalcPaymentSummary();}
 function beginEdit(workIdx,taskIdx){const w=CURRENT_WORKS[workIdx],t=(w.task_items||[])[taskIdx];if(!w||!t)return;EDIT_WORK_NO=w['번호'];qs('saveBtn').textContent='수정 저장';selectedMaterials=[];for(const part of String(t['사용자재']||'').split(';')){if(!part.trim())continue;const pp=part.split('|');if(pp.length===3)selectedMaterials.push({name:pp[0],qty:Number(pp[1]||0),unit:pp[2]||''});}renderSelectedMaterials();qs('vendorName').value=w['업체명']||'';qs('wageCost').value=Number(w['인건비']||0);qs('materialCost').value=Number(w['자재비']||0);qs('repairCost').value=Number(w['수리및보수비']||0);qs('noteText').value=t['비고']||'';qs('taskDate').value=t['날짜']||'';qs('taskEndDate').value=t['종료날짜']||t['날짜']||'';qs('weatherSel').value=w['날씨']||qs('weatherSel').value;qs('taskKind').value=t['작업내용']||qs('taskKind').value;qs('machineSel').value=t['사용기계']||qs('machineSel').value;qs('startTime').value=t['시작시간']||'';qs('endTime').value=t['종료시간']||'';qs('workersBox').innerHTML='';for(const part of String(t['인력내역']||'').split(';')){if(!part.trim())continue;const pp=part.split('|');addWorkerRow({gender:pp[0]||'남자',count:Number(pp[1]||1),pay:Number(pp[2]||0),role:pp[3]||'일반'});}if(!qs('workersBox').children.length)addWorkerRow();qs('paymentRows').innerHTML='';(w['결제정보_json']||[]).forEach(r=>addPaymentRow(r));if(!(w['결제정보_json']||[]).length)addPaymentRow();[...document.querySelectorAll('#cropChips .chip,#pestChips .chip')].forEach(c=>c.classList.remove('on'));document.querySelectorAll('#cropChips .default-chip,#pestChips .default-chip').forEach(c=>c.classList.add('on'));for(const crop of String(t['작물']||'').split(',')){const v=crop.trim();if(!v||v==='작물 미선택')continue;const btn=[...document.querySelectorAll('#cropChips .chip')].find(b=>b.dataset.value===v);if(btn)toggleChipWithDefault(btn,'cropChips');}for(const pest of String(t['병충해']||'').split(',')){const v=pest.trim();if(!v||v==='병충해 미선택')continue;const btn=[...document.querySelectorAll('#pestChips .chip')].find(b=>b.dataset.value===v);if(btn)toggleChipWithDefault(btn,'pestChips');}recalcPaymentSummary();showTab('add');}
 function buildTaskPayload(){const start=qs('taskDate').value;if(!start){alert('시작일을 입력하세요');return null;}const end=qs('taskEndDate').value||start,st=qs('startTime').value,et=qs('endTime').value;let hours='시간미입력';if(st&&et){const a=st.split(':').map(Number),b=et.split(':').map(Number);const diff=(b[0]*60+b[1])-(a[0]*60+a[1]);if(diff>0)hours=(diff/60).toFixed(1).replace(/\.0$/,'')+'시간';}return {날씨:qs('weatherSel').value,vendor:qs('vendorName').value.trim(),wage_cost:Number(qs('wageCost').value||0),material_cost:Number(qs('materialCost').value||0),repair_cost:Number(qs('repairCost').value||0),payment_rows:collectPaymentRows(),note:qs('noteText').value.trim(),task_items:[{날짜:start,종료날짜:end,작물:chipSummary('cropChips','작물 미선택'),작업내용:qs('taskKind').value,시작시간:st,종료시간:et,작업시간:hours,사용기계:qs('machineSel').value,사용자재:selectedMaterials.map(m=>`${m.name}|${m.qty}|${m.unit}`).join(';'),병충해:chipSummary('pestChips','병충해 미선택'),인력내역:workerString(),비고:qs('noteText').value.trim()}]};}
 async function saveWork(){const payload=buildTaskPayload();if(!payload)return;const url=EDIT_WORK_NO?'/api/works/'+EDIT_WORK_NO:'/api/works';const method=EDIT_WORK_NO?'PUT':'POST';const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!d.ok&&d.ok!==true){alert((EDIT_WORK_NO?'수정':'저장')+' 실패');return;}alert(EDIT_WORK_NO?'수정되었습니다':'저장되었습니다');resetForm();await loadWorks();await loadPaymentSummary();await loadCalendarAndStats();await loadMaterials();showTab('works');}
 async function deleteWork(no){if(!confirm('삭제할까요?'))return;await fetch('/api/works/'+no,{method:'DELETE'});await loadWorks();await loadPaymentSummary();await loadCalendarAndStats();}
-async function loadMaterials(){const r=await fetch('/api/materials');const data=await r.json();const box=qs('materialsList');if(!Array.isArray(data)||!data.length){box.className='empty';box.innerHTML='등록된 자재가 없습니다.';return;}box.className='';box.innerHTML=data.map(m=>`<div class="line"><div><b>${m['자재명']}</b><div class="muted">${m['단위']||''} / 가격 ${m['가격']||0} / 재고 ${m['재고']||0}</div></div></div>`).join('');}
+async function loadMaterials(){const r=await fetch('/api/materials');const data=await r.json();const box=qs('materialsList');if(!Array.isArray(data)||!data.length){box.className='empty';box.innerHTML='등록된 자재가 없습니다.';return;}box.className='';box.innerHTML=data.map(m=>`<div class="line"><div><b>${m['자재명']}</b><div class="muted">${m['단위']||''} / 가격 ${m['가격']||0}</div></div><div><input type="number" id="stock_${encodeURIComponent(m['자재명'])}" value="${m['재고']??0}" style="width:90px;margin-right:6px"><button type="button" class="sub" onclick="updateMaterialStockByEncoded('${encodeURIComponent(m['자재명'])}')">재고수정</button></div></div>`).join('');}
+async function updateMaterialStockByEncoded(encodedName){const name=decodeURIComponent(encodedName);const el=qs('stock_'+encodedName);if(!el)return;await fetch('/api/materials/'+encodeURIComponent(name),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({재고:el.value||0})});await loadMaterials();await loadOptions();}
 async function saveMaterial(){const payload={자재명:qs('matName').value.trim(),단위:qs('matUnit').value.trim(),가격:qs('matPrice').value||0,재고:qs('matStock').value||0};if(!payload.자재명){alert('자재명을 입력하세요');return;}await fetch('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});qs('matName').value='';qs('matUnit').value='';qs('matPrice').value='';qs('matStock').value='';await loadMaterials();await loadOptions();}
-async function addOption(){const tbl=qs('optTable').value,value=qs('optValue').value.trim();if(!value)return;await fetch('/api/options/'+encodeURIComponent(tbl),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({항목:value})});qs('optValue').value='';await loadOptions();await loadOptionsView();}
+async function addOption(){const tbl=qs('optTable').value,value=qs('optValue').value.trim();if(!value){alert('옵션 값을 입력하세요');return;}await fetch('/api/options/'+encodeURIComponent(tbl),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({항목:value})});qs('optValue').value='';await loadOptions();await loadOptionsView();}
+async function renameOptionValue(tbl,name){const newName=prompt('수정',name);if(newName===null)return;const clean=newName.trim();if(!clean)return;await fetch('/api/options/'+encodeURIComponent(tbl)+'/'+encodeURIComponent(name),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({항목:clean})});await loadOptions();await loadOptionsView();}
+async function deleteOptionValue(tbl,name){if(!confirm('삭제할까요?'))return;await fetch('/api/options/'+encodeURIComponent(tbl)+'/'+encodeURIComponent(name),{method:'DELETE'});await loadOptions();await loadOptionsView();}
 async function savePest(){const payload={이름:qs('pestName').value.trim(),권장약제:qs('pestDrug').value.trim(),증상:qs('pestSymptom').value.trim()};if(!payload.이름){alert('병충해 이름을 입력하세요');return;}await fetch('/api/pests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});qs('pestName').value='';qs('pestDrug').value='';qs('pestSymptom').value='';await loadOptions();await loadOptionsView();}
-async function loadOptionsView(){const r=await fetch('/api/options');const data=await r.json();const box=qs('optionsView');let html='';['옵션_날씨','옵션_작물','옵션_작업내용','옵션_기계','옵션_단위'].forEach(k=>{html+=`<div style="margin-bottom:12px"><b>${k}</b><div>`+(data[k]||[]).map(v=>`<span class="tag">${v}</span>`).join('')+`</div></div>`;});html+=`<div style="margin-bottom:12px"><b>병충해</b><div>`+(data['병충해']||[]).map(p=>`<div class="line"><div>${p['이름']}<div class="muted">${p['권장약제']||'-'} / ${p['증상']||'-'}</div></div></div>`).join('')+`</div></div>`;box.className='';box.innerHTML=html||'<div class="empty">옵션이 없습니다.</div>';}
+async function loadOptionsView(){const r=await fetch('/api/options');const data=await r.json();const box=qs('optionsView');let html='';['옵션_날씨','옵션_작물','옵션_작업내용','옵션_기계','옵션_단위'].forEach(k=>{html+=`<div style="margin-bottom:12px"><div class="line"><b>${k}</b></div><div>`+(data[k]||[]).map(v=>`<div class="line"><span class="tag">${v}</span><div><button type="button" class="sub" onclick="renameOptionValue('${k}','${String(v).replace(/'/g,"\'")}')">수정</button> <button type="button" class="red" onclick="deleteOptionValue('${k}','${String(v).replace(/'/g,"\'")}')">삭제</button></div></div>`).join('')+`</div></div>`;});html+=`<div style="margin-bottom:12px"><b>병충해</b><div>`+(data['병충해']||[]).map(p=>`<div class="line"><div>${p['이름']}<div class="muted">${p['권장약제']||'-'} / ${p['증상']||'-'}</div></div></div>`).join('')+`</div></div>`;box.className='';box.innerHTML=html||'<div class="empty">옵션이 없습니다.</div>';}
 async function loadCalendarAndStats(){const year=qs('yearSel').value,month=qs('monthSel').value;const statRes=await fetch(`/api/stats?year=${year}&month=${month}`);const stat=await statRes.json();qs('monthCnt').textContent=(stat['당월']?.['건수']??0)+'건';qs('monthWage').textContent=won(stat['당월']?.['인건비']??0);qs('seasonWage').textContent=won(stat['시즌']?.['인건비']??0);qs('seasonLabel').textContent=`현재 시즌 기준: ${stat.season_year}년 3월 ~ ${stat.season_year+1}년 2월 / 전환일 ${stat.switch_date}`;const calRes=await fetch(`/api/calendar/${year}/${month}`);CAL_DATA=await calRes.json();const days=['일','월','화','수','목','금','토'];const firstDow=new Date(Number(year),Number(month)-1,1).getDay();const today=new Date();let html='<div class="cal">'+days.map(d=>`<div class="cal-head">${d}</div>`).join('');for(let i=0;i<firstDow;i++)html+='<div class="cal-day empty"></div>';for(let d=1;d<=CAL_DATA.days;d++){const arr=CAL_DATA.day_map[String(d)]||[];const isToday=today.getFullYear()==Number(year)&&(today.getMonth()+1)==Number(month)&&today.getDate()==d;const labels=arr.flatMap(x=>(x.task_items||[]).map(t=>t['작업내용']||'작업')).slice(0,2);html+=`<div class="cal-day ${isToday?'today':''}" onclick="openDayModal(${d})"><div>${d}</div>${labels.map(x=>`<span class="ev">${x}</span>`).join('')}${arr.length>2?`<span class="ev">+${arr.length-2}</span>`:''}</div>`;}html+='</div>';qs('calendarBox').innerHTML=html;}
 function workDetailHtml(work,task){const payments=(work['결제정보_json']||[]).map(p=>`<div class="muted">- ${p.method} ${won(p.amount)}</div>`).join('');return `<div class="list-card"><div><b>${task['작업내용']||''}</b></div><div class="muted">📅 ${task['날짜']||''}${task['종료날짜']&&task['종료날짜']!==task['날짜']?' ~ '+task['종료날짜']:''}</div><div class="muted">🌱 ${task['작물']||'작물 미선택'}</div><div class="muted">☀️ ${work['날씨']||'-'}</div><div class="muted">🔧 ${task['사용기계']||'-'}</div><div class="muted">🪣 ${task['사용자재']||'-'}</div><div class="muted">🦟 ${task['병충해']||'병충해 미선택'}</div><div class="muted">⏱ ${task['작업시간']||'시간미입력'}</div><div class="muted">👷 ${task['인력내역']||'-'}</div><div class="muted">🏢 ${work['업체명']||'-'}</div><div class="muted">시즌 ${work['시즌연도']||'-'}</div><div class="muted">💰 총 ${won(work['총금액']||0)} / 인건비 ${work['인건비_표시']||'0원'} / 자재비 ${won(work['자재비']||0)} / 수리·보수비 ${won(work['수리및보수비']||0)}</div>${payments||'<div class="muted">결재내역 없음</div>'}<div class="muted">📝 ${task['비고']||'-'}</div></div>`;}
 function openDayModal(day){const arr=(CAL_DATA.day_map||{})[String(day)]||[];qs('dayTitle').textContent=`${CAL_DATA.year}년 ${CAL_DATA.month}월 ${day}일`;if(!arr.length){qs('dayBody').innerHTML='<div class="empty">작업 없음</div>';qs('dayModalBg').classList.add('open');return;}let html='';arr.forEach(w=>{(w.task_items||[]).forEach(t=>{html+=workDetailHtml(w,t);});});qs('dayBody').innerHTML=html;qs('dayModalBg').classList.add('open');}
 function closeDayModal(){const bg=qs('dayModalBg');if(bg)bg.classList.remove('open');}
 document.addEventListener('click',e=>{if(e.target===qs('dayModalBg'))closeDayModal();if(e.target===qs('workSideBg'))closeWorkSide();});
 window.addEventListener('error',e=>alert('화면 오류: '+e.message));
-async function initApp(){buildYearMonthSelects();await loadOptions();qs('matSelect').addEventListener('change',updateMatUnit);qs('taskDate').addEventListener('change',updateEndDate);qs('dayCount').addEventListener('input',updateEndDate);qs('wageCost').addEventListener('input',recalcPaymentSummary);qs('materialCost').addEventListener('input',recalcPaymentSummary);qs('repairCost').addEventListener('input',recalcPaymentSummary);addWorkerRow();addPaymentRow();renderSelectedMaterials();await loadWorks();await loadPaymentSummary();await loadMaterials();await loadOptionsView();await loadSeasonSettings();await loadCalendarAndStats();}
+async async function initApp(){buildYearMonthSelects();await loadOptions();qs('matSelect').addEventListener('change',updateMatUnit);qs('taskDate').addEventListener('change',updateEndDate);qs('dayCount').addEventListener('input',updateEndDate);qs('wageCost').addEventListener('input',recalcPaymentSummary);qs('materialCost').addEventListener('input',recalcPaymentSummary);qs('repairCost').addEventListener('input',recalcPaymentSummary);addWorkerRow();addPaymentRow();renderSelectedMaterials();await loadWorks();await loadPaymentSummary();await loadMaterials();await loadOptionsView();await loadSeasonSettings();await loadCalendarAndStats();resetForm();}
 initApp();
-function addOption(tbl){
-    let name = prompt("추가할 값");
-    fetch(`/api/options/${tbl}`, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({name})
-    }).then(()=>loadOptions());
-}
-
-function deleteOption(tbl, name){
-    fetch(`/api/options/${tbl}/${name}`, {method:"DELETE"})
-    .then(()=>loadOptions());
-}
-
-function updateOption(tbl, name){
-    let newName = prompt("수정", name);
-    fetch(`/api/options/${tbl}/${name}`, {
-        method:"PUT",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({name:newName})
-    }).then(()=>loadOptions());
-}
 </script>
 </body>
 </html>"""

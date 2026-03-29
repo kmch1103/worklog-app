@@ -382,19 +382,46 @@ def safe_parse_task_items(row):
 
 @app.route("/api/works", methods=["GET"])
 def api_get_works():
+    q = (request.args.get("q") or "").strip()
+
     conn = db_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT
-            "번호","날짜","종료날짜","날씨","작물","작업내용","인건비",
-            "시작시간","종료시간","작업시간","사용기계","사용자재",
-            "적용병충해","비고","생성시각","수정시각","인력내역",
-            "작업목록","업체명","자재비","수리및보수비","총금액",
-            "현금결제액","계좌이체액","카드결제액","결제정보","시즌연도"
-        FROM "작업일지"
-        ORDER BY "날짜" DESC, "번호" DESC
-    """)
+    if q:
+        like = f"%{q}%"
+        cur.execute("""
+            SELECT
+                "번호","날짜","종료날짜","날씨","작물","작업내용","인건비",
+                "시작시간","종료시간","작업시간","사용기계","사용자재",
+                "적용병충해","비고","생성시각","수정시각","인력내역",
+                "작업목록","업체명","자재비","수리및보수비","총금액",
+                "현금결제액","계좌이체액","카드결제액","결제정보","시즌연도"
+            FROM "작업일지"
+            WHERE
+                COALESCE("날짜",'') ILIKE %s OR
+                COALESCE("종료날짜",'') ILIKE %s OR
+                COALESCE("날씨",'') ILIKE %s OR
+                COALESCE("작물",'') ILIKE %s OR
+                COALESCE("작업내용",'') ILIKE %s OR
+                COALESCE("사용기계",'') ILIKE %s OR
+                COALESCE("사용자재",'') ILIKE %s OR
+                COALESCE("적용병충해",'') ILIKE %s OR
+                COALESCE("비고",'') ILIKE %s OR
+                COALESCE("업체명",'') ILIKE %s OR
+                COALESCE("작업목록",'') ILIKE %s
+            ORDER BY "날짜" DESC, "번호" DESC
+        """, (like, like, like, like, like, like, like, like, like, like, like))
+    else:
+        cur.execute("""
+            SELECT
+                "번호","날짜","종료날짜","날씨","작물","작업내용","인건비",
+                "시작시간","종료시간","작업시간","사용기계","사용자재",
+                "적용병충해","비고","생성시각","수정시각","인력내역",
+                "작업목록","업체명","자재비","수리및보수비","총금액",
+                "현금결제액","계좌이체액","카드결제액","결제정보","시즌연도"
+            FROM "작업일지"
+            ORDER BY "날짜" DESC, "번호" DESC
+        """)
 
     rows = hydrate_work_rows(cur.fetchall())
     cur.close()

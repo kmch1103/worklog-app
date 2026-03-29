@@ -2,6 +2,7 @@
 import json
 import os
 from datetime import date, datetime, timedelta
+from datetime import datetime
 
 from flask import Flask, jsonify, render_template_string, request
 import psycopg
@@ -352,8 +353,6 @@ def api_payment_summary():
     return jsonify(row)
 
 
-@app.route("/api/works")
-from datetime import datetime
 
 def safe_parse_task_items(row):
     try:

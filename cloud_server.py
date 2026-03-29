@@ -442,8 +442,7 @@ def api_delete_work(no):
             return jsonify({"ok": False, "error": "작업을 찾을 수 없습니다."}), 404
 
         old = dict(old)
-        old_mat = aggregate_materials(parse_or_synthesize_task_items(old))
-
+        old_mat = aggregate_materials(safe_parse_task_items(old))
         for name, info in old_mat.items():
             cur.execute(
                 'UPDATE "자재" SET "재고" = COALESCE("재고",0) + %s WHERE "자재명"=%s',
@@ -457,6 +456,7 @@ def api_delete_work(no):
     except Exception as e:
         if conn:
             conn.rollback()
+        print("DELETE ERROR:", e)
         app.logger.exception("api_delete_work failed")
         return jsonify({"ok": False, "error": str(e)}), 500
 

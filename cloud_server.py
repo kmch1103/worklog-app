@@ -8,6 +8,15 @@ import os
 app = Flask(__name__)
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
+from flask import render_template_string
+
+@app.route("/")
+def home():
+    return render_template_string("""
+    <h2>작업일지 서버 정상 동작 중</h2>
+    <a href="/api/works_light">작업목록 확인</a>
+    """)
+
 def db_conn():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 

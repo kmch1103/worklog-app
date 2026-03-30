@@ -1,206 +1,245 @@
-import json
-import os
-import io
-import sqlite3
+import json, os, io
 from datetime import date, datetime
-
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, jsonify, request, render_template_string, send_file
+import psycopg
+from psycopg.rows import dict_row
 import pandas as pd
 
 app = Flask(__name__)
-
-DB_PATH = "worklog.db"
-
+DATABASE_URL = os.environ.get("DATABASE_URL","")
 
 def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
-
-# 초기 테이블 생성
-def init_db():
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS 작업일지 (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        날짜 TEXT,
-        작업내용 TEXT,
-        날씨 TEXT,
-        작물 TEXT,
-        시작시간 TEXT,
-        종료시간 TEXT,
-        자재비 REAL,
-        인건비 REAL,
-        총금액 REAL,
-        사용자재 TEXT,
-        비고 TEXT,
-        생성시각 TEXT
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS 자재 (
-        자재명 TEXT PRIMARY KEY,
-        단위 TEXT,
-        재고 REAL
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
-
-
+# ---------------------------
+# 📱 메인 UI (모바일 최적화)
+# ---------------------------
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return render_template_string("""
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:sans-serif;padding:10px}
+button{padding:12px;margin:5px;font-size:16px;width:100%}
+.card{border:1px solid #ddd;padding:10px;margin:5px;border-radius:10px}
+</style>
+</head>
 
+<body>
 
-# 자재 조회
+<h2>📒 작업일지</h2>
+
+<button onclick="go('input')">➕ 작업입력</button>
+<button onclick="loadWorks()">📋 작업목록</button>
+<button onclick="loadMaterials()">📦 자재관리</button>
+<button onclick="loadChart()">📊 월별수익</button>
+<button onclick="downloadExcel()">⬇ 엑셀</button>
+<button onclick="downloadMonthly()">📅 월정산</button>
+<button onclick="backup()">☁ 백업</button>
+
+<div id="content"></div>
+
+<script>
+function go(p){location.href='/' + p}
+
+function downloadExcel(){location='/api/export_excel'}
+function downloadMonthly(){location='/api/export_monthly'}
+
+function backup(){
+    fetch('/api/backup').then(()=>alert("백업 완료"))
+}
+
+async function loadWorks(){
+    let d=await fetch('/api/works_light').then(r=>r.json())
+    let html=""
+    d.forEach(w=>{
+        html+=`<div class="card">${w.날짜}<br>${w.작업내용}</div>`
+    })
+    content.innerHTML=html
+}
+
+async function loadMaterials(){
+    let d=await fetch('/api/materials_all').then(r=>r.json())
+    let html=""
+    d.forEach(m=>{
+        html+=`<div class="card">${m.자재명} (${m.재고})</div>`
+    })
+    content.innerHTML=html
+}
+
+async function loadChart(){
+    let d=await fetch('/api/monthly_json').then(r=>r.json())
+
+    let html="<h3>월별 수익</h3>"
+    d.forEach(x=>{
+        html+=`<div class="card">${x.month} → ${x.total}원</div>`
+    })
+    content.innerHTML=html
+}
+</script>
+
+</body>
+</html>
+""")
+
+# ---------------------------
+# 입력
+# ---------------------------
+@app.route("/input")
+def input_page():
+    return render_template_string("""
+<h2>작업 입력</h2>
+
+날짜 <input id="date"><br>
+작업 <input id="task"><br>
+
+자재명 <input id="mat"><br>
+수량 <input id="qty" type="number"><br>
+
+자재비 <input id="material_cost"><br>
+인건비 <input id="wage_cost"><br>
+
+<button onclick="save()">저장</button>
+<button onclick="cancel()">취소</button>
+
+<script>
+function save(){
+    fetch('/api/works',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+            date:date.value,
+            task:task.value,
+            material_cost:material_cost.value,
+            wage_cost:wage_cost.value,
+            materials:[{name:mat.value,qty:qty.value,unit:"개"}]
+        })
+    }).then(()=>location.href='/')
+}
+function cancel(){location.href='/'}
+</script>
+""")
+
+# ---------------------------
+# 자재
+# ---------------------------
 @app.route("/api/materials_all")
 def materials():
-    conn = db()
-    cur = conn.cursor()
+    c=db();cur=c.cursor()
+    cur.execute('SELECT "자재명","재고" FROM "자재"')
+    r=[dict(x) for x in cur.fetchall()]
+    cur.close();c.close()
+    return jsonify(r)
 
-    cur.execute("SELECT * FROM 자재 ORDER BY 자재명")
-    rows = [dict(x) for x in cur.fetchall()]
+# ---------------------------
+# 작업 저장
+# ---------------------------
+@app.route("/api/works",methods=["POST"])
+def add():
+    d=request.json or {}
+    c=db();cur=c.cursor()
 
-    conn.close()
-    return jsonify(rows)
-
-
-# 자재 수정
-@app.route("/api/materials/<name>", methods=["PUT"])
-def update_material(name):
-    d = request.json or {}
-    new_qty = float(d.get("재고", 0))
-
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute(
-        "UPDATE 자재 SET 재고=? WHERE 자재명=?",
-        (new_qty, name)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({"ok": 1})
-
-
-# 작업 추가
-@app.route("/api/works", methods=["POST"])
-def add_work():
-    d = request.json or {}
-
-    conn = db()
-    cur = conn.cursor()
-
-    materials = d.get("materials", [])
-
-    # 자재 재고 증가
-    for m in materials:
-        name = m.get("name")
-        unit = m.get("unit")
-        qty = float(m.get("qty", 0))
-
-        if not name:
-            continue
-
+    for m in d.get("materials",[]):
         cur.execute("""
-        INSERT INTO 자재 (자재명, 단위, 재고)
-        VALUES (?, ?, ?)
-        ON CONFLICT(자재명)
-        DO UPDATE SET 재고 = 재고 + excluded.재고
-        """, (name, unit, qty))
+        INSERT INTO "자재" ("자재명","단위","재고")
+        VALUES (%s,%s,%s)
+        ON CONFLICT ("자재명")
+        DO UPDATE SET "재고"="자재"."재고"+EXCLUDED."재고"
+        """,(m["name"],m["unit"],float(m["qty"])))
 
     cur.execute("""
-    INSERT INTO 작업일지
-    (날짜, 작업내용, 날씨, 작물, 시작시간, 종료시간,
-     자재비, 인건비, 총금액, 사용자재, 비고, 생성시각)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        d.get("날짜", date.today().isoformat()),
-        d.get("작업내용", ""),
-        d.get("날씨", ""),
-        d.get("작물", ""),
-        d.get("시작시간", ""),
-        d.get("종료시간", ""),
-        float(d.get("자재비", 0)),
-        float(d.get("인건비", 0)),
-        float(d.get("총금액", 0)),
-        json.dumps(materials, ensure_ascii=False),
-        d.get("비고", ""),
-        datetime.now().isoformat()
-    ))
+    INSERT INTO "작업일지"
+    ("날짜","작업내용","자재비","인건비","사용자재","생성시각")
+    VALUES (%s,%s,%s,%s,%s,%s)
+    """,(d.get("date") or date.today().isoformat(),
+         d.get("task",""),
+         float(d.get("material_cost",0)),
+         float(d.get("wage_cost",0)),
+         json.dumps(d.get("materials",[]),ensure_ascii=False),
+         datetime.now().isoformat()))
 
-    conn.commit()
-    conn.close()
+    c.commit();cur.close();c.close()
+    return jsonify({"ok":1})
 
-    return jsonify({"ok": 1})
-
-
-# 작업 삭제
-@app.route("/api/works", methods=["DELETE"])
-def delete_work():
-    d = request.json or {}
-
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute("""
-    DELETE FROM 작업일지
-    WHERE 날짜=? AND 작업내용=?
-    LIMIT 1
-    """, (d.get("날짜"), d.get("작업내용")))
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({"ok": 1})
-
-
+# ---------------------------
 # 작업 조회
+# ---------------------------
 @app.route("/api/works_light")
 def works():
-    conn = db()
-    cur = conn.cursor()
+    c=db();cur=c.cursor()
+    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" ORDER BY "날짜" DESC LIMIT 100')
+    r=[dict(x) for x in cur.fetchall()]
+    cur.close();c.close()
+    return jsonify(r)
 
+# ---------------------------
+# 📊 월별 JSON (그래프용)
+# ---------------------------
+@app.route("/api/monthly_json")
+def monthly():
+    c=db();cur=c.cursor()
     cur.execute("""
-    SELECT * FROM 작업일지
-    ORDER BY 날짜 DESC, 생성시각 DESC
-    LIMIT 300
+        SELECT SUBSTRING("날짜",1,7) as month,
+        SUM("자재비"+"인건비") as total
+        FROM "작업일지"
+        GROUP BY month ORDER BY month DESC
     """)
+    r=[dict(x) for x in cur.fetchall()]
+    cur.close();c.close()
+    return jsonify(r)
 
-    rows = [dict(x) for x in cur.fetchall()]
-    conn.close()
-
-    return jsonify(rows)
-
-
-# 엑셀 다운로드
+# ---------------------------
+# 엑셀
+# ---------------------------
 @app.route("/api/export_excel")
 def export_excel():
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM 작업일지")
-    rows = [dict(x) for x in cur.fetchall()]
-
-    df = pd.DataFrame(rows)
-
-    output = io.BytesIO()
-    df.to_excel(output, index=False)
+    c=db();cur=c.cursor()
+    cur.execute('SELECT * FROM "작업일지"')
+    rows=[dict(x) for x in cur.fetchall()]
+    df=pd.DataFrame(rows)
+    output=io.BytesIO()
+    df.to_excel(output,index=False)
     output.seek(0)
+    return send_file(output,download_name="작업일지.xlsx",as_attachment=True)
 
-    return send_file(output, download_name="작업일지.xlsx", as_attachment=True)
+# ---------------------------
+# 월별 엑셀
+# ---------------------------
+@app.route("/api/export_monthly")
+def export_monthly():
+    c=db();cur=c.cursor()
+    cur.execute("""
+        SELECT SUBSTRING("날짜",1,7) as month,
+        SUM("자재비") as material,
+        SUM("인건비") as wage,
+        SUM("자재비"+"인건비") as total
+        FROM "작업일지"
+        GROUP BY month
+    """)
+    df=pd.DataFrame([dict(x) for x in cur.fetchall()])
+    output=io.BytesIO()
+    df.to_excel(output,index=False)
+    output.seek(0)
+    return send_file(output,download_name="월정산.xlsx",as_attachment=True)
 
+# ---------------------------
+# ☁ 백업
+# ---------------------------
+@app.route("/api/backup")
+def backup():
+    c=db();cur=c.cursor()
+    cur.execute('SELECT * FROM "작업일지"')
+    rows=[dict(x) for x in cur.fetchall()]
+    cur.close();c.close()
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    with open("backup.json","w",encoding="utf-8") as f:
+        json.dump(rows,f,ensure_ascii=False)
+
+    return jsonify({"ok":1})
+
+# ---------------------------
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=8080)

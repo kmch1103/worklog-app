@@ -1,8 +1,9 @@
-import json, os
+import json, os, io
 from datetime import date, datetime
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, send_file
 import psycopg
 from psycopg.rows import dict_row
+import pandas as pd
 
 app = Flask(__name__)
 DATABASE_URL = os.environ.get("DATABASE_URL","")
@@ -21,73 +22,44 @@ def home():
 <button onclick="go('input')">작업입력</button>
 <button onclick="loadWorks()">작업목록</button>
 <button onclick="loadMaterials()">자재관리</button>
-<button onclick="loadCalendar()">달력</button>
+<button onclick="downloadExcel()">엑셀다운로드</button>
+<button onclick="downloadMonthly()">월별정산</button>
 
 <div id="content"></div>
 
 <script>
 function go(p){ location.href='/' + p }
 
+function downloadExcel(){
+    window.location="/api/export_excel"
+}
+
+function downloadMonthly(){
+    window.location="/api/export_monthly"
+}
+
 async function loadWorks(){
     let d=await fetch('/api/works_light').then(r=>r.json())
     let html="<h3>작업목록</h3>"
     d.forEach(w=>{
-        html+=`<div>${w.날짜} - ${w.작업내용}
-        <button onclick="edit(${w.번호})">수정</button></div>`
+        html+=`<div>${w.날짜} - ${w.작업내용}</div>`
     })
     content.innerHTML=html
 }
 
-function edit(id){ location.href='/edit/'+id }
-
 async function loadMaterials(){
     let d=await fetch('/api/materials_all').then(r=>r.json())
-    let has="",none=""
-
+    let html=""
     d.forEach(m=>{
-        let row=`
-        <div>${m.자재명} (${m.재고})
-        <input id="q_${m.자재명}" value="${m.재고}">
-        <button onclick="u('${m.자재명}')">수정</button>
-        <button onclick="del('${m.자재명}')">삭제</button></div>`
-        m.재고>0?has+=row:none+=row
+        html+=`<div>${m.자재명} (${m.재고})</div>`
     })
-
-    content.innerHTML="<h3>재고 있음</h3>"+has+"<h3>재고 없음</h3>"+none
-}
-
-function u(n){
-    let v=document.getElementById("q_"+n).value
-    fetch('/api/materials/'+n,{method:'PUT',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({재고:v})}).then(loadMaterials)
-}
-
-function del(n){
-    if(!confirm("삭제?"))return
-    fetch('/api/materials/'+n,{method:'DELETE'}).then(loadMaterials)
-}
-
-async function loadCalendar(){
-    let today=new Date()
-    let y=today.getFullYear()
-    let m=today.getMonth()+1
-
-    let d=await fetch(`/api/calendar_compare/${y}/${m}`).then(r=>r.json())
-
-    let html="<h3>올해</h3>"
-    d.this.forEach(x=> html+=`<div>${x.날짜} ${x.작업내용}</div>`)
-
-    html+="<h3>작년</h3>"
-    d.last.forEach(x=> html+=`<div>${x.날짜} ${x.작업내용}</div>`)
-
     content.innerHTML=html
 }
 </script>
 """)
 
 # ---------------------------
-# 입력 화면
+# 입력
 # ---------------------------
 @app.route("/input")
 def input_page():
@@ -100,6 +72,9 @@ def input_page():
 자재명 <input id="mat"><br>
 수량 <input id="qty" type="number"><br>
 
+자재비 <input id="material_cost"><br>
+인건비 <input id="wage_cost"><br>
+
 <button onclick="save()">저장</button>
 <button onclick="cancel()">취소</button>
 
@@ -111,6 +86,8 @@ function save(){
         body:JSON.stringify({
             date:date.value,
             task:task.value,
+            material_cost:material_cost.value,
+            wage_cost:wage_cost.value,
             materials:[{name:mat.value,qty:qty.value,unit:"개"}]
         })
     }).then(()=>location.href='/')
@@ -120,29 +97,7 @@ function cancel(){ location.href='/' }
 """)
 
 # ---------------------------
-# 수정 화면
-# ---------------------------
-@app.route("/edit/<int:id>")
-def edit_page(id):
-    return render_template_string(f"""
-<h2>작업 수정 (ID:{id})</h2>
-
-작업내용 <input id="task"><br>
-
-<button onclick="save()">수정</button>
-<button onclick="cancel()">취소</button>
-
-<script>
-function save(){{
-    alert("수정 기능은 확장 가능")
-    location.href='/'
-}}
-function cancel(){{ location.href='/' }}
-</script>
-""")
-
-# ---------------------------
-# 자재 API
+# 자재
 # ---------------------------
 @app.route("/api/materials_all")
 def materials():
@@ -152,29 +107,15 @@ def materials():
     cur.close();c.close()
     return jsonify(r)
 
-@app.route("/api/materials/<name>",methods=["PUT"])
-def update_mat(name):
-    v=float(request.json.get("재고",0))
-    c=db();cur=c.cursor()
-    cur.execute('UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s',(v,name))
-    c.commit();cur.close();c.close()
-    return jsonify({"ok":1})
-
-@app.route("/api/materials/<name>",methods=["DELETE"])
-def del_mat(name):
-    c=db();cur=c.cursor()
-    cur.execute('DELETE FROM "자재" WHERE "자재명"=%s',(name,))
-    c.commit();cur.close();c.close()
-    return jsonify({"ok":1})
-
 # ---------------------------
-# 작업 저장 (자재 자동등록)
+# 작업 저장
 # ---------------------------
 @app.route("/api/works",methods=["POST"])
 def add():
     d=request.json or {}
     c=db();cur=c.cursor()
 
+    # 자재 자동 등록 + 누적
     for m in d.get("materials",[]):
         cur.execute("""
         INSERT INTO "자재" ("자재명","단위","재고")
@@ -184,10 +125,14 @@ def add():
         """,(m["name"],m["unit"],float(m["qty"])))
 
     cur.execute("""
-    INSERT INTO "작업일지" ("날짜","작업내용","생성시각")
-    VALUES (%s,%s,%s)
+    INSERT INTO "작업일지"
+    ("날짜","작업내용","자재비","인건비","사용자재","생성시각")
+    VALUES (%s,%s,%s,%s,%s,%s)
     """,(d.get("date") or date.today().isoformat(),
          d.get("task",""),
+         float(d.get("material_cost",0)),
+         float(d.get("wage_cost",0)),
+         json.dumps(d.get("materials",[]), ensure_ascii=False),
          datetime.now().isoformat()))
 
     c.commit();cur.close();c.close()
@@ -205,20 +150,78 @@ def works():
     return jsonify(r)
 
 # ---------------------------
-# 달력 비교
+# 🔥 엑셀 (자재 상세 포함)
 # ---------------------------
-@app.route("/api/calendar_compare/<int:y>/<int:m>")
-def cal(y,m):
+@app.route("/api/export_excel")
+def export_excel():
     c=db();cur=c.cursor()
 
-    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s',(f"{y}-{m:02d}%",))
-    now=[dict(x) for x in cur.fetchall()]
+    cur.execute("""
+        SELECT "번호","날짜","작업내용","자재비","인건비","사용자재"
+        FROM "작업일지"
+        ORDER BY "날짜" DESC
+    """)
 
-    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s',(f"{y-1}-{m:02d}%",))
-    prev=[dict(x) for x in cur.fetchall()]
+    rows=[]
+    for r in cur.fetchall():
+        row=dict(r)
+
+        # 자재 상세 풀기
+        mats=json.loads(row.get("사용자재") or "[]")
+        mat_text=", ".join([f"{m['name']}({m['qty']})" for m in mats])
+
+        rows.append({
+            "번호":row["번호"],
+            "날짜":row["날짜"],
+            "작업내용":row["작업내용"],
+            "자재상세":mat_text,
+            "자재비":row["자재비"],
+            "인건비":row["인건비"],
+            "총금액":(row["자재비"] or 0)+(row["인건비"] or 0)
+        })
 
     cur.close();c.close()
-    return jsonify({"this":now,"last":prev})
+
+    df=pd.DataFrame(rows)
+
+    output=io.BytesIO()
+    df.to_excel(output,index=False)
+    output.seek(0)
+
+    return send_file(output,
+        download_name="작업일지_상세.xlsx",
+        as_attachment=True)
+
+# ---------------------------
+# 🔥 월별 정산 엑셀
+# ---------------------------
+@app.route("/api/export_monthly")
+def export_monthly():
+    c=db();cur=c.cursor()
+
+    cur.execute("""
+        SELECT
+        SUBSTRING("날짜",1,7) as month,
+        SUM("자재비") as material,
+        SUM("인건비") as wage,
+        SUM("자재비"+"인건비") as total
+        FROM "작업일지"
+        GROUP BY month
+        ORDER BY month DESC
+    """)
+
+    rows=[dict(x) for x in cur.fetchall()]
+    cur.close();c.close()
+
+    df=pd.DataFrame(rows)
+
+    output=io.BytesIO()
+    df.to_excel(output,index=False)
+    output.seek(0)
+
+    return send_file(output,
+        download_name="월별정산.xlsx",
+        as_attachment=True)
 
 # ---------------------------
 if __name__=="__main__":

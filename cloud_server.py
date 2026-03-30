@@ -1,11 +1,15 @@
 import json, os, io
 from datetime import date, datetime
+from flask import Flask, request, jsonify, render_template
 from flask import Flask, jsonify, request, render_template_string, send_file
 import psycopg
 from psycopg.rows import dict_row
 import pandas as pd
 
 app = Flask(__name__)
+@app.route("/")
+def home():
+    return render_template("index.html")
 DATABASE_URL = os.environ.get("DATABASE_URL","")
 
 def db():

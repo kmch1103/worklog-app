@@ -1,1295 +1,308 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>작업일지 클라우드 시스템</title>
-  <style>
-    :root {
-      --bg: #f3f6fb;
-      --sidebar: #1f2937;
-      --sidebar-2: #111827;
-      --menu: #374151;
-      --menu-hover: #4b5563;
-      --menu-active: #2563eb;
-      --card: #ffffff;
-      --text: #111827;
-      --muted: #6b7280;
-      --line: #e5e7eb;
-      --danger: #dc2626;
-      --success: #16a34a;
-      --warning: #d97706;
-      --shadow: 0 4px 14px rgba(0,0,0,0.08);
-      --radius: 16px;
-    }
+<meta charset="UTF-8">
+<title>작업일지</title>
 
-    * { box-sizing: border-box; }
+<style>
+body {
+    font-family: 맑은고딕;
+    margin: 0;
+    background: #f5f6fa;
+}
 
-    body {
-      margin: 0;
-      font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
+/* ===== 좌측 메뉴 ===== */
+.sidebar {
+    width: 220px;
+    height: 100vh;
+    position: fixed;
+    background: #1f2937;
+    color: white;
+    padding: 20px;
+}
 
-    .app {
-      display: flex;
-      min-height: 100vh;
-    }
+.sidebar h2 {
+    margin-bottom: 20px;
+}
 
-    .sidebar {
-      width: 240px;
-      background: linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-2) 100%);
-      color: #fff;
-      padding: 20px 16px;
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow-y: auto;
-      box-shadow: 2px 0 12px rgba(0,0,0,0.12);
-      z-index: 20;
-    }
+.menu-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #374151;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
 
-    .logo {
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 8px;
-      letter-spacing: -0.4px;
-    }
+/* ===== 메인 영역 ===== */
+.content {
+    margin-left: 240px;
+    padding: 20px;
+}
 
-    .logo-sub {
-      font-size: 12px;
-      color: #cbd5e1;
-      margin-bottom: 20px;
-    }
+/* ===== 카드 ===== */
+.card {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
 
-    .menu-title {
-      font-size: 12px;
-      color: #94a3b8;
-      margin: 18px 6px 10px;
-    }
-
-    .menu-btn {
-      width: 100%;
-      border: none;
-      background: var(--menu);
-      color: #fff;
-      padding: 13px 14px;
-      margin-bottom: 10px;
-      border-radius: 12px;
-      text-align: left;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.2s ease;
-    }
-
-    .menu-btn:hover { background: var(--menu-hover); }
-    .menu-btn.active { background: var(--menu-active); }
-
-    .content {
-      flex: 1;
-      padding: 22px;
-      min-width: 0;
-    }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 18px;
-      flex-wrap: wrap;
-    }
-
-    .page-title {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-    }
-
-    .page-desc {
-      color: var(--muted);
-      font-size: 14px;
-      margin-top: 4px;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .input, .select, .textarea, .btn {
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      padding: 11px 12px;
-      font-size: 14px;
-      outline: none;
-    }
-
-    .input, .select, .textarea {
-      background: #fff;
-      width: 100%;
-    }
-
-    .textarea {
-      min-height: 92px;
-      resize: vertical;
-      font-family: inherit;
-    }
-
-    .btn {
-      background: #fff;
-      cursor: pointer;
-      font-weight: 700;
-    }
-
-    .btn.primary {
-      background: #2563eb;
-      border-color: #2563eb;
-      color: #fff;
-    }
-
-    .btn.success {
-      background: var(--success);
-      border-color: var(--success);
-      color: #fff;
-    }
-
-    .btn.warning {
-      background: var(--warning);
-      border-color: var(--warning);
-      color: #fff;
-    }
-
-    .btn.danger {
-      background: var(--danger);
-      border-color: var(--danger);
-      color: #fff;
-    }
-
-    .btn:hover { opacity: 0.93; }
-
-    .page { display: none; }
-    .page.active { display: block; }
-
-    .panel {
-      background: var(--card);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 18px;
-      margin-bottom: 18px;
-    }
-
-    .grid {
-      display: grid;
-      gap: 14px;
-    }
-
-    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-    .field label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      color: #374151;
-    }
-
-    .date-group {
-      margin-bottom: 22px;
-    }
-
-    .date-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .date-title {
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: -0.3px;
-    }
-
-    .date-count {
-      font-size: 13px;
-      color: var(--muted);
-      background: #eef2ff;
-      padding: 6px 10px;
-      border-radius: 999px;
-    }
-
-    .work-cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 14px;
-    }
-
-    .work-card {
-      background: #fff;
-      border: 1px solid #edf0f5;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .work-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 10px;
-    }
-
-    .work-title {
-      font-size: 18px;
-      font-weight: 800;
-      line-height: 1.3;
-    }
-
-    .work-badge {
-      font-size: 12px;
-      background: #dbeafe;
-      color: #1d4ed8;
-      padding: 5px 8px;
-      border-radius: 999px;
-      white-space: nowrap;
-      font-weight: 700;
-    }
-
-    .meta-list {
-      display: grid;
-      gap: 7px;
-      font-size: 14px;
-    }
-
-    .meta-row {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-    }
-
-    .meta-label {
-      width: 76px;
-      color: var(--muted);
-      flex-shrink: 0;
-      font-weight: 700;
-    }
-
-    .meta-value {
-      flex: 1;
-      word-break: break-word;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 14px;
-    }
-
-    .stat-card {
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-      padding: 18px;
-      border: 1px solid #eef2f7;
-    }
-
-    .stat-title {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      font-weight: 700;
-    }
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.6px;
-    }
-
-    .list-table-wrap {
-      overflow-x: auto;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 740px;
-    }
-
-    th, td {
-      padding: 13px 12px;
-      border-bottom: 1px solid #eef2f7;
-      text-align: left;
-      font-size: 14px;
-      vertical-align: top;
-    }
-
-    th {
-      background: #f8fafc;
-      font-size: 13px;
-      color: #475569;
-    }
-
-    .empty {
-      padding: 36px 16px;
-      text-align: center;
-      color: var(--muted);
-      font-weight: 700;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-    }
-
-    .inline {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .material-row {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr auto;
-      gap: 10px;
-      margin-bottom: 10px;
-      align-items: center;
-    }
-
-    .summary-box {
-      background: #eff6ff;
-      color: #1e3a8a;
-      padding: 12px 14px;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .mobile-top {
-      display: none;
-      margin-bottom: 12px;
-    }
-
-    .toggle-menu-btn {
-      width: 100%;
-      border: none;
-      background: #1f2937;
-      color: #fff;
-      border-radius: 12px;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .option-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .option-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: #eef2ff;
-      color: #1e3a8a;
-      padding: 8px 10px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .chip-del {
-      border: none;
-      background: transparent;
-      color: #b91c1c;
-      cursor: pointer;
-      font-weight: 800;
-      padding: 0;
-    }
-
-    canvas {
-      width: 100% !important;
-      max-height: 380px;
-      background: #fff;
-      border-radius: 16px;
-    }
-
-    @media (max-width: 1024px) {
-      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-
-    @media (max-width: 840px) {
-      .app { display: block; }
-      .mobile-top { display: block; }
-      .sidebar {
-        position: fixed;
-        left: -260px;
-        top: 0;
-        height: 100vh;
-        transition: left 0.25s ease;
-      }
-      .sidebar.open { left: 0; }
-      .content { padding: 14px; }
-      .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
-      .material-row { grid-template-columns: 1fr; }
-    }
-  </style>
+/* ===== 입력 영역 ===== */
+.input-box input {
+    margin: 5px;
+}
+</style>
 </head>
+
 <body>
-  <div class="app">
-    <aside class="sidebar" id="sidebar">
-      <div class="logo">작업일지</div>
-      <div class="logo-sub">클라우드 시스템</div>
 
-      <div class="menu-title">메뉴</div>
-      <button class="menu-btn active" data-page="journal" onclick="showPage('journal', this)">작업일지</button>
-      <button class="menu-btn" data-page="input" onclick="showPage('input', this)">작업일지 입력</button>
-      <button class="menu-btn" data-page="materials" onclick="showPage('materials', this)">자재관리</button>
-      <button class="menu-btn" data-page="monthly" onclick="showPage('monthly', this)">월별수익</button>
-      <button class="menu-btn" data-page="excel" onclick="showPage('excel', this)">엑셀</button>
-      <button class="menu-btn" data-page="settlement" onclick="showPage('settlement', this)">월정산</button>
-      <button class="menu-btn" data-page="backup" onclick="showPage('backup', this)">백업</button>
-      <button class="menu-btn" data-page="options" onclick="showPage('options', this)">옵션관리</button>
-    </aside>
+<!-- =========================
+     좌측 메뉴
+     ========================= -->
+<div class="sidebar">
+    <h2>작업일지</h2>
 
-    <main class="content">
-      <div class="mobile-top">
-        <button class="toggle-menu-btn" onclick="toggleSidebar()">메뉴 열기 / 닫기</button>
-      </div>
+    <!-- 현재는 작업일지만 사용 -->
+    <button class="menu-btn">작업일지</button>
+</div>
 
-      <div class="page active" id="journal-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">작업일지</div>
-            <div class="page-desc">기본 첫 화면입니다. 같은 날짜 작업은 옆 카드로 표시됩니다.</div>
-          </div>
-          <div class="toolbar">
-            <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadJournal()" />
-            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재/병충해 검색" style="width:240px" oninput="loadJournal()" />
-            <button class="btn" onclick="resetJournalFilters()">초기화</button>
-            <button class="btn primary" onclick="loadJournal()">새로고침</button>
-          </div>
-        </div>
 
-        <div class="stats-grid" id="topStats"></div>
-        <div id="journalListArea"></div>
-      </div>
+<!-- =========================
+     메인 화면
+     ========================= -->
+<div class="content">
 
-      <div class="page" id="input-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">작업일지 입력</div>
-            <div class="page-desc">시작날짜와 종료날짜를 넣으면 연속일수가 자동 계산됩니다. 옵션관리에서 선택 목록을 바꿀 수 있습니다.</div>
-          </div>
-        </div>
+    <!-- =========================
+         입력 영역 (작업일지 입력)
+         ========================= -->
+    <div class="card">
 
-        <div class="panel">
-          <form id="workForm">
-            <div class="grid grid-3">
-              <div class="field">
-                <label>시작날짜</label>
-                <input class="input" type="date" id="f_start_date" required />
-              </div>
-              <div class="field">
-                <label>종료날짜</label>
-                <input class="input" type="date" id="f_end_date" required />
-              </div>
-              <div class="field">
-                <label>연속일수</label>
-                <input class="input" type="number" id="f_days" min="1" readonly />
-              </div>
+        <h3>작업 입력</h3>
+
+        <!-- 작업내용 -->
+        <input id="task" placeholder="작업내용 입력">
+
+        <br><br>
+
+        <!-- =========================
+             다중선택 - 날씨
+             역할: 체크된 값 배열로 저장됨
+             ========================= -->
+        날씨:
+        <label><input type="checkbox" name="weather" value="맑음">맑음</label>
+        <label><input type="checkbox" name="weather" value="비">비</label>
+        <label><input type="checkbox" name="weather" value="흐림">흐림</label>
+
+        <br><br>
+
+        <!-- =========================
+             다중선택 - 작물
+             ========================= -->
+        작물:
+        <label><input type="checkbox" name="crop" value="한라봉">한라봉</label>
+        <label><input type="checkbox" name="crop" value="천혜향">천혜향</label>
+
+        <br><br>
+
+        <!-- =========================
+             다중선택 - 병충해
+             ========================= -->
+        병충해:
+        <label><input type="checkbox" name="pest" value="응애">응애</label>
+        <label><input type="checkbox" name="pest" value="진딧물">진딧물</label>
+
+        <br><br>
+
+        <!-- =========================
+             사용자재 입력 (여러개 추가 가능)
+             ========================= -->
+        <h4>사용자재</h4>
+        <div id="materials"></div>
+        <button onclick="addMaterial()">+ 자재 추가</button>
+
+        <br><br>
+
+        <!-- =========================
+             사용기계 입력
+             ========================= -->
+        <h4>사용기계</h4>
+        <div id="machines"></div>
+        <button onclick="addMachine()">+ 기계 추가</button>
+
+        <br><br>
+
+        <!-- =========================
+             인건비 입력 (다중)
+             ========================= -->
+        <h4>인건비</h4>
+        <div id="labor"></div>
+        <button onclick="addLabor()">+ 인건비 추가</button>
+
+        <br><br>
+
+        <button onclick="saveWork()">저장</button>
+
+    </div>
+
+
+    <!-- =========================
+         작업일지 목록
+         ========================= -->
+    <div id="list"></div>
+
+</div>
+
+
+<script>
+
+/* =========================
+   체크박스 값 가져오기
+   역할: 다중선택 → 배열 반환
+   ========================= */
+function getChecked(name){
+    return Array.from(document.querySelectorAll("input[name="+name+"]:checked"))
+        .map(x=>x.value)
+}
+
+/* =========================
+   사용자재 추가 UI
+   ========================= */
+function addMaterial(){
+    let div = document.createElement("div")
+    div.innerHTML = `
+        자재명 <input>
+        수량 <input type="number">
+        방식
+        <select>
+            <option>사용</option>
+            <option>구매</option>
+            <option>대여</option>
+        </select>
+    `
+    document.getElementById("materials").appendChild(div)
+}
+
+/* =========================
+   기계 추가 UI
+   ========================= */
+function addMachine(){
+    let div = document.createElement("div")
+    div.innerHTML = `
+        기계명 <input>
+        방식
+        <select onchange="paymentUI(this)">
+            <option>사용</option>
+            <option>구매</option>
+            <option>대여</option>
+        </select>
+        <span class="payment"></span>
+    `
+    document.getElementById("machines").appendChild(div)
+}
+
+/* =========================
+   결제방식 UI (카드/할부 등)
+   ========================= */
+function paymentUI(sel){
+    let span = sel.parentNode.querySelector(".payment")
+
+    span.innerHTML = `
+        결제
+        <select onchange="cardUI(this)">
+            <option>현금</option>
+            <option>계좌이체</option>
+            <option>카드</option>
+        </select>
+    `
+}
+
+/* 카드 선택시 할부 UI */
+function cardUI(sel){
+    if(sel.value == "카드"){
+        sel.parentNode.innerHTML += `
+            <select>
+                <option>일시불</option>
+                <option>할부</option>
+            </select>
+        `
+    }
+}
+
+/* =========================
+   인건비 추가
+   ========================= */
+function addLabor(){
+    let div = document.createElement("div")
+    div.innerHTML = `
+        인원 <input type="number">
+        금액 <input type="number">
+    `
+    document.getElementById("labor").appendChild(div)
+}
+
+/* =========================
+   저장
+   ========================= */
+function saveWork(){
+
+    let data = {
+        작업내용: document.getElementById("task").value,
+        날씨: getChecked("weather"),
+        작물: getChecked("crop"),
+        병충해: getChecked("pest"),
+        사용자재: [],
+        사용기계: [],
+        인건비상세: []
+    }
+
+    fetch("/api/works",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(data)
+    }).then(()=>{
+        alert("저장완료")
+        loadList()
+    })
+}
+
+/* =========================
+   목록 불러오기
+   ========================= */
+function loadList(){
+    fetch("/api/works_light")
+    .then(r=>r.json())
+    .then(data=>{
+        let html = ""
+        data.forEach(d=>{
+            html += `
+            <div class="card">
+                <b>${d.작업내용}</b> (${d.날짜})
+                <button onclick="del('${d.날짜}','${d.작업내용}')">삭제</button>
             </div>
+            `
+        })
+        document.getElementById("list").innerHTML = html
+    })
+}
+
+/* =========================
+   삭제
+   ========================= */
+function del(date, task){
+    fetch("/api/works",{
+        method:"DELETE",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({날짜:date, 작업내용:task})
+    }).then(()=>loadList())
+}
+
+/* 초기 로딩 */
+loadList()
+
+</script>
 
-            <div class="grid grid-2">
-              <div class="field">
-                <label>시작시간</label>
-                <input class="input" type="time" id="f_start_time" />
-              </div>
-              <div class="field">
-                <label>종료시간</label>
-                <input class="input" type="time" id="f_end_time" />
-              </div>
-            </div>
-
-            <div class="grid grid-3">
-              <div class="field">
-                <label>날씨</label>
-                <input class="input" list="weather-options" id="f_weather" placeholder="선택 또는 입력" />
-                <datalist id="weather-options"></datalist>
-              </div>
-              <div class="field">
-                <label>작물</label>
-                <input class="input" list="crop-options" id="f_crop" placeholder="선택 또는 입력" />
-                <datalist id="crop-options"></datalist>
-              </div>
-              <div class="field">
-                <label>병충해</label>
-                <input class="input" list="pest-options" id="f_pest" placeholder="선택 또는 입력" />
-                <datalist id="pest-options"></datalist>
-              </div>
-            </div>
-
-            <div class="grid grid-2">
-              <div class="field">
-                <label>작업내용</label>
-                <input class="input" list="work-options" id="f_work" placeholder="선택 또는 입력" required />
-                <datalist id="work-options"></datalist>
-              </div>
-              <div class="field">
-                <label>대표 사용자재</label>
-                <input class="input" list="material-options" id="f_main_material" placeholder="선택 또는 입력" />
-                <datalist id="material-options"></datalist>
-              </div>
-            </div>
-
-            <div class="panel" style="padding:14px; margin-top:16px; background:#f8fbff; box-shadow:none; border:1px solid #e5edf8;">
-              <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                <strong>사용 자재 입력</strong>
-                <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
-              </div>
-              <div id="materialRows"></div>
-              <div class="summary-box">자재는 여러 개 추가할 수 있습니다. 첫 줄 자재명은 옵션 목록과 연결됩니다.</div>
-            </div>
-
-            <div class="grid grid-3">
-              <div class="field">
-                <label>자재비</label>
-                <input class="input" type="number" id="f_material_cost" value="0" min="0" />
-              </div>
-              <div class="field">
-                <label>인건비</label>
-                <input class="input" type="number" id="f_labor_cost" value="0" min="0" />
-              </div>
-              <div class="field">
-                <label>총금액</label>
-                <input class="input" type="number" id="f_total_cost" value="0" min="0" readonly />
-              </div>
-            </div>
-
-            <div class="field">
-              <label>비고</label>
-              <textarea class="textarea" id="f_note" placeholder="메모를 입력하세요."></textarea>
-            </div>
-
-            <div class="inline" style="margin-top:16px;">
-              <button type="submit" class="btn primary">저장</button>
-              <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <div class="page" id="materials-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">자재관리</div>
-            <div class="page-desc">재고 있음 / 없음으로 구분해서 표시합니다.</div>
-          </div>
-          <div class="toolbar">
-            <button class="btn primary" onclick="loadMaterials()">새로고침</button>
-          </div>
-        </div>
-
-        <div class="grid grid-2">
-          <div class="panel">
-            <h3 style="margin-top:0;">재고 있는 자재</h3>
-            <div id="materialsHasStock"></div>
-          </div>
-          <div class="panel">
-            <h3 style="margin-top:0;">재고 없는 자재</h3>
-            <div id="materialsNoStock"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="page" id="monthly-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">월별수익</div>
-            <div class="page-desc">월별 총금액 카드와 간단 차트를 함께 표시합니다.</div>
-          </div>
-          <div class="toolbar">
-            <button class="btn primary" onclick="loadMonthly()">불러오기</button>
-          </div>
-        </div>
-        <div id="monthlyCards" class="stats-grid"></div>
-        <div class="panel">
-          <canvas id="monthlyCanvas" height="140"></canvas>
-        </div>
-      </div>
-
-      <div class="page" id="excel-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">엑셀</div>
-            <div class="page-desc">작업일지 엑셀과 월별 정산 엑셀을 바로 다운로드합니다.</div>
-          </div>
-        </div>
-        <div class="grid grid-2">
-          <div class="panel">
-            <h3 style="margin-top:0;">작업일지 엑셀</h3>
-            <p>날짜, 작업내용, 사용자재, 자재비, 인건비, 총금액 포함</p>
-            <button class="btn success" onclick="downloadFile('/api/export_excel')">작업일지 엑셀 다운로드</button>
-          </div>
-          <div class="panel">
-            <h3 style="margin-top:0;">월별 정산 엑셀</h3>
-            <p>월별 자재비, 인건비, 총금액 합계 포함</p>
-            <button class="btn success" onclick="downloadFile('/api/export_monthly')">월정산 엑셀 다운로드</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="page" id="settlement-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">월정산</div>
-            <div class="page-desc">월별 합산 데이터를 표 형태로 확인합니다.</div>
-          </div>
-        </div>
-        <div class="list-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>월</th>
-                <th>자재비</th>
-                <th>인건비</th>
-                <th>총금액</th>
-              </tr>
-            </thead>
-            <tbody id="settlementBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="page" id="backup-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">백업</div>
-            <div class="page-desc">현재 데이터를 JSON 파일로 백업합니다.</div>
-          </div>
-        </div>
-        <div class="panel">
-          <p>백업 파일은 서버에서 생성되거나 다운로드됩니다.</p>
-          <button class="btn warning" onclick="downloadFile('/api/backup')">백업 실행</button>
-        </div>
-      </div>
-
-      <div class="page" id="options-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">옵션관리</div>
-            <div class="page-desc">날씨, 작물, 작업내용, 사용자재, 병충해 선택 목록을 관리합니다. 현재는 브라우저 저장 방식입니다.</div>
-          </div>
-        </div>
-
-        <div class="grid grid-2">
-          <div class="panel">
-            <h3 style="margin-top:0;">날씨</h3>
-            <div class="inline">
-              <input class="input" id="opt_weather" placeholder="예: 맑음" />
-              <button class="btn primary" onclick="addOptionItem('weather')">추가</button>
-            </div>
-            <div class="option-list" id="weather-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">작물</h3>
-            <div class="inline">
-              <input class="input" id="opt_crop" placeholder="예: 한라봉" />
-              <button class="btn primary" onclick="addOptionItem('crop')">추가</button>
-            </div>
-            <div class="option-list" id="crop-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">작업내용</h3>
-            <div class="inline">
-              <input class="input" id="opt_work" placeholder="예: 방제 작업" />
-              <button class="btn primary" onclick="addOptionItem('work')">추가</button>
-            </div>
-            <div class="option-list" id="work-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">사용자재</h3>
-            <div class="inline">
-              <input class="input" id="opt_material" placeholder="예: 톱신페스트" />
-              <button class="btn primary" onclick="addOptionItem('material')">추가</button>
-            </div>
-            <div class="option-list" id="material-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">병충해</h3>
-            <div class="inline">
-              <input class="input" id="opt_pest" placeholder="예: 응애" />
-              <button class="btn primary" onclick="addOptionItem('pest')">추가</button>
-            </div>
-            <div class="option-list" id="pest-option-list"></div>
-          </div>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <script>
-    let cachedWorks = [];
-    let chartData = [];
-
-    const defaultOptions = {
-      weather: ['맑음', '흐림', '비', '눈', '바람', '기타'],
-      crop: ['한라봉', '천혜향', '유라조생', '극조생'],
-      work: ['물관리', '방제', '묶기', '수확', '전정', '기타'],
-      material: ['톱신페스트', '다이센', '카스피', '기계유제'],
-      pest: ['응애', '진딧물', '총채벌레', '검은점무늬병']
-    };
-
-    function getOptions(key) {
-      const saved = localStorage.getItem('worklog_options_' + key);
-      if (!saved) return [...defaultOptions[key]];
-      try { return JSON.parse(saved); } catch { return [...defaultOptions[key]]; }
-    }
-
-    function setOptions(key, arr) {
-      localStorage.setItem('worklog_options_' + key, JSON.stringify(arr));
-    }
-
-    function renderOptionLists() {
-      ['weather','crop','work','material','pest'].forEach(key => {
-        const arr = getOptions(key);
-        const datalist = document.getElementById(key + '-options');
-        if (datalist) {
-          datalist.innerHTML = arr.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-        }
-        const list = document.getElementById(key + '-option-list');
-        if (list) {
-          list.innerHTML = arr.map(v => `
-            <span class="option-chip">
-              ${escapeHtml(v)}
-              <button class="chip-del" onclick="removeOptionItem('${key}', '${escapeJs(v)}')">×</button>
-            </span>
-          `).join('');
-        }
-      });
-    }
-
-    function addOptionItem(key) {
-      const input = document.getElementById('opt_' + key);
-      const value = (input.value || '').trim();
-      if (!value) return;
-      const arr = getOptions(key);
-      if (!arr.includes(value)) arr.push(value);
-      setOptions(key, arr);
-      input.value = '';
-      renderOptionLists();
-      syncMaterialDatalists();
-    }
-
-    function removeOptionItem(key, value) {
-      const arr = getOptions(key).filter(v => v !== value);
-      setOptions(key, arr);
-      renderOptionLists();
-      syncMaterialDatalists();
-    }
-
-    function escapeJs(str) {
-      return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    }
-
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('open');
-    }
-
-    function showPage(page, el = null) {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.getElementById(page + '-page').classList.add('active');
-
-      document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
-      const targetBtn = el || document.querySelector(`.menu-btn[data-page="${page}"]`);
-      if (targetBtn) targetBtn.classList.add('active');
-
-      if (window.innerWidth <= 840) {
-        document.getElementById('sidebar').classList.remove('open');
-      }
-
-      if (page === 'journal') loadJournal();
-      if (page === 'materials') loadMaterials();
-      if (page === 'monthly') loadMonthly();
-      if (page === 'settlement') loadSettlement();
-      if (page === 'options') renderOptionLists();
-    }
-
-    function todayStr() {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    }
-
-    function money(v) {
-      const n = Number(v || 0);
-      return n.toLocaleString() + '원';
-    }
-
-    function escapeHtml(str) {
-      return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function computeTotalCost() {
-      const material = Number(document.getElementById('f_material_cost').value || 0);
-      const labor = Number(document.getElementById('f_labor_cost').value || 0);
-      document.getElementById('f_total_cost').value = material + labor;
-    }
-
-    function computeDays() {
-      const s = document.getElementById('f_start_date').value;
-      const e = document.getElementById('f_end_date').value;
-      if (!s || !e) {
-        document.getElementById('f_days').value = '';
-        return;
-      }
-      const sd = new Date(s);
-      const ed = new Date(e);
-      const diff = Math.floor((ed - sd) / (1000 * 60 * 60 * 24)) + 1;
-      document.getElementById('f_days').value = diff > 0 ? diff : 1;
-    }
-
-    function syncMaterialDatalists() {
-      const items = getOptions('material');
-      document.querySelectorAll('.material-name-list').forEach(dl => {
-        dl.innerHTML = items.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-      });
-    }
-
-    function addMaterialRow(name = '', qty = '', unit = '') {
-      const wrap = document.getElementById('materialRows');
-      const rowId = 'matdl_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-      const row = document.createElement('div');
-      row.className = 'material-row';
-      row.innerHTML = `
-        <div>
-          <input class="input material-name" list="${rowId}" placeholder="자재명" value="${escapeHtml(name)}" />
-          <datalist id="${rowId}" class="material-name-list"></datalist>
-        </div>
-        <input class="input material-qty" type="number" min="0" step="0.1" placeholder="수량" value="${escapeHtml(qty)}" />
-        <input class="input material-unit" placeholder="단위(병, 말, 봉)" value="${escapeHtml(unit)}" />
-        <button type="button" class="btn danger" onclick="this.parentElement.remove()">삭제</button>
-      `;
-      wrap.appendChild(row);
-      syncMaterialDatalists();
-    }
-
-    function collectMaterials() {
-      const names = [...document.querySelectorAll('.material-name')].map(v => v.value.trim());
-      const qtys = [...document.querySelectorAll('.material-qty')].map(v => v.value.trim());
-      const units = [...document.querySelectorAll('.material-unit')].map(v => v.value.trim());
-
-      const items = [];
-      for (let i = 0; i < names.length; i++) {
-        if (!names[i]) continue;
-        const q = qtys[i] || '0';
-        const u = units[i] || '';
-        items.push(`${names[i]}|${q}|${u}`);
-      }
-      return items.join(', ');
-    }
-
-    function resetWorkForm() {
-      document.getElementById('workForm').reset();
-      document.getElementById('f_start_date').value = todayStr();
-      document.getElementById('f_end_date').value = todayStr();
-      document.getElementById('f_material_cost').value = 0;
-      document.getElementById('f_labor_cost').value = 0;
-      document.getElementById('f_total_cost').value = 0;
-      document.getElementById('materialRows').innerHTML = '';
-      addMaterialRow();
-      computeDays();
-    }
-
-    async function requestJson(url, options = {}) {
-      const res = await fetch(url, options);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `요청 실패: ${res.status}`);
-      }
-      return await res.json();
-    }
-
-    async function loadJournal() {
-      try {
-        const data = await requestJson('/api/works_light');
-        cachedWorks = Array.isArray(data) ? data : (data.data || []);
-
-        const dateFilter = document.getElementById('searchDate').value;
-        const keyword = (document.getElementById('searchKeyword').value || '').trim().toLowerCase();
-
-        let works = [...cachedWorks];
-
-        if (dateFilter) {
-          works = works.filter(w => String(w.시작날짜 || w.날짜 || '').startsWith(dateFilter) || String(w.종료날짜 || '').startsWith(dateFilter));
-        }
-
-        if (keyword) {
-          works = works.filter(w => {
-            const text = [
-              w.작업내용, w.작물, w.사용자재, w.비고, w.날씨, w.병충해
-            ].join(' ').toLowerCase();
-            return text.includes(keyword);
-          });
-        }
-
-        renderTopStats(works);
-        renderJournalCards(works);
-      } catch (err) {
-        document.getElementById('journalListArea').innerHTML = `<div class="empty">작업일지를 불러오지 못했습니다.<br>${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderTopStats(works) {
-      const totalWorks = works.length;
-      const totalMaterial = works.reduce((a, b) => a + Number(b.자재비 || 0), 0);
-      const totalLabor = works.reduce((a, b) => a + Number(b.인건비 || 0), 0);
-      const total = works.reduce((a, b) => a + Number(b.총금액 || (Number(b.자재비 || 0) + Number(b.인건비 || 0))), 0);
-
-      document.getElementById('topStats').innerHTML = `
-        <div class="stat-card"><div class="stat-title">총 작업일지 수</div><div class="stat-value">${totalWorks.toLocaleString()}</div></div>
-        <div class="stat-card"><div class="stat-title">자재비 합계</div><div class="stat-value">${Number(totalMaterial).toLocaleString()}원</div></div>
-        <div class="stat-card"><div class="stat-title">인건비 합계</div><div class="stat-value">${Number(totalLabor).toLocaleString()}원</div></div>
-        <div class="stat-card"><div class="stat-title">총금액 합계</div><div class="stat-value">${Number(total).toLocaleString()}원</div></div>
-      `;
-    }
-
-    function renderJournalCards(works) {
-      const area = document.getElementById('journalListArea');
-      if (!works.length) {
-        area.innerHTML = `<div class="empty">표시할 작업일지가 없습니다.</div>`;
-        return;
-      }
-
-      const grouped = {};
-      works.forEach(w => {
-        const date = w.시작날짜 || w.날짜 || '날짜없음';
-        if (!grouped[date]) grouped[date] = [];
-        grouped[date].push(w);
-      });
-
-      const dates = Object.keys(grouped).sort((a, b) => String(b).localeCompare(String(a)));
-      let html = '';
-
-      dates.forEach(date => {
-        const list = grouped[date];
-        html += `
-          <div class="date-group">
-            <div class="date-header">
-              <div class="date-title">${escapeHtml(date)}</div>
-              <div class="date-count">${list.length}건</div>
-            </div>
-            <div class="work-cards">
-        `;
-
-        list.forEach((w) => {
-          const total = Number(w.총금액 || (Number(w.자재비 || 0) + Number(w.인건비 || 0)));
-          html += `
-            <div class="work-card">
-              <div class="work-card-header">
-                <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
-                <div class="work-badge">${escapeHtml(w.날씨 || '기록')}</div>
-              </div>
-              <div class="meta-list">
-                <div class="meta-row"><div class="meta-label">기간</div><div class="meta-value">${escapeHtml(w.시작날짜 || w.날짜 || '-')} ${w.종료날짜 ? '~ ' + escapeHtml(w.종료날짜) : ''}</div></div>
-                <div class="meta-row"><div class="meta-label">연속일수</div><div class="meta-value">${escapeHtml(w.연속일수 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">시간</div><div class="meta-value">${escapeHtml(w.시작시간 || '')} ${w.종료시간 ? '~ ' + escapeHtml(w.종료시간) : ''}</div></div>
-                <div class="meta-row"><div class="meta-label">병충해</div><div class="meta-value">${escapeHtml(w.병충해 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">자재비</div><div class="meta-value">${money(w.자재비)}</div></div>
-                <div class="meta-row"><div class="meta-label">인건비</div><div class="meta-value">${money(w.인건비)}</div></div>
-                <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value"><strong>${money(total)}</strong></div></div>
-                <div class="meta-row"><div class="meta-label">비고</div><div class="meta-value">${escapeHtml(w.비고 || '-')}</div></div>
-              </div>
-            </div>
-          `;
-        });
-
-        html += `</div></div>`;
-      });
-
-      area.innerHTML = html;
-    }
-
-    function resetJournalFilters() {
-      document.getElementById('searchDate').value = '';
-      document.getElementById('searchKeyword').value = '';
-      loadJournal();
-    }
-
-    document.getElementById('f_material_cost').addEventListener('input', computeTotalCost);
-    document.getElementById('f_labor_cost').addEventListener('input', computeTotalCost);
-    document.getElementById('f_start_date').addEventListener('change', computeDays);
-    document.getElementById('f_end_date').addEventListener('change', computeDays);
-
-    document.getElementById('workForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      try {
-        const payload = {
-          날짜: document.getElementById('f_start_date').value,
-          시작날짜: document.getElementById('f_start_date').value,
-          종료날짜: document.getElementById('f_end_date').value,
-          연속일수: Number(document.getElementById('f_days').value || 1),
-          시작시간: document.getElementById('f_start_time').value,
-          종료시간: document.getElementById('f_end_time').value,
-          날씨: document.getElementById('f_weather').value,
-          작물: document.getElementById('f_crop').value,
-          병충해: document.getElementById('f_pest').value,
-          작업내용: document.getElementById('f_work').value,
-          대표사용자재: document.getElementById('f_main_material').value,
-          사용자재: collectMaterials(),
-          자재비: Number(document.getElementById('f_material_cost').value || 0),
-          인건비: Number(document.getElementById('f_labor_cost').value || 0),
-          총금액: Number(document.getElementById('f_total_cost').value || 0),
-          비고: document.getElementById('f_note').value
-        };
-
-        await requestJson('/api/works', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        alert('작업일지가 저장되었습니다.');
-        resetWorkForm();
-        showPage('journal');
-      } catch (err) {
-        alert('저장 실패: ' + err.message);
-      }
-    });
-
-    async function loadMaterials() {
-      try {
-        const data = await requestJson('/api/materials_all');
-        const list = Array.isArray(data) ? data : (data.data || []);
-        const hasStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) > 0);
-        const noStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) <= 0);
-
-        renderMaterialBox('materialsHasStock', hasStock, true);
-        renderMaterialBox('materialsNoStock', noStock, false);
-      } catch (err) {
-        document.getElementById('materialsHasStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-        document.getElementById('materialsNoStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderMaterialBox(targetId, list, hasStock) {
-      const area = document.getElementById(targetId);
-      if (!list.length) {
-        area.innerHTML = `<div class="empty">${hasStock ? '재고 있는' : '재고 없는'} 자재가 없습니다.</div>`;
-        return;
-      }
-
-      area.innerHTML = `
-        <div class="list-table-wrap" style="box-shadow:none; border:1px solid #eef2f7;">
-          <table style="min-width:100%;">
-            <thead>
-              <tr>
-                <th>자재명</th>
-                <th>재고</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${list.map(m => {
-                const name = m.자재명 ?? m.name ?? '';
-                const qty = Number(m.재고 ?? m.수량 ?? 0);
-                return `
-                  <tr>
-                    <td>${escapeHtml(name)}</td>
-                    <td>${qty}</td>
-                    <td>
-                      <div class="inline">
-                        <button class="btn" onclick="updateMaterialPrompt('${escapeJs(name)}', ${qty})">재고수정</button>
-                        <button class="btn danger" onclick="deleteMaterialPrompt('${escapeJs(name)}')">삭제</button>
-                      </div>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    async function updateMaterialPrompt(name, currentQty) {
-      const newQty = prompt('재고 수정', currentQty);
-      if (newQty === null) return;
-      try {
-        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 재고: Number(newQty) })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        alert('재고가 수정되었습니다.');
-        loadMaterials();
-      } catch (err) {
-        alert('재고 수정 실패: ' + err.message);
-      }
-    }
-
-    async function deleteMaterialPrompt(name) {
-      if (!confirm(`${name} 자재를 삭제하시겠습니까?`)) return;
-      try {
-        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(await res.text());
-        alert('삭제되었습니다.');
-        loadMaterials();
-      } catch (err) {
-        alert('자재 삭제 실패: ' + err.message);
-      }
-    }
-
-    async function loadMonthly() {
-      try {
-        const data = await requestJson('/api/monthly_json');
-        chartData = Array.isArray(data) ? data : (data.data || []);
-        renderMonthlyCards(chartData);
-        drawMonthlyChart(chartData);
-      } catch (err) {
-        document.getElementById('monthlyCards').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderMonthlyCards(data) {
-      const area = document.getElementById('monthlyCards');
-      if (!data.length) {
-        area.innerHTML = `<div class="empty">월별 데이터가 없습니다.</div>`;
-        return;
-      }
-
-      area.innerHTML = data.map(row => {
-        const month = row.월 || row.month || '-';
-        const total = Number(row.총금액 || row.total || 0);
-        return `
-          <div class="stat-card">
-            <div class="stat-title">${escapeHtml(month)}</div>
-            <div class="stat-value">${total.toLocaleString()}원</div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function drawMonthlyChart(data) {
-      const canvas = document.getElementById('monthlyCanvas');
-      const ctx = canvas.getContext('2d');
-      const ratio = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * ratio;
-      canvas.height = 320 * ratio;
-      ctx.scale(ratio, ratio);
-      ctx.clearRect(0, 0, rect.width, 320);
-      if (!data.length) return;
-
-      const labels = data.map(d => String(d.월 || d.month || ''));
-      const values = data.map(d => Number(d.총금액 || d.total || 0));
-      const maxVal = Math.max(...values, 1);
-      const padding = 40;
-      const chartW = rect.width - padding * 2;
-      const chartH = 240;
-      const baseY = 270;
-      const barGap = 12;
-      const barW = Math.max(20, (chartW - barGap * (values.length - 1)) / values.length);
-
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padding, baseY);
-      ctx.lineTo(rect.width - padding, baseY);
-      ctx.stroke();
-
-      ctx.font = '12px Malgun Gothic';
-      ctx.fillStyle = '#475569';
-      ctx.textAlign = 'center';
-
-      values.forEach((v, i) => {
-        const x = padding + i * (barW + barGap);
-        const h = (v / maxVal) * chartH;
-        const y = baseY - h;
-        ctx.fillStyle = '#60a5fa';
-        ctx.fillRect(x, y, barW, h);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillText(v.toLocaleString(), x + barW / 2, y - 8);
-        ctx.fillStyle = '#475569';
-        ctx.fillText(labels[i], x + barW / 2, baseY + 18);
-      });
-    }
-
-    async function loadSettlement() {
-      try {
-        const data = await requestJson('/api/monthly_json');
-        const list = Array.isArray(data) ? data : (data.data || []);
-        const tbody = document.getElementById('settlementBody');
-
-        if (!list.length) {
-          tbody.innerHTML = `<tr><td colspan="4">데이터가 없습니다.</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = list.map(row => `
-          <tr>
-            <td>${escapeHtml(row.월 || row.month || '-')}</td>
-            <td>${money(row.자재비 || row.material_cost || 0)}</td>
-            <td>${money(row.인건비 || row.labor_cost || 0)}</td>
-            <td><strong>${money(row.총금액 || row.total || 0)}</strong></td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        document.getElementById('settlementBody').innerHTML = `<tr><td colspan="4">불러오기 실패: ${escapeHtml(err.message)}</td></tr>`;
-      }
-    }
-
-    function downloadFile(url) {
-      window.location.href = url;
-    }
-
-    window.addEventListener('resize', () => {
-      const monthlyPage = document.getElementById('monthly-page');
-      if (monthlyPage.classList.contains('active') && chartData.length) {
-        drawMonthlyChart(chartData);
-      }
-    });
-
-    window.onload = function() {
-      renderOptionLists();
-      document.getElementById('f_start_date').value = todayStr();
-      document.getElementById('f_end_date').value = todayStr();
-      addMaterialRow();
-      computeDays();
-      computeTotalCost();
-      showPage('journal');
-    };
-  </script>
 </body>
 </html>

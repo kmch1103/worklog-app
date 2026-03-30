@@ -18,9 +18,7 @@ def db():
 # ---------------------------
 # 📱 메인 UI (모바일 최적화)
 # ---------------------------
-@app.route("/")
-def home():
-    return render_template_string("""
+
 <!DOCTYPE html>
 <html>
 <head>

@@ -1,937 +1,1295 @@
-from __future__ import annotations
-
-import json
-import os
-import shutil
-import sqlite3
-from contextlib import closing
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any
-
-from flask import Flask, jsonify, render_template, request, send_file
-
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "worklog.db"
-BACKUP_DIR = BASE_DIR / "backups"
-BACKUP_DIR.mkdir(exist_ok=True)
-
-app = Flask(__name__, template_folder="templates", static_folder="static")
-app.config["JSON_AS_ASCII"] = False
-
-
-# -----------------------------
-# DB helpers
-# -----------------------------
-def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def now_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def parse_json_field(value: Any, default: Any) -> Any:
-    if value is None or value == "":
-        return default
-    if isinstance(value, (list, dict)):
-        return value
-    try:
-        return json.loads(value)
-    except Exception:
-        return default
-
-
-def ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
-    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-    if column not in cols:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
-
-
-def init_db() -> None:
-    with get_conn() as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS options (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT NOT NULL,
-                name TEXT NOT NULL,
-                extra1 TEXT DEFAULT '',
-                extra2 TEXT DEFAULT '',
-                extra3 TEXT DEFAULT '',
-                is_active INTEGER DEFAULT 1,
-                created_at TEXT,
-                updated_at TEXT
-            );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_options_unique
-            ON options(category, name);
-
-            CREATE TABLE IF NOT EXISTS materials (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                unit TEXT DEFAULT '',
-                stock_qty REAL DEFAULT 0,
-                base_price REAL DEFAULT 0,
-                total_purchase_amount REAL DEFAULT 0,
-                created_at TEXT,
-                updated_at TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS worklogs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                weather_json TEXT DEFAULT '[]',
-                crops_json TEXT DEFAULT '[]',
-                task_types_json TEXT DEFAULT '[]',
-                pests_json TEXT DEFAULT '[]',
-                notes TEXT DEFAULT '',
-                payment_method TEXT DEFAULT '',
-                payment_detail_json TEXT DEFAULT '{}',
-                created_at TEXT,
-                updated_at TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS worklog_material_purchases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worklog_id INTEGER NOT NULL,
-                material_id INTEGER NOT NULL,
-                purchase_date TEXT,
-                qty REAL DEFAULT 0,
-                unit_price REAL DEFAULT 0,
-                amount REAL DEFAULT 0,
-                payment_method TEXT DEFAULT '',
-                payment_detail_json TEXT DEFAULT '{}',
-                FOREIGN KEY(worklog_id) REFERENCES worklogs(id) ON DELETE CASCADE,
-                FOREIGN KEY(material_id) REFERENCES materials(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS worklog_material_usages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worklog_id INTEGER NOT NULL,
-                material_id INTEGER NOT NULL,
-                qty REAL DEFAULT 0,
-                FOREIGN KEY(worklog_id) REFERENCES worklogs(id) ON DELETE CASCADE,
-                FOREIGN KEY(material_id) REFERENCES materials(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS worklog_labor (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worklog_id INTEGER NOT NULL,
-                labor_type TEXT NOT NULL,
-                people_count REAL DEFAULT 0,
-                unit_cost REAL DEFAULT 0,
-                amount REAL DEFAULT 0,
-                payment_method TEXT DEFAULT '',
-                payment_detail_json TEXT DEFAULT '{}',
-                memo TEXT DEFAULT '',
-                FOREIGN KEY(worklog_id) REFERENCES worklogs(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS money_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tx_type TEXT NOT NULL,
-                category TEXT NOT NULL,
-                item_name TEXT NOT NULL,
-                amount REAL DEFAULT 0,
-                tx_date TEXT NOT NULL,
-                payment_method TEXT DEFAULT '',
-                payment_detail_json TEXT DEFAULT '{}',
-                linked_worklog_id INTEGER,
-                linked_purchase_id INTEGER,
-                linked_labor_id INTEGER,
-                note TEXT DEFAULT '',
-                created_at TEXT,
-                FOREIGN KEY(linked_worklog_id) REFERENCES worklogs(id) ON DELETE SET NULL
-            );
-            """
-        )
-
-        # migration support for older simplified db
-        ensure_column(conn, "worklogs", "weather_json", "weather_json TEXT DEFAULT '[]'")
-        ensure_column(conn, "worklogs", "crops_json", "crops_json TEXT DEFAULT '[]'")
-        ensure_column(conn, "worklogs", "task_types_json", "task_types_json TEXT DEFAULT '[]'")
-        ensure_column(conn, "worklogs", "pests_json", "pests_json TEXT DEFAULT '[]'")
-        ensure_column(conn, "worklogs", "payment_method", "payment_method TEXT DEFAULT ''")
-        ensure_column(conn, "worklogs", "payment_detail_json", "payment_detail_json TEXT DEFAULT '{}'" )
-
-        seed_default_options(conn)
-        conn.commit()
-
-
-def seed_default_options(conn: sqlite3.Connection) -> None:
-    defaults = {
-        "weather": ["맑음", "흐림", "비", "눈", "바람", "기타"],
-        "crop": ["한라봉", "천혜향", "유라조생", "극조생"],
-        "task_type": ["물관리", "방제", "전정", "수확", "묶기", "시비", "기타"],
-        "material_unit": ["개", "병", "통", "포", "kg", "g", "L", "ml", "말", "박스"],
-        "payment_method": ["현금", "계좌이체", "카드"],
-    }
-    pest_defaults = [
-        ("귤굴나방", "새순과 잎이 구불구불하게 굴이 생기고 잎이 오그라듦", "노블레스, 카스피"),
-        ("총채벌레", "꽃과 어린 과실 표면이 상처 나고 은색 반점이 생김", "카스피, 완타치"),
-        ("응애", "잎 색이 흐려지고 잎 뒷면에 미세한 점상 피해", "기계유제, 응애약"),
-        ("진딧물", "새순에 군집하고 끈적이 분비물 발생", "노블레스, 진딧물약"),
-        ("검은점무늬병", "과실과 잎에 검은 반점 발생", "다이센, 벤레이트"),
-    ]
-    ts = now_str()
-    for category, names in defaults.items():
-        for name in names:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO options(category, name, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (category, name, ts, ts),
-            )
-    for name, symptom, medicine in pest_defaults:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO options(category, name, extra1, extra2, created_at, updated_at)
-            VALUES ('pest', ?, ?, ?, ?, ?)
-            """,
-            (name, symptom, medicine, ts, ts),
-        )
-
-
-# -----------------------------
-# Serializers / summaries
-# -----------------------------
-def payment_detail_payload(method: str, detail: dict[str, Any] | None) -> dict[str, Any]:
-    detail = detail or {}
-    return {
-        "bank_name": detail.get("bank_name", ""),
-        "card_name": detail.get("card_name", ""),
-        "card_plan": detail.get("card_plan", ""),
-        "installment_months": detail.get("installment_months", ""),
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>작업일지 클라우드 시스템</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --sidebar: #1f2937;
+      --sidebar-2: #111827;
+      --menu: #374151;
+      --menu-hover: #4b5563;
+      --menu-active: #2563eb;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+      --shadow: 0 4px 14px rgba(0,0,0,0.08);
+      --radius: 16px;
     }
 
+    * { box-sizing: border-box; }
 
-def material_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "unit": row["unit"],
-        "stock_qty": row["stock_qty"],
-        "base_price": row["base_price"],
-        "total_purchase_amount": row["total_purchase_amount"],
+    body {
+      margin: 0;
+      font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
 
-
-def get_pest_details(conn: sqlite3.Connection, pest_names: list[str]) -> list[dict[str, Any]]:
-    if not pest_names:
-        return []
-    placeholders = ",".join(["?"] * len(pest_names))
-    rows = conn.execute(
-        f"SELECT name, extra1, extra2 FROM options WHERE category='pest' AND name IN ({placeholders})",
-        pest_names,
-    ).fetchall()
-    lookup = {r["name"]: {"name": r["name"], "symptom": r["extra1"], "recommended": r["extra2"]} for r in rows}
-    return [lookup[n] for n in pest_names if n in lookup]
-
-
-def get_worklog_detail(conn: sqlite3.Connection, worklog_id: int) -> dict[str, Any] | None:
-    row = conn.execute("SELECT * FROM worklogs WHERE id=?", (worklog_id,)).fetchone()
-    if not row:
-        return None
-
-    purchases = conn.execute(
-        """
-        SELECT p.*, m.name AS material_name, m.unit AS material_unit
-        FROM worklog_material_purchases p
-        JOIN materials m ON m.id = p.material_id
-        WHERE p.worklog_id=?
-        ORDER BY p.id ASC
-        """,
-        (worklog_id,),
-    ).fetchall()
-
-    usages = conn.execute(
-        """
-        SELECT u.*, m.name AS material_name, m.unit AS material_unit
-        FROM worklog_material_usages u
-        JOIN materials m ON m.id = u.material_id
-        WHERE u.worklog_id=?
-        ORDER BY u.id ASC
-        """,
-        (worklog_id,),
-    ).fetchall()
-
-    labor_rows = conn.execute(
-        "SELECT * FROM worklog_labor WHERE worklog_id=? ORDER BY id ASC",
-        (worklog_id,),
-    ).fetchall()
-
-    weather = parse_json_field(row["weather_json"], [])
-    crops = parse_json_field(row["crops_json"], [])
-    task_types = parse_json_field(row["task_types_json"], [])
-    pests = parse_json_field(row["pests_json"], [])
-    payment_detail = parse_json_field(row["payment_detail_json"], {})
-
-    purchase_amount = sum((r["amount"] or 0) for r in purchases)
-    labor_amount = sum((r["amount"] or 0) for r in labor_rows)
-
-    return {
-        "id": row["id"],
-        "start_date": row["start_date"],
-        "end_date": row["end_date"],
-        "weather": weather,
-        "crops": crops,
-        "task_types": task_types,
-        "pests": pests,
-        "pest_details": get_pest_details(conn, pests),
-        "notes": row["notes"],
-        "payment_method": row["payment_method"],
-        "payment_detail": payment_detail,
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
-        "material_purchases": [
-            {
-                "id": r["id"],
-                "material_id": r["material_id"],
-                "material_name": r["material_name"],
-                "unit": r["material_unit"],
-                "purchase_date": r["purchase_date"],
-                "qty": r["qty"],
-                "unit_price": r["unit_price"],
-                "amount": r["amount"],
-                "payment_method": r["payment_method"],
-                "payment_detail": parse_json_field(r["payment_detail_json"], {}),
-            }
-            for r in purchases
-        ],
-        "material_usages": [
-            {
-                "id": r["id"],
-                "material_id": r["material_id"],
-                "material_name": r["material_name"],
-                "unit": r["material_unit"],
-                "qty": r["qty"],
-            }
-            for r in usages
-        ],
-        "labor_entries": [
-            {
-                "id": r["id"],
-                "labor_type": r["labor_type"],
-                "people_count": r["people_count"],
-                "unit_cost": r["unit_cost"],
-                "amount": r["amount"],
-                "payment_method": r["payment_method"],
-                "payment_detail": parse_json_field(r["payment_detail_json"], {}),
-                "memo": r["memo"],
-            }
-            for r in labor_rows
-        ],
-        "totals": {
-            "purchase_amount": purchase_amount,
-            "labor_amount": labor_amount,
-            "expense_total": purchase_amount + labor_amount,
-        },
+    .app {
+      display: flex;
+      min-height: 100vh;
     }
 
+    .sidebar {
+      width: 240px;
+      background: linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-2) 100%);
+      color: #fff;
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.12);
+      z-index: 20;
+    }
 
-# -----------------------------
-# Business logic
-# -----------------------------
-def upsert_material(conn: sqlite3.Connection, name: str, unit: str, base_price: float | None = None) -> int:
-    ts = now_str()
-    row = conn.execute("SELECT id, unit, base_price FROM materials WHERE name=?", (name,)).fetchone()
-    if row:
-        updates = []
-        params: list[Any] = []
-        if unit and unit != row["unit"]:
-            updates.append("unit=?")
-            params.append(unit)
-        if base_price is not None and float(base_price) > 0:
-            updates.append("base_price=?")
-            params.append(float(base_price))
-        if updates:
-            updates.append("updated_at=?")
-            params.append(ts)
-            params.append(name)
-            conn.execute(f"UPDATE materials SET {', '.join(updates)} WHERE name=?", params)
-        return int(row["id"])
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      letter-spacing: -0.4px;
+    }
 
-    cur = conn.execute(
-        """
-        INSERT INTO materials(name, unit, stock_qty, base_price, total_purchase_amount, created_at, updated_at)
-        VALUES (?, ?, 0, ?, 0, ?, ?)
-        """,
-        (name, unit, float(base_price or 0), ts, ts),
-    )
-    return int(cur.lastrowid)
+    .logo-sub {
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-bottom: 20px;
+    }
 
+    .menu-title {
+      font-size: 12px;
+      color: #94a3b8;
+      margin: 18px 6px 10px;
+    }
 
-def change_stock(conn: sqlite3.Connection, material_id: int, qty_delta: float, price_delta: float = 0.0, set_base_price: float | None = None) -> None:
-    row = conn.execute("SELECT * FROM materials WHERE id=?", (material_id,)).fetchone()
-    if not row:
-        raise ValueError("자재를 찾을 수 없습니다.")
-    new_stock = float(row["stock_qty"] or 0) + float(qty_delta)
-    if new_stock < -1e-9:
-        raise ValueError(f"재고 부족: {row['name']}")
-    base_price = row["base_price"]
-    if set_base_price is not None and set_base_price > 0:
-        base_price = set_base_price
-    conn.execute(
-        "UPDATE materials SET stock_qty=?, total_purchase_amount=COALESCE(total_purchase_amount,0)+?, base_price=?, updated_at=? WHERE id=?",
-        (new_stock, float(price_delta), float(base_price or 0), now_str(), material_id),
-    )
+    .menu-btn {
+      width: 100%;
+      border: none;
+      background: var(--menu);
+      color: #fff;
+      padding: 13px 14px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      text-align: left;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
 
+    .menu-btn:hover { background: var(--menu-hover); }
+    .menu-btn.active { background: var(--menu-active); }
 
-def add_money_tx(
-    conn: sqlite3.Connection,
-    tx_type: str,
-    category: str,
-    item_name: str,
-    amount: float,
-    tx_date: str,
-    payment_method: str = "",
-    payment_detail: dict[str, Any] | None = None,
-    linked_worklog_id: int | None = None,
-    linked_purchase_id: int | None = None,
-    linked_labor_id: int | None = None,
-    note: str = "",
-) -> int:
-    cur = conn.execute(
-        """
-        INSERT INTO money_transactions(
-            tx_type, category, item_name, amount, tx_date, payment_method,
-            payment_detail_json, linked_worklog_id, linked_purchase_id, linked_labor_id,
-            note, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            tx_type,
-            category,
-            item_name,
-            float(amount or 0),
-            tx_date,
-            payment_method,
-            json.dumps(payment_detail_payload(payment_method, payment_detail), ensure_ascii=False),
-            linked_worklog_id,
-            linked_purchase_id,
-            linked_labor_id,
-            note,
-            now_str(),
-        ),
-    )
-    return int(cur.lastrowid)
+    .content {
+      flex: 1;
+      padding: 22px;
+      min-width: 0;
+    }
 
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
 
-def save_worklog(payload: dict[str, Any], worklog_id: int | None = None) -> int:
-    with get_conn() as conn:
-        try:
-            if worklog_id:
-                rollback_worklog_effects(conn, worklog_id)
-                conn.execute("DELETE FROM worklogs WHERE id=?", (worklog_id,))
-                conn.commit()
-            new_id = create_worklog(conn, payload)
-            conn.commit()
-            return new_id
-        except Exception:
-            conn.rollback()
-            raise
+    .page-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
 
+    .page-desc {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
 
-def create_worklog(conn: sqlite3.Connection, payload: dict[str, Any]) -> int:
-    start_date = payload.get("start_date") or datetime.now().strftime("%Y-%m-%d")
-    end_date = payload.get("end_date") or start_date
-    weather = payload.get("weather", [])
-    crops = payload.get("crops", [])
-    task_types = payload.get("task_types", [])
-    pests = payload.get("pests", [])
-    notes = payload.get("notes", "")
-    payment_method = payload.get("payment_method", "")
-    payment_detail = payment_detail_payload(payment_method, payload.get("payment_detail", {}))
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-    cur = conn.execute(
-        """
-        INSERT INTO worklogs(
-            start_date, end_date, weather_json, crops_json, task_types_json, pests_json,
-            notes, payment_method, payment_detail_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            start_date,
-            end_date,
-            json.dumps(weather, ensure_ascii=False),
-            json.dumps(crops, ensure_ascii=False),
-            json.dumps(task_types, ensure_ascii=False),
-            json.dumps(pests, ensure_ascii=False),
-            notes,
-            payment_method,
-            json.dumps(payment_detail, ensure_ascii=False),
-            now_str(),
-            now_str(),
-        ),
-    )
-    worklog_id = int(cur.lastrowid)
+    .input, .select, .textarea, .btn {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      padding: 11px 12px;
+      font-size: 14px;
+      outline: none;
+    }
 
-    for item in payload.get("material_purchases", []):
-        name = (item.get("material_name") or "").strip()
-        if not name:
-            continue
-        unit = (item.get("unit") or "").strip()
-        qty = float(item.get("qty") or 0)
-        unit_price = float(item.get("unit_price") or 0)
-        amount = float(item.get("amount") or (qty * unit_price))
-        purchase_date = item.get("purchase_date") or start_date
-        item_payment_method = item.get("payment_method") or payment_method
-        item_payment_detail = payment_detail_payload(item_payment_method, item.get("payment_detail", {}))
+    .input, .select, .textarea {
+      background: #fff;
+      width: 100%;
+    }
 
-        material_id = upsert_material(conn, name, unit, unit_price)
-        change_stock(conn, material_id, qty, amount, unit_price)
-        pcur = conn.execute(
-            """
-            INSERT INTO worklog_material_purchases(
-                worklog_id, material_id, purchase_date, qty, unit_price, amount,
-                payment_method, payment_detail_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                worklog_id,
-                material_id,
-                purchase_date,
-                qty,
-                unit_price,
-                amount,
-                item_payment_method,
-                json.dumps(item_payment_detail, ensure_ascii=False),
-            ),
-        )
-        purchase_id = int(pcur.lastrowid)
-        add_money_tx(
-            conn,
-            tx_type="지출",
-            category="자재비",
-            item_name=name,
-            amount=amount,
-            tx_date=purchase_date,
-            payment_method=item_payment_method,
-            payment_detail=item_payment_detail,
-            linked_worklog_id=worklog_id,
-            linked_purchase_id=purchase_id,
-            note="작업일지 자재구입",
-        )
+    .textarea {
+      min-height: 92px;
+      resize: vertical;
+      font-family: inherit;
+    }
 
-    for item in payload.get("material_usages", []):
-        name = (item.get("material_name") or "").strip()
-        if not name:
-            continue
-        qty = float(item.get("qty") or 0)
-        row = conn.execute("SELECT id FROM materials WHERE name=?", (name,)).fetchone()
-        if not row:
-            raise ValueError(f"등록되지 않은 자재입니다: {name}")
-        material_id = int(row["id"])
-        change_stock(conn, material_id, -qty)
-        conn.execute(
-            "INSERT INTO worklog_material_usages(worklog_id, material_id, qty) VALUES (?, ?, ?)",
-            (worklog_id, material_id, qty),
-        )
+    .btn {
+      background: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
 
-    for item in payload.get("labor_entries", []):
-        labor_type = item.get("labor_type", "기타")
-        people_count = float(item.get("people_count") or 0)
-        unit_cost = float(item.get("unit_cost") or 0)
-        amount = float(item.get("amount") or (people_count * unit_cost))
-        item_payment_method = item.get("payment_method") or payment_method
-        item_payment_detail = payment_detail_payload(item_payment_method, item.get("payment_detail", {}))
-        memo = item.get("memo", "")
-        lcur = conn.execute(
-            """
-            INSERT INTO worklog_labor(
-                worklog_id, labor_type, people_count, unit_cost, amount,
-                payment_method, payment_detail_json, memo
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                worklog_id,
-                labor_type,
-                people_count,
-                unit_cost,
-                amount,
-                item_payment_method,
-                json.dumps(item_payment_detail, ensure_ascii=False),
-                memo,
-            ),
-        )
-        labor_id = int(lcur.lastrowid)
-        add_money_tx(
-            conn,
-            tx_type="지출",
-            category="인건비",
-            item_name=f"인건비({labor_type})",
-            amount=amount,
-            tx_date=start_date,
-            payment_method=item_payment_method,
-            payment_detail=item_payment_detail,
-            linked_worklog_id=worklog_id,
-            linked_labor_id=labor_id,
-            note=memo or "작업일지 인건비",
-        )
+    .btn.primary {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
 
-    return worklog_id
+    .btn.success {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+    }
 
+    .btn.warning {
+      background: var(--warning);
+      border-color: var(--warning);
+      color: #fff;
+    }
 
-def rollback_worklog_effects(conn: sqlite3.Connection, worklog_id: int) -> None:
-    purchases = conn.execute(
-        "SELECT * FROM worklog_material_purchases WHERE worklog_id=?",
-        (worklog_id,),
-    ).fetchall()
-    usages = conn.execute(
-        "SELECT * FROM worklog_material_usages WHERE worklog_id=?",
-        (worklog_id,),
-    ).fetchall()
+    .btn.danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
 
-    for row in purchases:
-        change_stock(conn, row["material_id"], -(row["qty"] or 0), -float(row["amount"] or 0))
-    for row in usages:
-        change_stock(conn, row["material_id"], float(row["qty"] or 0))
+    .btn:hover { opacity: 0.93; }
 
-    conn.execute("DELETE FROM money_transactions WHERE linked_worklog_id=?", (worklog_id,))
-    conn.execute("DELETE FROM worklog_labor WHERE worklog_id=?", (worklog_id,))
-    conn.execute("DELETE FROM worklog_material_usages WHERE worklog_id=?", (worklog_id,))
-    conn.execute("DELETE FROM worklog_material_purchases WHERE worklog_id=?", (worklog_id,))
+    .page { display: none; }
+    .page.active { display: block; }
 
+    .panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
 
-def delete_worklog(worklog_id: int) -> None:
-    with get_conn() as conn:
-        try:
-            rollback_worklog_effects(conn, worklog_id)
-            conn.execute("DELETE FROM worklogs WHERE id=?", (worklog_id,))
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
 
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-# -----------------------------
-# Summaries
-# -----------------------------
-def get_month_summary(year_month: str) -> dict[str, Any]:
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM money_transactions WHERE substr(tx_date,1,7)=? ORDER BY tx_date ASC, id ASC",
-            (year_month,),
-        ).fetchall()
-        income_rows = [r for r in rows if r["tx_type"] == "수입"]
-        expense_rows = [r for r in rows if r["tx_type"] == "지출"]
+    .field label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #374151;
+    }
 
-        def sum_amount(items: list[sqlite3.Row]) -> float:
-            return round(sum(float(i["amount"] or 0) for i in items), 2)
+    .date-group {
+      margin-bottom: 22px;
+    }
 
-        payment_breakdown: dict[str, float] = {}
-        category_breakdown: dict[str, float] = {}
-        for r in rows:
-            payment_breakdown[r["payment_method"] or "미입력"] = payment_breakdown.get(r["payment_method"] or "미입력", 0) + float(r["amount"] or 0)
-            key = f"{r['tx_type']}:{r['category']}"
-            category_breakdown[key] = category_breakdown.get(key, 0) + float(r["amount"] or 0)
+    .date-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
 
-        return {
-            "year_month": year_month,
-            "income_total": sum_amount(income_rows),
-            "expense_total": sum_amount(expense_rows),
-            "net": round(sum_amount(income_rows) - sum_amount(expense_rows), 2),
-            "payment_breakdown": payment_breakdown,
-            "category_breakdown": category_breakdown,
-            "income_rows": [dict(r) for r in income_rows],
-            "expense_rows": [dict(r) for r in expense_rows],
+    .date-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .date-count {
+      font-size: 13px;
+      color: var(--muted);
+      background: #eef2ff;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .work-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
+
+    .work-card {
+      background: #fff;
+      border: 1px solid #edf0f5;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .work-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .work-title {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .work-badge {
+      font-size: 12px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      padding: 5px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 7px;
+      font-size: 14px;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .meta-label {
+      width: 76px;
+      color: var(--muted);
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+
+    .meta-value {
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      border: 1px solid #eef2f7;
+    }
+
+    .stat-title {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+    }
+
+    .list-table-wrap {
+      overflow-x: auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 740px;
+    }
+
+    th, td {
+      padding: 13px 12px;
+      border-bottom: 1px solid #eef2f7;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .empty {
+      padding: 36px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 700;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .inline {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .material-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr auto;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+
+    .summary-box {
+      background: #eff6ff;
+      color: #1e3a8a;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .mobile-top {
+      display: none;
+      margin-bottom: 12px;
+    }
+
+    .toggle-menu-btn {
+      width: 100%;
+      border: none;
+      background: #1f2937;
+      color: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .option-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .option-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .chip-del {
+      border: none;
+      background: transparent;
+      color: #b91c1c;
+      cursor: pointer;
+      font-weight: 800;
+      padding: 0;
+    }
+
+    canvas {
+      width: 100% !important;
+      max-height: 380px;
+      background: #fff;
+      border-radius: 16px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 840px) {
+      .app { display: block; }
+      .mobile-top { display: block; }
+      .sidebar {
+        position: fixed;
+        left: -260px;
+        top: 0;
+        height: 100vh;
+        transition: left 0.25s ease;
+      }
+      .sidebar.open { left: 0; }
+      .content { padding: 14px; }
+      .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+      .material-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">작업일지</div>
+      <div class="logo-sub">클라우드 시스템</div>
+
+      <div class="menu-title">메뉴</div>
+      <button class="menu-btn active" data-page="journal" onclick="showPage('journal', this)">작업일지</button>
+      <button class="menu-btn" data-page="input" onclick="showPage('input', this)">작업일지 입력</button>
+      <button class="menu-btn" data-page="materials" onclick="showPage('materials', this)">자재관리</button>
+      <button class="menu-btn" data-page="monthly" onclick="showPage('monthly', this)">월별수익</button>
+      <button class="menu-btn" data-page="excel" onclick="showPage('excel', this)">엑셀</button>
+      <button class="menu-btn" data-page="settlement" onclick="showPage('settlement', this)">월정산</button>
+      <button class="menu-btn" data-page="backup" onclick="showPage('backup', this)">백업</button>
+      <button class="menu-btn" data-page="options" onclick="showPage('options', this)">옵션관리</button>
+    </aside>
+
+    <main class="content">
+      <div class="mobile-top">
+        <button class="toggle-menu-btn" onclick="toggleSidebar()">메뉴 열기 / 닫기</button>
+      </div>
+
+      <div class="page active" id="journal-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">작업일지</div>
+            <div class="page-desc">기본 첫 화면입니다. 같은 날짜 작업은 옆 카드로 표시됩니다.</div>
+          </div>
+          <div class="toolbar">
+            <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadJournal()" />
+            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재/병충해 검색" style="width:240px" oninput="loadJournal()" />
+            <button class="btn" onclick="resetJournalFilters()">초기화</button>
+            <button class="btn primary" onclick="loadJournal()">새로고침</button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="topStats"></div>
+        <div id="journalListArea"></div>
+      </div>
+
+      <div class="page" id="input-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">작업일지 입력</div>
+            <div class="page-desc">시작날짜와 종료날짜를 넣으면 연속일수가 자동 계산됩니다. 옵션관리에서 선택 목록을 바꿀 수 있습니다.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <form id="workForm">
+            <div class="grid grid-3">
+              <div class="field">
+                <label>시작날짜</label>
+                <input class="input" type="date" id="f_start_date" required />
+              </div>
+              <div class="field">
+                <label>종료날짜</label>
+                <input class="input" type="date" id="f_end_date" required />
+              </div>
+              <div class="field">
+                <label>연속일수</label>
+                <input class="input" type="number" id="f_days" min="1" readonly />
+              </div>
+            </div>
+
+            <div class="grid grid-2">
+              <div class="field">
+                <label>시작시간</label>
+                <input class="input" type="time" id="f_start_time" />
+              </div>
+              <div class="field">
+                <label>종료시간</label>
+                <input class="input" type="time" id="f_end_time" />
+              </div>
+            </div>
+
+            <div class="grid grid-3">
+              <div class="field">
+                <label>날씨</label>
+                <input class="input" list="weather-options" id="f_weather" placeholder="선택 또는 입력" />
+                <datalist id="weather-options"></datalist>
+              </div>
+              <div class="field">
+                <label>작물</label>
+                <input class="input" list="crop-options" id="f_crop" placeholder="선택 또는 입력" />
+                <datalist id="crop-options"></datalist>
+              </div>
+              <div class="field">
+                <label>병충해</label>
+                <input class="input" list="pest-options" id="f_pest" placeholder="선택 또는 입력" />
+                <datalist id="pest-options"></datalist>
+              </div>
+            </div>
+
+            <div class="grid grid-2">
+              <div class="field">
+                <label>작업내용</label>
+                <input class="input" list="work-options" id="f_work" placeholder="선택 또는 입력" required />
+                <datalist id="work-options"></datalist>
+              </div>
+              <div class="field">
+                <label>대표 사용자재</label>
+                <input class="input" list="material-options" id="f_main_material" placeholder="선택 또는 입력" />
+                <datalist id="material-options"></datalist>
+              </div>
+            </div>
+
+            <div class="panel" style="padding:14px; margin-top:16px; background:#f8fbff; box-shadow:none; border:1px solid #e5edf8;">
+              <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+                <strong>사용 자재 입력</strong>
+                <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
+              </div>
+              <div id="materialRows"></div>
+              <div class="summary-box">자재는 여러 개 추가할 수 있습니다. 첫 줄 자재명은 옵션 목록과 연결됩니다.</div>
+            </div>
+
+            <div class="grid grid-3">
+              <div class="field">
+                <label>자재비</label>
+                <input class="input" type="number" id="f_material_cost" value="0" min="0" />
+              </div>
+              <div class="field">
+                <label>인건비</label>
+                <input class="input" type="number" id="f_labor_cost" value="0" min="0" />
+              </div>
+              <div class="field">
+                <label>총금액</label>
+                <input class="input" type="number" id="f_total_cost" value="0" min="0" readonly />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>비고</label>
+              <textarea class="textarea" id="f_note" placeholder="메모를 입력하세요."></textarea>
+            </div>
+
+            <div class="inline" style="margin-top:16px;">
+              <button type="submit" class="btn primary">저장</button>
+              <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="page" id="materials-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">자재관리</div>
+            <div class="page-desc">재고 있음 / 없음으로 구분해서 표시합니다.</div>
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" onclick="loadMaterials()">새로고침</button>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="panel">
+            <h3 style="margin-top:0;">재고 있는 자재</h3>
+            <div id="materialsHasStock"></div>
+          </div>
+          <div class="panel">
+            <h3 style="margin-top:0;">재고 없는 자재</h3>
+            <div id="materialsNoStock"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" id="monthly-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">월별수익</div>
+            <div class="page-desc">월별 총금액 카드와 간단 차트를 함께 표시합니다.</div>
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" onclick="loadMonthly()">불러오기</button>
+          </div>
+        </div>
+        <div id="monthlyCards" class="stats-grid"></div>
+        <div class="panel">
+          <canvas id="monthlyCanvas" height="140"></canvas>
+        </div>
+      </div>
+
+      <div class="page" id="excel-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">엑셀</div>
+            <div class="page-desc">작업일지 엑셀과 월별 정산 엑셀을 바로 다운로드합니다.</div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="panel">
+            <h3 style="margin-top:0;">작업일지 엑셀</h3>
+            <p>날짜, 작업내용, 사용자재, 자재비, 인건비, 총금액 포함</p>
+            <button class="btn success" onclick="downloadFile('/api/export_excel')">작업일지 엑셀 다운로드</button>
+          </div>
+          <div class="panel">
+            <h3 style="margin-top:0;">월별 정산 엑셀</h3>
+            <p>월별 자재비, 인건비, 총금액 합계 포함</p>
+            <button class="btn success" onclick="downloadFile('/api/export_monthly')">월정산 엑셀 다운로드</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" id="settlement-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">월정산</div>
+            <div class="page-desc">월별 합산 데이터를 표 형태로 확인합니다.</div>
+          </div>
+        </div>
+        <div class="list-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>월</th>
+                <th>자재비</th>
+                <th>인건비</th>
+                <th>총금액</th>
+              </tr>
+            </thead>
+            <tbody id="settlementBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="page" id="backup-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">백업</div>
+            <div class="page-desc">현재 데이터를 JSON 파일로 백업합니다.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <p>백업 파일은 서버에서 생성되거나 다운로드됩니다.</p>
+          <button class="btn warning" onclick="downloadFile('/api/backup')">백업 실행</button>
+        </div>
+      </div>
+
+      <div class="page" id="options-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">옵션관리</div>
+            <div class="page-desc">날씨, 작물, 작업내용, 사용자재, 병충해 선택 목록을 관리합니다. 현재는 브라우저 저장 방식입니다.</div>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="panel">
+            <h3 style="margin-top:0;">날씨</h3>
+            <div class="inline">
+              <input class="input" id="opt_weather" placeholder="예: 맑음" />
+              <button class="btn primary" onclick="addOptionItem('weather')">추가</button>
+            </div>
+            <div class="option-list" id="weather-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">작물</h3>
+            <div class="inline">
+              <input class="input" id="opt_crop" placeholder="예: 한라봉" />
+              <button class="btn primary" onclick="addOptionItem('crop')">추가</button>
+            </div>
+            <div class="option-list" id="crop-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">작업내용</h3>
+            <div class="inline">
+              <input class="input" id="opt_work" placeholder="예: 방제 작업" />
+              <button class="btn primary" onclick="addOptionItem('work')">추가</button>
+            </div>
+            <div class="option-list" id="work-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">사용자재</h3>
+            <div class="inline">
+              <input class="input" id="opt_material" placeholder="예: 톱신페스트" />
+              <button class="btn primary" onclick="addOptionItem('material')">추가</button>
+            </div>
+            <div class="option-list" id="material-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">병충해</h3>
+            <div class="inline">
+              <input class="input" id="opt_pest" placeholder="예: 응애" />
+              <button class="btn primary" onclick="addOptionItem('pest')">추가</button>
+            </div>
+            <div class="option-list" id="pest-option-list"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let cachedWorks = [];
+    let chartData = [];
+
+    const defaultOptions = {
+      weather: ['맑음', '흐림', '비', '눈', '바람', '기타'],
+      crop: ['한라봉', '천혜향', '유라조생', '극조생'],
+      work: ['물관리', '방제', '묶기', '수확', '전정', '기타'],
+      material: ['톱신페스트', '다이센', '카스피', '기계유제'],
+      pest: ['응애', '진딧물', '총채벌레', '검은점무늬병']
+    };
+
+    function getOptions(key) {
+      const saved = localStorage.getItem('worklog_options_' + key);
+      if (!saved) return [...defaultOptions[key]];
+      try { return JSON.parse(saved); } catch { return [...defaultOptions[key]]; }
+    }
+
+    function setOptions(key, arr) {
+      localStorage.setItem('worklog_options_' + key, JSON.stringify(arr));
+    }
+
+    function renderOptionLists() {
+      ['weather','crop','work','material','pest'].forEach(key => {
+        const arr = getOptions(key);
+        const datalist = document.getElementById(key + '-options');
+        if (datalist) {
+          datalist.innerHTML = arr.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+        }
+        const list = document.getElementById(key + '-option-list');
+        if (list) {
+          list.innerHTML = arr.map(v => `
+            <span class="option-chip">
+              ${escapeHtml(v)}
+              <button class="chip-del" onclick="removeOptionItem('${key}', '${escapeJs(v)}')">×</button>
+            </span>
+          `).join('');
+        }
+      });
+    }
+
+    function addOptionItem(key) {
+      const input = document.getElementById('opt_' + key);
+      const value = (input.value || '').trim();
+      if (!value) return;
+      const arr = getOptions(key);
+      if (!arr.includes(value)) arr.push(value);
+      setOptions(key, arr);
+      input.value = '';
+      renderOptionLists();
+      syncMaterialDatalists();
+    }
+
+    function removeOptionItem(key, value) {
+      const arr = getOptions(key).filter(v => v !== value);
+      setOptions(key, arr);
+      renderOptionLists();
+      syncMaterialDatalists();
+    }
+
+    function escapeJs(str) {
+      return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    function showPage(page, el = null) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(page + '-page').classList.add('active');
+
+      document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
+      const targetBtn = el || document.querySelector(`.menu-btn[data-page="${page}"]`);
+      if (targetBtn) targetBtn.classList.add('active');
+
+      if (window.innerWidth <= 840) {
+        document.getElementById('sidebar').classList.remove('open');
+      }
+
+      if (page === 'journal') loadJournal();
+      if (page === 'materials') loadMaterials();
+      if (page === 'monthly') loadMonthly();
+      if (page === 'settlement') loadSettlement();
+      if (page === 'options') renderOptionLists();
+    }
+
+    function todayStr() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function money(v) {
+      const n = Number(v || 0);
+      return n.toLocaleString() + '원';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function computeTotalCost() {
+      const material = Number(document.getElementById('f_material_cost').value || 0);
+      const labor = Number(document.getElementById('f_labor_cost').value || 0);
+      document.getElementById('f_total_cost').value = material + labor;
+    }
+
+    function computeDays() {
+      const s = document.getElementById('f_start_date').value;
+      const e = document.getElementById('f_end_date').value;
+      if (!s || !e) {
+        document.getElementById('f_days').value = '';
+        return;
+      }
+      const sd = new Date(s);
+      const ed = new Date(e);
+      const diff = Math.floor((ed - sd) / (1000 * 60 * 60 * 24)) + 1;
+      document.getElementById('f_days').value = diff > 0 ? diff : 1;
+    }
+
+    function syncMaterialDatalists() {
+      const items = getOptions('material');
+      document.querySelectorAll('.material-name-list').forEach(dl => {
+        dl.innerHTML = items.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+      });
+    }
+
+    function addMaterialRow(name = '', qty = '', unit = '') {
+      const wrap = document.getElementById('materialRows');
+      const rowId = 'matdl_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+      const row = document.createElement('div');
+      row.className = 'material-row';
+      row.innerHTML = `
+        <div>
+          <input class="input material-name" list="${rowId}" placeholder="자재명" value="${escapeHtml(name)}" />
+          <datalist id="${rowId}" class="material-name-list"></datalist>
+        </div>
+        <input class="input material-qty" type="number" min="0" step="0.1" placeholder="수량" value="${escapeHtml(qty)}" />
+        <input class="input material-unit" placeholder="단위(병, 말, 봉)" value="${escapeHtml(unit)}" />
+        <button type="button" class="btn danger" onclick="this.parentElement.remove()">삭제</button>
+      `;
+      wrap.appendChild(row);
+      syncMaterialDatalists();
+    }
+
+    function collectMaterials() {
+      const names = [...document.querySelectorAll('.material-name')].map(v => v.value.trim());
+      const qtys = [...document.querySelectorAll('.material-qty')].map(v => v.value.trim());
+      const units = [...document.querySelectorAll('.material-unit')].map(v => v.value.trim());
+
+      const items = [];
+      for (let i = 0; i < names.length; i++) {
+        if (!names[i]) continue;
+        const q = qtys[i] || '0';
+        const u = units[i] || '';
+        items.push(`${names[i]}|${q}|${u}`);
+      }
+      return items.join(', ');
+    }
+
+    function resetWorkForm() {
+      document.getElementById('workForm').reset();
+      document.getElementById('f_start_date').value = todayStr();
+      document.getElementById('f_end_date').value = todayStr();
+      document.getElementById('f_material_cost').value = 0;
+      document.getElementById('f_labor_cost').value = 0;
+      document.getElementById('f_total_cost').value = 0;
+      document.getElementById('materialRows').innerHTML = '';
+      addMaterialRow();
+      computeDays();
+    }
+
+    async function requestJson(url, options = {}) {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `요청 실패: ${res.status}`);
+      }
+      return await res.json();
+    }
+
+    async function loadJournal() {
+      try {
+        const data = await requestJson('/api/works_light');
+        cachedWorks = Array.isArray(data) ? data : (data.data || []);
+
+        const dateFilter = document.getElementById('searchDate').value;
+        const keyword = (document.getElementById('searchKeyword').value || '').trim().toLowerCase();
+
+        let works = [...cachedWorks];
+
+        if (dateFilter) {
+          works = works.filter(w => String(w.시작날짜 || w.날짜 || '').startsWith(dateFilter) || String(w.종료날짜 || '').startsWith(dateFilter));
         }
 
-
-def get_monthly_overview() -> list[dict[str, Any]]:
-    with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT substr(tx_date,1,7) AS ym,
-                   SUM(CASE WHEN tx_type='수입' THEN amount ELSE 0 END) AS income_total,
-                   SUM(CASE WHEN tx_type='지출' THEN amount ELSE 0 END) AS expense_total
-            FROM money_transactions
-            GROUP BY substr(tx_date,1,7)
-            ORDER BY ym DESC
-            """
-        ).fetchall()
-        return [
-            {
-                "year_month": r["ym"],
-                "income_total": round(float(r["income_total"] or 0), 2),
-                "expense_total": round(float(r["expense_total"] or 0), 2),
-                "net": round(float(r["income_total"] or 0) - float(r["expense_total"] or 0), 2),
-            }
-            for r in rows
-        ]
-
-
-# -----------------------------
-# Routes
-# -----------------------------
-@app.route("/")
-def index() -> str:
-    return render_template("index.html")
-
-
-@app.route("/api/options", methods=["GET", "POST"])
-def api_options():
-    with get_conn() as conn:
-        if request.method == "GET":
-            rows = conn.execute(
-                "SELECT * FROM options WHERE is_active=1 ORDER BY category, name"
-            ).fetchall()
-            grouped: dict[str, list[dict[str, Any]]] = {}
-            for r in rows:
-                grouped.setdefault(r["category"], []).append(
-                    {
-                        "id": r["id"],
-                        "name": r["name"],
-                        "extra1": r["extra1"],
-                        "extra2": r["extra2"],
-                        "extra3": r["extra3"],
-                    }
-                )
-            return jsonify(grouped)
-
-        data = request.get_json(force=True)
-        category = data.get("category", "").strip()
-        name = data.get("name", "").strip()
-        if not category or not name:
-            return jsonify({"error": "category와 name이 필요합니다."}), 400
-        ts = now_str()
-        try:
-            cur = conn.execute(
-                """
-                INSERT INTO options(category, name, extra1, extra2, extra3, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    category,
-                    name,
-                    data.get("extra1", ""),
-                    data.get("extra2", ""),
-                    data.get("extra3", ""),
-                    ts,
-                    ts,
-                ),
-            )
-            conn.commit()
-            return jsonify({"ok": True, "id": cur.lastrowid})
-        except sqlite3.IntegrityError:
-            return jsonify({"error": "이미 존재하는 옵션입니다."}), 400
-
-
-@app.route("/api/options/<int:option_id>", methods=["PUT", "DELETE"])
-def api_option_detail(option_id: int):
-    with get_conn() as conn:
-        if request.method == "PUT":
-            data = request.get_json(force=True)
-            conn.execute(
-                """
-                UPDATE options
-                SET name=?, extra1=?, extra2=?, extra3=?, updated_at=?
-                WHERE id=?
-                """,
-                (
-                    data.get("name", "").strip(),
-                    data.get("extra1", ""),
-                    data.get("extra2", ""),
-                    data.get("extra3", ""),
-                    now_str(),
-                    option_id,
-                ),
-            )
-            conn.commit()
-            return jsonify({"ok": True})
-        conn.execute("DELETE FROM options WHERE id=?", (option_id,))
-        conn.commit()
-        return jsonify({"ok": True})
-
-
-@app.route("/api/materials", methods=["GET", "POST"])
-def api_materials():
-    with get_conn() as conn:
-        if request.method == "GET":
-            rows = conn.execute("SELECT * FROM materials ORDER BY name ASC").fetchall()
-            return jsonify([material_row_to_dict(r) for r in rows])
-
-        data = request.get_json(force=True)
-        name = data.get("name", "").strip()
-        unit = data.get("unit", "").strip()
-        qty = float(data.get("qty") or 0)
-        unit_price = float(data.get("unit_price") or 0)
-        amount = float(data.get("amount") or (qty * unit_price))
-        purchase_date = data.get("purchase_date") or datetime.now().strftime("%Y-%m-%d")
-        payment_method = data.get("payment_method", "")
-        payment_detail = payment_detail_payload(payment_method, data.get("payment_detail", {}))
-        if not name:
-            return jsonify({"error": "자재명을 입력하세요."}), 400
-        try:
-            material_id = upsert_material(conn, name, unit, unit_price)
-            change_stock(conn, material_id, qty, amount, unit_price)
-            add_money_tx(
-                conn,
-                tx_type="지출",
-                category="자재비",
-                item_name=name,
-                amount=amount,
-                tx_date=purchase_date,
-                payment_method=payment_method,
-                payment_detail=payment_detail,
-                note="자재관리에서 직접 등록",
-            )
-            conn.commit()
-            return jsonify({"ok": True})
-        except Exception as exc:
-            conn.rollback()
-            return jsonify({"error": str(exc)}), 400
-
-
-@app.route("/api/materials/<int:material_id>", methods=["PUT", "DELETE"])
-def api_material_detail(material_id: int):
-    with get_conn() as conn:
-        if request.method == "PUT":
-            data = request.get_json(force=True)
-            conn.execute(
-                "UPDATE materials SET name=?, unit=?, base_price=?, updated_at=? WHERE id=?",
-                (
-                    data.get("name", "").strip(),
-                    data.get("unit", "").strip(),
-                    float(data.get("base_price") or 0),
-                    now_str(),
-                    material_id,
-                ),
-            )
-            conn.commit()
-            return jsonify({"ok": True})
-        conn.execute("DELETE FROM materials WHERE id=?", (material_id,))
-        conn.commit()
-        return jsonify({"ok": True})
-
-
-@app.route("/api/worklogs", methods=["GET", "POST"])
-def api_worklogs():
-    if request.method == "GET":
-        with get_conn() as conn:
-            rows = conn.execute("SELECT id FROM worklogs ORDER BY start_date DESC, id DESC").fetchall()
-            result = [get_worklog_detail(conn, int(r["id"])) for r in rows]
-            return jsonify(result)
-
-    data = request.get_json(force=True)
-    try:
-        worklog_id = save_worklog(data)
-        return jsonify({"ok": True, "id": worklog_id})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
-
-
-@app.route("/api/worklogs/<int:worklog_id>", methods=["GET", "PUT", "DELETE"])
-def api_worklog_detail(worklog_id: int):
-    if request.method == "GET":
-        with get_conn() as conn:
-            data = get_worklog_detail(conn, worklog_id)
-            if not data:
-                return jsonify({"error": "작업일지를 찾을 수 없습니다."}), 404
-            return jsonify(data)
-    if request.method == "PUT":
-        payload = request.get_json(force=True)
-        try:
-            new_id = save_worklog(payload, worklog_id=worklog_id)
-            return jsonify({"ok": True, "id": new_id})
-        except Exception as exc:
-            return jsonify({"error": str(exc)}), 400
-    try:
-        delete_worklog(worklog_id)
-        return jsonify({"ok": True})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
-
-
-@app.route("/api/money", methods=["GET", "POST"])
-def api_money():
-    with get_conn() as conn:
-        if request.method == "GET":
-            ym = request.args.get("month", "")
-            if ym:
-                rows = conn.execute(
-                    "SELECT * FROM money_transactions WHERE substr(tx_date,1,7)=? ORDER BY tx_date DESC, id DESC",
-                    (ym,),
-                ).fetchall()
-            else:
-                rows = conn.execute("SELECT * FROM money_transactions ORDER BY tx_date DESC, id DESC LIMIT 300").fetchall()
-            return jsonify([
-                {
-                    **dict(r),
-                    "payment_detail": parse_json_field(r["payment_detail_json"], {}),
-                }
-                for r in rows
-            ])
-
-        data = request.get_json(force=True)
-        add_money_tx(
-            conn,
-            tx_type=data.get("tx_type", "지출"),
-            category=data.get("category", "기타"),
-            item_name=data.get("item_name", "기타"),
-            amount=float(data.get("amount") or 0),
-            tx_date=data.get("tx_date") or datetime.now().strftime("%Y-%m-%d"),
-            payment_method=data.get("payment_method", ""),
-            payment_detail=data.get("payment_detail", {}),
-            note=data.get("note", ""),
-        )
-        conn.commit()
-        return jsonify({"ok": True})
-
-
-@app.route("/api/monthly-overview")
-def api_monthly_overview():
-    return jsonify(get_monthly_overview())
-
-
-@app.route("/api/month-summary/<year_month>")
-def api_month_summary(year_month: str):
-    return jsonify(get_month_summary(year_month))
-
-
-@app.route("/api/backup", methods=["POST"])
-def api_backup():
-    if not DB_PATH.exists():
-        return jsonify({"error": "DB 파일이 없습니다."}), 404
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = BACKUP_DIR / f"worklog_backup_{ts}.db"
-    shutil.copy2(DB_PATH, backup_path)
-    return jsonify({"ok": True, "backup_file": backup_path.name})
-
-
-@app.route("/api/export-json")
-def api_export_json():
-    with get_conn() as conn:
-        data = {
-            "worklogs": [get_worklog_detail(conn, int(r["id"])) for r in conn.execute("SELECT id FROM worklogs ORDER BY id DESC")],
-            "materials": [material_row_to_dict(r) for r in conn.execute("SELECT * FROM materials ORDER BY name")],
-            "options": [dict(r) for r in conn.execute("SELECT * FROM options ORDER BY category, name")],
-            "money_transactions": [
-                {
-                    **dict(r),
-                    "payment_detail": parse_json_field(r["payment_detail_json"], {}),
-                }
-                for r in conn.execute("SELECT * FROM money_transactions ORDER BY tx_date DESC, id DESC")
-            ],
+        if (keyword) {
+          works = works.filter(w => {
+            const text = [
+              w.작업내용, w.작물, w.사용자재, w.비고, w.날씨, w.병충해
+            ].join(' ').toLowerCase();
+            return text.includes(keyword);
+          });
         }
-    export_path = BASE_DIR / "worklog_export.json"
-    export_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return send_file(export_path, as_attachment=True, download_name="worklog_export.json")
 
+        renderTopStats(works);
+        renderJournalCards(works);
+      } catch (err) {
+        document.getElementById('journalListArea').innerHTML = `<div class="empty">작업일지를 불러오지 못했습니다.<br>${escapeHtml(err.message)}</div>`;
+      }
+    }
 
-if __name__ == "__main__":
-    init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
-else:
-    init_db()
+    function renderTopStats(works) {
+      const totalWorks = works.length;
+      const totalMaterial = works.reduce((a, b) => a + Number(b.자재비 || 0), 0);
+      const totalLabor = works.reduce((a, b) => a + Number(b.인건비 || 0), 0);
+      const total = works.reduce((a, b) => a + Number(b.총금액 || (Number(b.자재비 || 0) + Number(b.인건비 || 0))), 0);
+
+      document.getElementById('topStats').innerHTML = `
+        <div class="stat-card"><div class="stat-title">총 작업일지 수</div><div class="stat-value">${totalWorks.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="stat-title">자재비 합계</div><div class="stat-value">${Number(totalMaterial).toLocaleString()}원</div></div>
+        <div class="stat-card"><div class="stat-title">인건비 합계</div><div class="stat-value">${Number(totalLabor).toLocaleString()}원</div></div>
+        <div class="stat-card"><div class="stat-title">총금액 합계</div><div class="stat-value">${Number(total).toLocaleString()}원</div></div>
+      `;
+    }
+
+    function renderJournalCards(works) {
+      const area = document.getElementById('journalListArea');
+      if (!works.length) {
+        area.innerHTML = `<div class="empty">표시할 작업일지가 없습니다.</div>`;
+        return;
+      }
+
+      const grouped = {};
+      works.forEach(w => {
+        const date = w.시작날짜 || w.날짜 || '날짜없음';
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(w);
+      });
+
+      const dates = Object.keys(grouped).sort((a, b) => String(b).localeCompare(String(a)));
+      let html = '';
+
+      dates.forEach(date => {
+        const list = grouped[date];
+        html += `
+          <div class="date-group">
+            <div class="date-header">
+              <div class="date-title">${escapeHtml(date)}</div>
+              <div class="date-count">${list.length}건</div>
+            </div>
+            <div class="work-cards">
+        `;
+
+        list.forEach((w) => {
+          const total = Number(w.총금액 || (Number(w.자재비 || 0) + Number(w.인건비 || 0)));
+          html += `
+            <div class="work-card">
+              <div class="work-card-header">
+                <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
+                <div class="work-badge">${escapeHtml(w.날씨 || '기록')}</div>
+              </div>
+              <div class="meta-list">
+                <div class="meta-row"><div class="meta-label">기간</div><div class="meta-value">${escapeHtml(w.시작날짜 || w.날짜 || '-')} ${w.종료날짜 ? '~ ' + escapeHtml(w.종료날짜) : ''}</div></div>
+                <div class="meta-row"><div class="meta-label">연속일수</div><div class="meta-value">${escapeHtml(w.연속일수 || '-')}</div></div>
+                <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
+                <div class="meta-row"><div class="meta-label">시간</div><div class="meta-value">${escapeHtml(w.시작시간 || '')} ${w.종료시간 ? '~ ' + escapeHtml(w.종료시간) : ''}</div></div>
+                <div class="meta-row"><div class="meta-label">병충해</div><div class="meta-value">${escapeHtml(w.병충해 || '-')}</div></div>
+                <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
+                <div class="meta-row"><div class="meta-label">자재비</div><div class="meta-value">${money(w.자재비)}</div></div>
+                <div class="meta-row"><div class="meta-label">인건비</div><div class="meta-value">${money(w.인건비)}</div></div>
+                <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value"><strong>${money(total)}</strong></div></div>
+                <div class="meta-row"><div class="meta-label">비고</div><div class="meta-value">${escapeHtml(w.비고 || '-')}</div></div>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `</div></div>`;
+      });
+
+      area.innerHTML = html;
+    }
+
+    function resetJournalFilters() {
+      document.getElementById('searchDate').value = '';
+      document.getElementById('searchKeyword').value = '';
+      loadJournal();
+    }
+
+    document.getElementById('f_material_cost').addEventListener('input', computeTotalCost);
+    document.getElementById('f_labor_cost').addEventListener('input', computeTotalCost);
+    document.getElementById('f_start_date').addEventListener('change', computeDays);
+    document.getElementById('f_end_date').addEventListener('change', computeDays);
+
+    document.getElementById('workForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      try {
+        const payload = {
+          날짜: document.getElementById('f_start_date').value,
+          시작날짜: document.getElementById('f_start_date').value,
+          종료날짜: document.getElementById('f_end_date').value,
+          연속일수: Number(document.getElementById('f_days').value || 1),
+          시작시간: document.getElementById('f_start_time').value,
+          종료시간: document.getElementById('f_end_time').value,
+          날씨: document.getElementById('f_weather').value,
+          작물: document.getElementById('f_crop').value,
+          병충해: document.getElementById('f_pest').value,
+          작업내용: document.getElementById('f_work').value,
+          대표사용자재: document.getElementById('f_main_material').value,
+          사용자재: collectMaterials(),
+          자재비: Number(document.getElementById('f_material_cost').value || 0),
+          인건비: Number(document.getElementById('f_labor_cost').value || 0),
+          총금액: Number(document.getElementById('f_total_cost').value || 0),
+          비고: document.getElementById('f_note').value
+        };
+
+        await requestJson('/api/works', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        alert('작업일지가 저장되었습니다.');
+        resetWorkForm();
+        showPage('journal');
+      } catch (err) {
+        alert('저장 실패: ' + err.message);
+      }
+    });
+
+    async function loadMaterials() {
+      try {
+        const data = await requestJson('/api/materials_all');
+        const list = Array.isArray(data) ? data : (data.data || []);
+        const hasStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) > 0);
+        const noStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) <= 0);
+
+        renderMaterialBox('materialsHasStock', hasStock, true);
+        renderMaterialBox('materialsNoStock', noStock, false);
+      } catch (err) {
+        document.getElementById('materialsHasStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+        document.getElementById('materialsNoStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderMaterialBox(targetId, list, hasStock) {
+      const area = document.getElementById(targetId);
+      if (!list.length) {
+        area.innerHTML = `<div class="empty">${hasStock ? '재고 있는' : '재고 없는'} 자재가 없습니다.</div>`;
+        return;
+      }
+
+      area.innerHTML = `
+        <div class="list-table-wrap" style="box-shadow:none; border:1px solid #eef2f7;">
+          <table style="min-width:100%;">
+            <thead>
+              <tr>
+                <th>자재명</th>
+                <th>재고</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(m => {
+                const name = m.자재명 ?? m.name ?? '';
+                const qty = Number(m.재고 ?? m.수량 ?? 0);
+                return `
+                  <tr>
+                    <td>${escapeHtml(name)}</td>
+                    <td>${qty}</td>
+                    <td>
+                      <div class="inline">
+                        <button class="btn" onclick="updateMaterialPrompt('${escapeJs(name)}', ${qty})">재고수정</button>
+                        <button class="btn danger" onclick="deleteMaterialPrompt('${escapeJs(name)}')">삭제</button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function updateMaterialPrompt(name, currentQty) {
+      const newQty = prompt('재고 수정', currentQty);
+      if (newQty === null) return;
+      try {
+        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 재고: Number(newQty) })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        alert('재고가 수정되었습니다.');
+        loadMaterials();
+      } catch (err) {
+        alert('재고 수정 실패: ' + err.message);
+      }
+    }
+
+    async function deleteMaterialPrompt(name) {
+      if (!confirm(`${name} 자재를 삭제하시겠습니까?`)) return;
+      try {
+        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(await res.text());
+        alert('삭제되었습니다.');
+        loadMaterials();
+      } catch (err) {
+        alert('자재 삭제 실패: ' + err.message);
+      }
+    }
+
+    async function loadMonthly() {
+      try {
+        const data = await requestJson('/api/monthly_json');
+        chartData = Array.isArray(data) ? data : (data.data || []);
+        renderMonthlyCards(chartData);
+        drawMonthlyChart(chartData);
+      } catch (err) {
+        document.getElementById('monthlyCards').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderMonthlyCards(data) {
+      const area = document.getElementById('monthlyCards');
+      if (!data.length) {
+        area.innerHTML = `<div class="empty">월별 데이터가 없습니다.</div>`;
+        return;
+      }
+
+      area.innerHTML = data.map(row => {
+        const month = row.월 || row.month || '-';
+        const total = Number(row.총금액 || row.total || 0);
+        return `
+          <div class="stat-card">
+            <div class="stat-title">${escapeHtml(month)}</div>
+            <div class="stat-value">${total.toLocaleString()}원</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function drawMonthlyChart(data) {
+      const canvas = document.getElementById('monthlyCanvas');
+      const ctx = canvas.getContext('2d');
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = 320 * ratio;
+      ctx.scale(ratio, ratio);
+      ctx.clearRect(0, 0, rect.width, 320);
+      if (!data.length) return;
+
+      const labels = data.map(d => String(d.월 || d.month || ''));
+      const values = data.map(d => Number(d.총금액 || d.total || 0));
+      const maxVal = Math.max(...values, 1);
+      const padding = 40;
+      const chartW = rect.width - padding * 2;
+      const chartH = 240;
+      const baseY = 270;
+      const barGap = 12;
+      const barW = Math.max(20, (chartW - barGap * (values.length - 1)) / values.length);
+
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding, baseY);
+      ctx.lineTo(rect.width - padding, baseY);
+      ctx.stroke();
+
+      ctx.font = '12px Malgun Gothic';
+      ctx.fillStyle = '#475569';
+      ctx.textAlign = 'center';
+
+      values.forEach((v, i) => {
+        const x = padding + i * (barW + barGap);
+        const h = (v / maxVal) * chartH;
+        const y = baseY - h;
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillRect(x, y, barW, h);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillText(v.toLocaleString(), x + barW / 2, y - 8);
+        ctx.fillStyle = '#475569';
+        ctx.fillText(labels[i], x + barW / 2, baseY + 18);
+      });
+    }
+
+    async function loadSettlement() {
+      try {
+        const data = await requestJson('/api/monthly_json');
+        const list = Array.isArray(data) ? data : (data.data || []);
+        const tbody = document.getElementById('settlementBody');
+
+        if (!list.length) {
+          tbody.innerHTML = `<tr><td colspan="4">데이터가 없습니다.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = list.map(row => `
+          <tr>
+            <td>${escapeHtml(row.월 || row.month || '-')}</td>
+            <td>${money(row.자재비 || row.material_cost || 0)}</td>
+            <td>${money(row.인건비 || row.labor_cost || 0)}</td>
+            <td><strong>${money(row.총금액 || row.total || 0)}</strong></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        document.getElementById('settlementBody').innerHTML = `<tr><td colspan="4">불러오기 실패: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function downloadFile(url) {
+      window.location.href = url;
+    }
+
+    window.addEventListener('resize', () => {
+      const monthlyPage = document.getElementById('monthly-page');
+      if (monthlyPage.classList.contains('active') && chartData.length) {
+        drawMonthlyChart(chartData);
+      }
+    });
+
+    window.onload = function() {
+      renderOptionLists();
+      document.getElementById('f_start_date').value = todayStr();
+      document.getElementById('f_end_date').value = todayStr();
+      addMaterialRow();
+      computeDays();
+      computeTotalCost();
+      showPage('journal');
+    };
+  </script>
+</body>
+</html>

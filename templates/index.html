@@ -228,7 +228,7 @@
 
     .work-cards {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: 14px;
     }
 
@@ -279,7 +279,7 @@
     }
 
     .meta-label {
-      width: 66px;
+      width: 76px;
       color: var(--muted);
       flex-shrink: 0;
       font-weight: 700;
@@ -289,25 +289,6 @@
       flex: 1;
       word-break: break-word;
     }
-
-    .work-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: auto;
-      flex-wrap: wrap;
-    }
-
-    .mini-btn {
-      border: none;
-      border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .mini-btn.edit { background: #dbeafe; color: #1d4ed8; }
-    .mini-btn.delete { background: #fee2e2; color: #b91c1c; }
 
     .stats-grid {
       display: grid;
@@ -414,6 +395,34 @@
       cursor: pointer;
     }
 
+    .option-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .option-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .chip-del {
+      border: none;
+      background: transparent;
+      color: #b91c1c;
+      cursor: pointer;
+      font-weight: 800;
+      padding: 0;
+    }
+
     canvas {
       width: 100% !important;
       max-height: 380px;
@@ -428,9 +437,7 @@
 
     @media (max-width: 840px) {
       .app { display: block; }
-
       .mobile-top { display: block; }
-
       .sidebar {
         position: fixed;
         left: -260px;
@@ -438,20 +445,10 @@
         height: 100vh;
         transition: left 0.25s ease;
       }
-
       .sidebar.open { left: 0; }
-
       .content { padding: 14px; }
-
-      .grid-4,
-      .grid-3,
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-
-      .material-row {
-        grid-template-columns: 1fr;
-      }
+      .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+      .material-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -462,15 +459,14 @@
       <div class="logo-sub">클라우드 시스템</div>
 
       <div class="menu-title">메뉴</div>
-      <button class="menu-btn active" data-page="works" onclick="showPage('works', this)">작업목록</button>
+      <button class="menu-btn active" data-page="journal" onclick="showPage('journal', this)">작업일지</button>
       <button class="menu-btn" data-page="input" onclick="showPage('input', this)">작업일지 입력</button>
-      <button class="menu-btn" data-page="edit" onclick="showPage('edit', this)">수정</button>
-      <button class="menu-btn" data-page="delete" onclick="showPage('delete', this)">삭제</button>
       <button class="menu-btn" data-page="materials" onclick="showPage('materials', this)">자재관리</button>
       <button class="menu-btn" data-page="monthly" onclick="showPage('monthly', this)">월별수익</button>
       <button class="menu-btn" data-page="excel" onclick="showPage('excel', this)">엑셀</button>
       <button class="menu-btn" data-page="settlement" onclick="showPage('settlement', this)">월정산</button>
       <button class="menu-btn" data-page="backup" onclick="showPage('backup', this)">백업</button>
+      <button class="menu-btn" data-page="options" onclick="showPage('options', this)">옵션관리</button>
     </aside>
 
     <main class="content">
@@ -478,61 +474,88 @@
         <button class="toggle-menu-btn" onclick="toggleSidebar()">메뉴 열기 / 닫기</button>
       </div>
 
-      <div class="page active" id="works-page">
+      <div class="page active" id="journal-page">
         <div class="topbar">
           <div>
-            <div class="page-title">작업목록</div>
+            <div class="page-title">작업일지</div>
             <div class="page-desc">기본 첫 화면입니다. 같은 날짜 작업은 옆 카드로 표시됩니다.</div>
           </div>
           <div class="toolbar">
-            <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadWorks()" />
-            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재 검색" style="width:220px" oninput="loadWorks()" />
-            <button class="btn" onclick="resetWorkFilters()">초기화</button>
-            <button class="btn primary" onclick="loadWorks()">새로고침</button>
+            <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadJournal()" />
+            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재/병충해 검색" style="width:240px" oninput="loadJournal()" />
+            <button class="btn" onclick="resetJournalFilters()">초기화</button>
+            <button class="btn primary" onclick="loadJournal()">새로고침</button>
           </div>
         </div>
 
         <div class="stats-grid" id="topStats"></div>
-        <div id="workListArea"></div>
+        <div id="journalListArea"></div>
       </div>
 
       <div class="page" id="input-page">
         <div class="topbar">
           <div>
             <div class="page-title">작업일지 입력</div>
-            <div class="page-desc">자재 여러 개 입력 가능. 작업 저장 시 자재 자동 등록 구조에 맞춘 화면입니다.</div>
+            <div class="page-desc">시작날짜와 종료날짜를 넣으면 연속일수가 자동 계산됩니다. 옵션관리에서 선택 목록을 바꿀 수 있습니다.</div>
           </div>
         </div>
 
         <div class="panel">
           <form id="workForm">
-            <div class="grid grid-4">
+            <div class="grid grid-3">
               <div class="field">
-                <label>날짜</label>
-                <input class="input" type="date" id="f_date" required />
+                <label>시작날짜</label>
+                <input class="input" type="date" id="f_start_date" required />
               </div>
               <div class="field">
-                <label>시작시간</label>
-                <input class="input" type="time" id="f_start" />
+                <label>종료날짜</label>
+                <input class="input" type="date" id="f_end_date" required />
               </div>
               <div class="field">
-                <label>종료시간</label>
-                <input class="input" type="time" id="f_end" />
-              </div>
-              <div class="field">
-                <label>날씨</label>
-                <input class="input" type="text" id="f_weather" placeholder="맑음 / 흐림 / 비" />
+                <label>연속일수</label>
+                <input class="input" type="number" id="f_days" min="1" readonly />
               </div>
             </div>
 
             <div class="grid grid-2">
               <div class="field">
-                <label>작물</label>
-                <input class="input" type="text" id="f_crop" placeholder="예: 한라봉, 천혜향" />
+                <label>시작시간</label>
+                <input class="input" type="time" id="f_start_time" />
               </div>
               <div class="field">
+                <label>종료시간</label>
+                <input class="input" type="time" id="f_end_time" />
+              </div>
+            </div>
+
+            <div class="grid grid-3">
+              <div class="field">
+                <label>날씨</label>
+                <input class="input" list="weather-options" id="f_weather" placeholder="선택 또는 입력" />
+                <datalist id="weather-options"></datalist>
+              </div>
+              <div class="field">
+                <label>작물</label>
+                <input class="input" list="crop-options" id="f_crop" placeholder="선택 또는 입력" />
+                <datalist id="crop-options"></datalist>
+              </div>
+              <div class="field">
+                <label>병충해</label>
+                <input class="input" list="pest-options" id="f_pest" placeholder="선택 또는 입력" />
+                <datalist id="pest-options"></datalist>
+              </div>
+            </div>
+
+            <div class="grid grid-2">
+              <div class="field">
                 <label>작업내용</label>
-                <input class="input" type="text" id="f_work" placeholder="예: 방제 작업" required />
+                <input class="input" list="work-options" id="f_work" placeholder="선택 또는 입력" required />
+                <datalist id="work-options"></datalist>
+              </div>
+              <div class="field">
+                <label>대표 사용자재</label>
+                <input class="input" list="material-options" id="f_main_material" placeholder="선택 또는 입력" />
+                <datalist id="material-options"></datalist>
               </div>
             </div>
 
@@ -542,7 +565,7 @@
                 <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
               </div>
               <div id="materialRows"></div>
-              <div class="summary-box">자재는 여러 개 추가 가능하며, 저장 시 자동 합산하여 서버로 전송합니다.</div>
+              <div class="summary-box">자재는 여러 개 추가할 수 있습니다. 첫 줄 자재명은 옵션 목록과 연결됩니다.</div>
             </div>
 
             <div class="grid grid-3">
@@ -570,38 +593,6 @@
               <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
             </div>
           </form>
-        </div>
-      </div>
-
-      <div class="page" id="edit-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">작업 수정</div>
-            <div class="page-desc">수정할 작업을 목록에서 선택해서 불러옵니다.</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="inline" style="margin-bottom:12px;">
-            <input class="input" id="editSearch" placeholder="날짜/작업내용 검색" style="max-width:280px" oninput="renderEditList()" />
-            <button class="btn primary" onclick="loadEditDeleteData()">목록 불러오기</button>
-          </div>
-          <div id="editListArea"></div>
-        </div>
-      </div>
-
-      <div class="page" id="delete-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">작업 삭제</div>
-            <div class="page-desc">삭제할 작업을 선택하세요.</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="inline" style="margin-bottom:12px;">
-            <input class="input" id="deleteSearch" placeholder="날짜/작업내용 검색" style="max-width:280px" oninput="renderDeleteList()" />
-            <button class="btn danger" onclick="loadEditDeleteData()">목록 새로고침</button>
-          </div>
-          <div id="deleteListArea"></div>
         </div>
       </div>
 
@@ -654,7 +645,7 @@
         <div class="grid grid-2">
           <div class="panel">
             <h3 style="margin-top:0;">작업일지 엑셀</h3>
-            <p>날짜, 작업내용, 자재상세, 자재비, 인건비, 총금액 포함</p>
+            <p>날짜, 작업내용, 사용자재, 자재비, 인건비, 총금액 포함</p>
             <button class="btn success" onclick="downloadFile('/api/export_excel')">작업일지 엑셀 다운로드</button>
           </div>
           <div class="panel">
@@ -695,8 +686,64 @@
           </div>
         </div>
         <div class="panel">
-          <p>백업 파일은 서버에서 생성되거나 다운로드됩니다. 현재 API 구조에 맞춰 동작합니다.</p>
+          <p>백업 파일은 서버에서 생성되거나 다운로드됩니다.</p>
           <button class="btn warning" onclick="downloadFile('/api/backup')">백업 실행</button>
+        </div>
+      </div>
+
+      <div class="page" id="options-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">옵션관리</div>
+            <div class="page-desc">날씨, 작물, 작업내용, 사용자재, 병충해 선택 목록을 관리합니다. 현재는 브라우저 저장 방식입니다.</div>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="panel">
+            <h3 style="margin-top:0;">날씨</h3>
+            <div class="inline">
+              <input class="input" id="opt_weather" placeholder="예: 맑음" />
+              <button class="btn primary" onclick="addOptionItem('weather')">추가</button>
+            </div>
+            <div class="option-list" id="weather-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">작물</h3>
+            <div class="inline">
+              <input class="input" id="opt_crop" placeholder="예: 한라봉" />
+              <button class="btn primary" onclick="addOptionItem('crop')">추가</button>
+            </div>
+            <div class="option-list" id="crop-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">작업내용</h3>
+            <div class="inline">
+              <input class="input" id="opt_work" placeholder="예: 방제 작업" />
+              <button class="btn primary" onclick="addOptionItem('work')">추가</button>
+            </div>
+            <div class="option-list" id="work-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">사용자재</h3>
+            <div class="inline">
+              <input class="input" id="opt_material" placeholder="예: 톱신페스트" />
+              <button class="btn primary" onclick="addOptionItem('material')">추가</button>
+            </div>
+            <div class="option-list" id="material-option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3 style="margin-top:0;">병충해</h3>
+            <div class="inline">
+              <input class="input" id="opt_pest" placeholder="예: 응애" />
+              <button class="btn primary" onclick="addOptionItem('pest')">추가</button>
+            </div>
+            <div class="option-list" id="pest-option-list"></div>
+          </div>
         </div>
       </div>
     </main>
@@ -704,8 +751,67 @@
 
   <script>
     let cachedWorks = [];
-    let editDeleteWorks = [];
     let chartData = [];
+
+    const defaultOptions = {
+      weather: ['맑음', '흐림', '비', '눈', '바람', '기타'],
+      crop: ['한라봉', '천혜향', '유라조생', '극조생'],
+      work: ['물관리', '방제', '묶기', '수확', '전정', '기타'],
+      material: ['톱신페스트', '다이센', '카스피', '기계유제'],
+      pest: ['응애', '진딧물', '총채벌레', '검은점무늬병']
+    };
+
+    function getOptions(key) {
+      const saved = localStorage.getItem('worklog_options_' + key);
+      if (!saved) return [...defaultOptions[key]];
+      try { return JSON.parse(saved); } catch { return [...defaultOptions[key]]; }
+    }
+
+    function setOptions(key, arr) {
+      localStorage.setItem('worklog_options_' + key, JSON.stringify(arr));
+    }
+
+    function renderOptionLists() {
+      ['weather','crop','work','material','pest'].forEach(key => {
+        const arr = getOptions(key);
+        const datalist = document.getElementById(key + '-options');
+        if (datalist) {
+          datalist.innerHTML = arr.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+        }
+        const list = document.getElementById(key + '-option-list');
+        if (list) {
+          list.innerHTML = arr.map(v => `
+            <span class="option-chip">
+              ${escapeHtml(v)}
+              <button class="chip-del" onclick="removeOptionItem('${key}', '${escapeJs(v)}')">×</button>
+            </span>
+          `).join('');
+        }
+      });
+    }
+
+    function addOptionItem(key) {
+      const input = document.getElementById('opt_' + key);
+      const value = (input.value || '').trim();
+      if (!value) return;
+      const arr = getOptions(key);
+      if (!arr.includes(value)) arr.push(value);
+      setOptions(key, arr);
+      input.value = '';
+      renderOptionLists();
+      syncMaterialDatalists();
+    }
+
+    function removeOptionItem(key, value) {
+      const arr = getOptions(key).filter(v => v !== value);
+      setOptions(key, arr);
+      renderOptionLists();
+      syncMaterialDatalists();
+    }
+
+    function escapeJs(str) {
+      return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
 
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('open');
@@ -723,11 +829,11 @@
         document.getElementById('sidebar').classList.remove('open');
       }
 
-      if (page === 'works') loadWorks();
+      if (page === 'journal') loadJournal();
       if (page === 'materials') loadMaterials();
       if (page === 'monthly') loadMonthly();
       if (page === 'settlement') loadSettlement();
-      if (page === 'edit' || page === 'delete') loadEditDeleteData();
+      if (page === 'options') renderOptionLists();
     }
 
     function todayStr() {
@@ -758,17 +864,42 @@
       document.getElementById('f_total_cost').value = material + labor;
     }
 
+    function computeDays() {
+      const s = document.getElementById('f_start_date').value;
+      const e = document.getElementById('f_end_date').value;
+      if (!s || !e) {
+        document.getElementById('f_days').value = '';
+        return;
+      }
+      const sd = new Date(s);
+      const ed = new Date(e);
+      const diff = Math.floor((ed - sd) / (1000 * 60 * 60 * 24)) + 1;
+      document.getElementById('f_days').value = diff > 0 ? diff : 1;
+    }
+
+    function syncMaterialDatalists() {
+      const items = getOptions('material');
+      document.querySelectorAll('.material-name-list').forEach(dl => {
+        dl.innerHTML = items.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+      });
+    }
+
     function addMaterialRow(name = '', qty = '', unit = '') {
       const wrap = document.getElementById('materialRows');
+      const rowId = 'matdl_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
       const row = document.createElement('div');
       row.className = 'material-row';
       row.innerHTML = `
-        <input class="input material-name" placeholder="자재명" value="${escapeHtml(name)}" />
+        <div>
+          <input class="input material-name" list="${rowId}" placeholder="자재명" value="${escapeHtml(name)}" />
+          <datalist id="${rowId}" class="material-name-list"></datalist>
+        </div>
         <input class="input material-qty" type="number" min="0" step="0.1" placeholder="수량" value="${escapeHtml(qty)}" />
         <input class="input material-unit" placeholder="단위(병, 말, 봉)" value="${escapeHtml(unit)}" />
         <button type="button" class="btn danger" onclick="this.parentElement.remove()">삭제</button>
       `;
       wrap.appendChild(row);
+      syncMaterialDatalists();
     }
 
     function collectMaterials() {
@@ -788,12 +919,14 @@
 
     function resetWorkForm() {
       document.getElementById('workForm').reset();
-      document.getElementById('f_date').value = todayStr();
+      document.getElementById('f_start_date').value = todayStr();
+      document.getElementById('f_end_date').value = todayStr();
       document.getElementById('f_material_cost').value = 0;
       document.getElementById('f_labor_cost').value = 0;
       document.getElementById('f_total_cost').value = 0;
       document.getElementById('materialRows').innerHTML = '';
       addMaterialRow();
+      computeDays();
     }
 
     async function requestJson(url, options = {}) {
@@ -805,7 +938,7 @@
       return await res.json();
     }
 
-    async function loadWorks() {
+    async function loadJournal() {
       try {
         const data = await requestJson('/api/works_light');
         cachedWorks = Array.isArray(data) ? data : (data.data || []);
@@ -816,22 +949,22 @@
         let works = [...cachedWorks];
 
         if (dateFilter) {
-          works = works.filter(w => String(w.날짜 || '').startsWith(dateFilter));
+          works = works.filter(w => String(w.시작날짜 || w.날짜 || '').startsWith(dateFilter) || String(w.종료날짜 || '').startsWith(dateFilter));
         }
 
         if (keyword) {
           works = works.filter(w => {
             const text = [
-              w.작업내용, w.작물, w.사용자재, w.비고, w.날씨
+              w.작업내용, w.작물, w.사용자재, w.비고, w.날씨, w.병충해
             ].join(' ').toLowerCase();
             return text.includes(keyword);
           });
         }
 
         renderTopStats(works);
-        renderWorkCards(works);
+        renderJournalCards(works);
       } catch (err) {
-        document.getElementById('workListArea').innerHTML = `<div class="empty">작업목록을 불러오지 못했습니다.<br>${escapeHtml(err.message)}</div>`;
+        document.getElementById('journalListArea').innerHTML = `<div class="empty">작업일지를 불러오지 못했습니다.<br>${escapeHtml(err.message)}</div>`;
       }
     }
 
@@ -842,23 +975,23 @@
       const total = works.reduce((a, b) => a + Number(b.총금액 || (Number(b.자재비 || 0) + Number(b.인건비 || 0))), 0);
 
       document.getElementById('topStats').innerHTML = `
-        <div class="stat-card"><div class="stat-title">총 작업 수</div><div class="stat-value">${totalWorks.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="stat-title">총 작업일지 수</div><div class="stat-value">${totalWorks.toLocaleString()}</div></div>
         <div class="stat-card"><div class="stat-title">자재비 합계</div><div class="stat-value">${Number(totalMaterial).toLocaleString()}원</div></div>
         <div class="stat-card"><div class="stat-title">인건비 합계</div><div class="stat-value">${Number(totalLabor).toLocaleString()}원</div></div>
         <div class="stat-card"><div class="stat-title">총금액 합계</div><div class="stat-value">${Number(total).toLocaleString()}원</div></div>
       `;
     }
 
-    function renderWorkCards(works) {
-      const area = document.getElementById('workListArea');
+    function renderJournalCards(works) {
+      const area = document.getElementById('journalListArea');
       if (!works.length) {
-        area.innerHTML = `<div class="empty">표시할 작업이 없습니다.</div>`;
+        area.innerHTML = `<div class="empty">표시할 작업일지가 없습니다.</div>`;
         return;
       }
 
       const grouped = {};
       works.forEach(w => {
-        const date = w.날짜 || '날짜없음';
+        const date = w.시작날짜 || w.날짜 || '날짜없음';
         if (!grouped[date]) grouped[date] = [];
         grouped[date].push(w);
       });
@@ -877,7 +1010,7 @@
             <div class="work-cards">
         `;
 
-        list.forEach((w, idx) => {
+        list.forEach((w) => {
           const total = Number(w.총금액 || (Number(w.자재비 || 0) + Number(w.인건비 || 0)));
           html += `
             <div class="work-card">
@@ -886,17 +1019,16 @@
                 <div class="work-badge">${escapeHtml(w.날씨 || '기록')}</div>
               </div>
               <div class="meta-list">
+                <div class="meta-row"><div class="meta-label">기간</div><div class="meta-value">${escapeHtml(w.시작날짜 || w.날짜 || '-')} ${w.종료날짜 ? '~ ' + escapeHtml(w.종료날짜) : ''}</div></div>
+                <div class="meta-row"><div class="meta-label">연속일수</div><div class="meta-value">${escapeHtml(w.연속일수 || '-')}</div></div>
                 <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
                 <div class="meta-row"><div class="meta-label">시간</div><div class="meta-value">${escapeHtml(w.시작시간 || '')} ${w.종료시간 ? '~ ' + escapeHtml(w.종료시간) : ''}</div></div>
+                <div class="meta-row"><div class="meta-label">병충해</div><div class="meta-value">${escapeHtml(w.병충해 || '-')}</div></div>
                 <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
                 <div class="meta-row"><div class="meta-label">자재비</div><div class="meta-value">${money(w.자재비)}</div></div>
                 <div class="meta-row"><div class="meta-label">인건비</div><div class="meta-value">${money(w.인건비)}</div></div>
                 <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value"><strong>${money(total)}</strong></div></div>
                 <div class="meta-row"><div class="meta-label">비고</div><div class="meta-value">${escapeHtml(w.비고 || '-')}</div></div>
-              </div>
-              <div class="work-actions">
-                <button class="mini-btn edit" onclick="prefillEditFromWorks(${findWorkIndex(w)})">수정</button>
-                <button class="mini-btn delete" onclick="quickDeleteFromWorks(${findWorkIndex(w)})">삭제</button>
               </div>
             </div>
           `;
@@ -908,29 +1040,32 @@
       area.innerHTML = html;
     }
 
-    function findWorkIndex(work) {
-      return cachedWorks.findIndex(w => JSON.stringify(w) === JSON.stringify(work));
-    }
-
-    function resetWorkFilters() {
+    function resetJournalFilters() {
       document.getElementById('searchDate').value = '';
       document.getElementById('searchKeyword').value = '';
-      loadWorks();
+      loadJournal();
     }
 
     document.getElementById('f_material_cost').addEventListener('input', computeTotalCost);
     document.getElementById('f_labor_cost').addEventListener('input', computeTotalCost);
+    document.getElementById('f_start_date').addEventListener('change', computeDays);
+    document.getElementById('f_end_date').addEventListener('change', computeDays);
 
     document.getElementById('workForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       try {
         const payload = {
-          날짜: document.getElementById('f_date').value,
-          시작시간: document.getElementById('f_start').value,
-          종료시간: document.getElementById('f_end').value,
+          날짜: document.getElementById('f_start_date').value,
+          시작날짜: document.getElementById('f_start_date').value,
+          종료날짜: document.getElementById('f_end_date').value,
+          연속일수: Number(document.getElementById('f_days').value || 1),
+          시작시간: document.getElementById('f_start_time').value,
+          종료시간: document.getElementById('f_end_time').value,
           날씨: document.getElementById('f_weather').value,
           작물: document.getElementById('f_crop').value,
+          병충해: document.getElementById('f_pest').value,
           작업내용: document.getElementById('f_work').value,
+          대표사용자재: document.getElementById('f_main_material').value,
           사용자재: collectMaterials(),
           자재비: Number(document.getElementById('f_material_cost').value || 0),
           인건비: Number(document.getElementById('f_labor_cost').value || 0),
@@ -944,160 +1079,13 @@
           body: JSON.stringify(payload)
         });
 
-        alert('작업이 저장되었습니다.');
+        alert('작업일지가 저장되었습니다.');
         resetWorkForm();
-        showPage('works');
+        showPage('journal');
       } catch (err) {
         alert('저장 실패: ' + err.message);
       }
     });
-
-    async function loadEditDeleteData() {
-      try {
-        const data = await requestJson('/api/works_light');
-        editDeleteWorks = Array.isArray(data) ? data : (data.data || []);
-        renderEditList();
-        renderDeleteList();
-      } catch (err) {
-        document.getElementById('editListArea').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-        document.getElementById('deleteListArea').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderEditList() {
-      const keyword = (document.getElementById('editSearch').value || '').trim().toLowerCase();
-      const list = editDeleteWorks.filter(w => !keyword || [w.날짜, w.작업내용, w.작물, w.사용자재].join(' ').toLowerCase().includes(keyword));
-      const area = document.getElementById('editListArea');
-      if (!list.length) {
-        area.innerHTML = `<div class="empty">수정할 항목이 없습니다.</div>`;
-        return;
-      }
-      area.innerHTML = list.map((w, i) => `
-        <div class="work-card" style="margin-bottom:12px;">
-          <div class="work-card-header">
-            <div>
-              <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
-              <div style="color:#6b7280; font-size:13px; margin-top:4px;">${escapeHtml(w.날짜 || '')}</div>
-            </div>
-            <button class="btn primary" onclick="editItem(${i})">이 항목 수정</button>
-          </div>
-          <div class="meta-list">
-            <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
-            <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
-            <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value">${money(w.총금액 || 0)}</div></div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function renderDeleteList() {
-      const keyword = (document.getElementById('deleteSearch').value || '').trim().toLowerCase();
-      const list = editDeleteWorks.filter(w => !keyword || [w.날짜, w.작업내용, w.작물, w.사용자재].join(' ').toLowerCase().includes(keyword));
-      const area = document.getElementById('deleteListArea');
-      if (!list.length) {
-        area.innerHTML = `<div class="empty">삭제할 항목이 없습니다.</div>`;
-        return;
-      }
-      area.innerHTML = list.map((w, i) => `
-        <div class="work-card" style="margin-bottom:12px;">
-          <div class="work-card-header">
-            <div>
-              <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
-              <div style="color:#6b7280; font-size:13px; margin-top:4px;">${escapeHtml(w.날짜 || '')}</div>
-            </div>
-            <button class="btn danger" onclick="deleteItem(${i})">이 항목 삭제</button>
-          </div>
-          <div class="meta-list">
-            <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
-            <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
-            <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value">${money(w.총금액 || 0)}</div></div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function parseMaterialString(materialText) {
-      if (!materialText) return [];
-      return String(materialText).split(',').map(s => s.trim()).filter(Boolean).map(item => {
-        const parts = item.split('|');
-        return {
-          name: parts[0] || '',
-          qty: parts[1] || '',
-          unit: parts[2] || ''
-        };
-      });
-    }
-
-    function prefillEditForm(item) {
-      document.getElementById('f_date').value = item.날짜 || todayStr();
-      document.getElementById('f_start').value = item.시작시간 || '';
-      document.getElementById('f_end').value = item.종료시간 || '';
-      document.getElementById('f_weather').value = item.날씨 || '';
-      document.getElementById('f_crop').value = item.작물 || '';
-      document.getElementById('f_work').value = item.작업내용 || '';
-      document.getElementById('f_material_cost').value = Number(item.자재비 || 0);
-      document.getElementById('f_labor_cost').value = Number(item.인건비 || 0);
-      document.getElementById('f_total_cost').value = Number(item.총금액 || 0);
-      document.getElementById('f_note').value = item.비고 || '';
-
-      const rows = document.getElementById('materialRows');
-      rows.innerHTML = '';
-      const parsed = parseMaterialString(item.사용자재 || '');
-      if (parsed.length) {
-        parsed.forEach(m => addMaterialRow(m.name, m.qty, m.unit));
-      } else {
-        addMaterialRow();
-      }
-    }
-
-    function editItem(i) {
-      const item = editDeleteWorks[i];
-      prefillEditForm(item);
-      showPage('input');
-      alert('기존 값이 입력 화면에 채워졌습니다. 수정 후 저장하세요.\n현재 코드는 새 저장 방식입니다.\n기존 행을 실제 UPDATE 하려면 별도 /api/works/<id> PUT API가 필요합니다.');
-    }
-
-    function prefillEditFromWorks(i) {
-      if (i < 0) return;
-      const item = cachedWorks[i];
-      prefillEditForm(item);
-      showPage('input');
-      alert('기존 값이 입력 화면에 채워졌습니다. 수정 후 저장하세요.');
-    }
-
-    async function deleteItem(i) {
-      const item = editDeleteWorks[i];
-      await deleteWorkByItem(item);
-    }
-
-    async function quickDeleteFromWorks(i) {
-      if (i < 0) return;
-      const item = cachedWorks[i];
-      await deleteWorkByItem(item);
-    }
-
-    async function deleteWorkByItem(item) {
-      try {
-        if (!confirm(`삭제하시겠습니까?\n${item.날짜 || ''} / ${item.작업내용 || ''}`)) return;
-
-        const res = await fetch('/api/works', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item)
-        });
-
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || '삭제 실패');
-        }
-
-        alert('삭제되었습니다.');
-        loadWorks();
-        loadEditDeleteData();
-      } catch (err) {
-        alert('삭제 실패: ' + err.message + '\n현재 백엔드에 DELETE API가 없으면 추가해야 합니다.');
-      }
-    }
 
     async function loadMaterials() {
       try {
@@ -1141,8 +1129,8 @@
                     <td>${qty}</td>
                     <td>
                       <div class="inline">
-                        <button class="btn" onclick="updateMaterialPrompt('${escapeHtml(name).replace(/'/g, "\\'")}', ${qty})">재고수정</button>
-                        <button class="btn danger" onclick="deleteMaterialPrompt('${escapeHtml(name).replace(/'/g, "\\'")}')">삭제</button>
+                        <button class="btn" onclick="updateMaterialPrompt('${escapeJs(name)}', ${qty})">재고수정</button>
+                        <button class="btn danger" onclick="deleteMaterialPrompt('${escapeJs(name)}')">삭제</button>
                       </div>
                     </td>
                   </tr>
@@ -1221,15 +1209,12 @@
       canvas.width = rect.width * ratio;
       canvas.height = 320 * ratio;
       ctx.scale(ratio, ratio);
-
       ctx.clearRect(0, 0, rect.width, 320);
-
       if (!data.length) return;
 
       const labels = data.map(d => String(d.월 || d.month || ''));
       const values = data.map(d => Number(d.총금액 || d.total || 0));
       const maxVal = Math.max(...values, 1);
-
       const padding = 40;
       const chartW = rect.width - padding * 2;
       const chartH = 240;
@@ -1252,13 +1237,10 @@
         const x = padding + i * (barW + barGap);
         const h = (v / maxVal) * chartH;
         const y = baseY - h;
-
         ctx.fillStyle = '#60a5fa';
         ctx.fillRect(x, y, barW, h);
-
         ctx.fillStyle = '#0f172a';
         ctx.fillText(v.toLocaleString(), x + barW / 2, y - 8);
-
         ctx.fillStyle = '#475569';
         ctx.fillText(labels[i], x + barW / 2, baseY + 18);
       });
@@ -1300,10 +1282,13 @@
     });
 
     window.onload = function() {
-      document.getElementById('f_date').value = todayStr();
+      renderOptionLists();
+      document.getElementById('f_start_date').value = todayStr();
+      document.getElementById('f_end_date').value = todayStr();
       addMaterialRow();
+      computeDays();
       computeTotalCost();
-      showPage('works');
+      showPage('journal');
     };
   </script>
 </body>

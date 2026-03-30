@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>작업일지 클라우드 시스템</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --sidebar: #1f2937;
+      --sidebar-2: #111827;
+      --menu: #374151;
+      --menu-hover: #4b5563;
+      --menu-active: #2563eb;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+      --shadow: 0 4px 14px rgba(0,0,0,0.08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: 240px;
+      background: linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-2) 100%);
+      color: #fff;
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.12);
+      z-index: 20;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      letter-spacing: -0.4px;
+    }
+
+    .logo-sub {
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-bottom: 20px;
+    }
+
+    .menu-title {
+      font-size: 12px;
+      color: #94a3b8;
+      margin: 18px 6px 10px;
+    }
+
+    .menu-btn {
+      width: 100%;
+      border: none;
+      background: var(--menu);
+      color: #fff;
+      padding: 13px 14px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      text-align: left;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    .menu-btn:hover { background: var(--menu-hover); }
+    .menu-btn.active { background: var(--menu-active); }
+
+    .content {
+      flex: 1;
+      padding: 22px;
+      min-width: 0;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .page-desc {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .input, .select, .textarea, .btn {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      padding: 11px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .input, .select, .textarea {
+      background: #fff;
+      width: 100%;
+    }
+
+    .textarea {
+      min-height: 92px;
+      resize: vertical;
+      font-family: inherit;
+    }
+
+    .btn {
+      background: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .btn.primary {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
+
+    .btn.success {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+    }
+
+    .btn.warning {
+      background: var(--warning);
+      border-color: var(--warning);
+      color: #fff;
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .btn:hover { opacity: 0.93; }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .field label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #374151;
+    }
+
+    .date-group {
+      margin-bottom: 22px;
+    }
+
+    .date-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .date-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .date-count {
+      font-size: 13px;
+      color: var(--muted);
+      background: #eef2ff;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .work-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .work-card {
+      background: #fff;
+      border: 1px solid #edf0f5;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .work-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .work-title {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .work-badge {
+      font-size: 12px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      padding: 5px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 7px;
+      font-size: 14px;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .meta-label {
+      width: 66px;
+      color: var(--muted);
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+
+    .meta-value {
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .work-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      flex-wrap: wrap;
+    }
+
+    .mini-btn {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .mini-btn.edit { background: #dbeafe; color: #1d4ed8; }
+    .mini-btn.delete { background: #fee2e2; color: #b91c1c; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      border: 1px solid #eef2f7;
+    }
+
+    .stat-title {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+    }
+
+    .list-table-wrap {
+      overflow-x: auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 740px;
+    }
+
+    th, td {
+      padding: 13px 12px;
+      border-bottom: 1px solid #eef2f7;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .empty {
+      padding: 36px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 700;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .inline {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .material-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr auto;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+
+    .summary-box {
+      background: #eff6ff;
+      color: #1e3a8a;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .mobile-top {
+      display: none;
+      margin-bottom: 12px;
+    }
+
+    .toggle-menu-btn {
+      width: 100%;
+      border: none;
+      background: #1f2937;
+      color: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    canvas {
+      width: 100% !important;
+      max-height: 380px;
+      background: #fff;
+      border-radius: 16px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 840px) {
+      .app { display: block; }
+
+      .mobile-top { display: block; }
+
+      .sidebar {
+        position: fixed;
+        left: -260px;
+        top: 0;
+        height: 100vh;
+        transition: left 0.25s ease;
+      }
+
+      .sidebar.open { left: 0; }
+
+      .content { padding: 14px; }
+
+      .grid-4,
+      .grid-3,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .material-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">작업일지</div>
+      <div class="logo-sub">클라우드 시스템</div>
+
+      <div class="menu-title">메뉴</div>
+      <button class="menu-btn active" data-page="works" onclick="showPage('works', this)">작업목록</button>
+      <button class="menu-btn" data-page="input" onclick="showPage('input', this)">작업일지 입력</button>
+      <button class="menu-btn" data-page="edit" onclick="showPage('edit', this)">수정</button>
+      <button class="menu-btn" data-page="delete" onclick="showPage('delete', this)">삭제</button>
+      <button class="menu-btn" data-page="materials" onclick="showPage('materials', this)">자재관리</button>
+      <button class="menu-btn" data-page="monthly" onclick="showPage('monthly', this)">월별수익</button>
+      <button class="menu-btn" data-page="excel" onclick="showPage('excel', this)">엑셀</button>
+      <button class="menu-btn" data-page="settlement" onclick="showPage('settlement', this)">월정산</button>
+      <button class="menu-btn" data-page="backup" onclick="showPage('backup', this)">백업</button>
+    </aside>
+
+    <main class="content">
+      <div class="mobile-top">
+        <button class="toggle-menu-btn" onclick="toggleSidebar()">메뉴 열기 / 닫기</button>
+      </div>
+
+      <div class="page active" id="works-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">작업목록</div>
+            <div class="page-desc">기본 첫 화면입니다. 같은 날짜 작업은 옆 카드로 표시됩니다.</div>
+          </div>
+          <div class="toolbar">
+            <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadWorks()" />
+            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재 검색" style="width:220px" oninput="loadWorks()" />
+            <button class="btn" onclick="resetWorkFilters()">초기화</button>
+            <button class="btn primary" onclick="loadWorks()">새로고침</button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="topStats"></div>
+        <div id="workListArea"></div>
+      </div>
+
+      <div class="page" id="input-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">작업일지 입력</div>
+            <div class="page-desc">자재 여러 개 입력 가능. 작업 저장 시 자재 자동 등록 구조에 맞춘 화면입니다.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <form id="workForm">
+            <div class="grid grid-4">
+              <div class="field">
+                <label>날짜</label>
+                <input class="input" type="date" id="f_date" required />
+              </div>
+              <div class="field">
+                <label>시작시간</label>
+                <input class="input" type="time" id="f_start" />
+              </div>
+              <div class="field">
+                <label>종료시간</label>
+                <input class="input" type="time" id="f_end" />
+              </div>
+              <div class="field">
+                <label>날씨</label>
+                <input class="input" type="text" id="f_weather" placeholder="맑음 / 흐림 / 비" />
+              </div>
+            </div>
+
+            <div class="grid grid-2">
+              <div class="field">
+                <label>작물</label>
+                <input class="input" type="text" id="f_crop" placeholder="예: 한라봉, 천혜향" />
+              </div>
+              <div class="field">
+                <label>작업내용</label>
+                <input class="input" type="text" id="f_work" placeholder="예: 방제 작업" required />
+              </div>
+            </div>
+
+            <div class="panel" style="padding:14px; margin-top:16px; background:#f8fbff; box-shadow:none; border:1px solid #e5edf8;">
+              <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+                <strong>사용 자재 입력</strong>
+                <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
+              </div>
+              <div id="materialRows"></div>
+              <div class="summary-box">자재는 여러 개 추가 가능하며, 저장 시 자동 합산하여 서버로 전송합니다.</div>
+            </div>
+
+            <div class="grid grid-3">
+              <div class="field">
+                <label>자재비</label>
+                <input class="input" type="number" id="f_material_cost" value="0" min="0" />
+              </div>
+              <div class="field">
+                <label>인건비</label>
+                <input class="input" type="number" id="f_labor_cost" value="0" min="0" />
+              </div>
+              <div class="field">
+                <label>총금액</label>
+                <input class="input" type="number" id="f_total_cost" value="0" min="0" readonly />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>비고</label>
+              <textarea class="textarea" id="f_note" placeholder="메모를 입력하세요."></textarea>
+            </div>
+
+            <div class="inline" style="margin-top:16px;">
+              <button type="submit" class="btn primary">저장</button>
+              <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="page" id="edit-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">작업 수정</div>
+            <div class="page-desc">수정할 작업을 목록에서 선택해서 불러옵니다.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="inline" style="margin-bottom:12px;">
+            <input class="input" id="editSearch" placeholder="날짜/작업내용 검색" style="max-width:280px" oninput="renderEditList()" />
+            <button class="btn primary" onclick="loadEditDeleteData()">목록 불러오기</button>
+          </div>
+          <div id="editListArea"></div>
+        </div>
+      </div>
+
+      <div class="page" id="delete-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">작업 삭제</div>
+            <div class="page-desc">삭제할 작업을 선택하세요.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="inline" style="margin-bottom:12px;">
+            <input class="input" id="deleteSearch" placeholder="날짜/작업내용 검색" style="max-width:280px" oninput="renderDeleteList()" />
+            <button class="btn danger" onclick="loadEditDeleteData()">목록 새로고침</button>
+          </div>
+          <div id="deleteListArea"></div>
+        </div>
+      </div>
+
+      <div class="page" id="materials-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">자재관리</div>
+            <div class="page-desc">재고 있음 / 없음으로 구분해서 표시합니다.</div>
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" onclick="loadMaterials()">새로고침</button>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="panel">
+            <h3 style="margin-top:0;">재고 있는 자재</h3>
+            <div id="materialsHasStock"></div>
+          </div>
+          <div class="panel">
+            <h3 style="margin-top:0;">재고 없는 자재</h3>
+            <div id="materialsNoStock"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" id="monthly-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">월별수익</div>
+            <div class="page-desc">월별 총금액 카드와 간단 차트를 함께 표시합니다.</div>
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" onclick="loadMonthly()">불러오기</button>
+          </div>
+        </div>
+        <div id="monthlyCards" class="stats-grid"></div>
+        <div class="panel">
+          <canvas id="monthlyCanvas" height="140"></canvas>
+        </div>
+      </div>
+
+      <div class="page" id="excel-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">엑셀</div>
+            <div class="page-desc">작업일지 엑셀과 월별 정산 엑셀을 바로 다운로드합니다.</div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="panel">
+            <h3 style="margin-top:0;">작업일지 엑셀</h3>
+            <p>날짜, 작업내용, 자재상세, 자재비, 인건비, 총금액 포함</p>
+            <button class="btn success" onclick="downloadFile('/api/export_excel')">작업일지 엑셀 다운로드</button>
+          </div>
+          <div class="panel">
+            <h3 style="margin-top:0;">월별 정산 엑셀</h3>
+            <p>월별 자재비, 인건비, 총금액 합계 포함</p>
+            <button class="btn success" onclick="downloadFile('/api/export_monthly')">월정산 엑셀 다운로드</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" id="settlement-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">월정산</div>
+            <div class="page-desc">월별 합산 데이터를 표 형태로 확인합니다.</div>
+          </div>
+        </div>
+        <div class="list-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>월</th>
+                <th>자재비</th>
+                <th>인건비</th>
+                <th>총금액</th>
+              </tr>
+            </thead>
+            <tbody id="settlementBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="page" id="backup-page">
+        <div class="topbar">
+          <div>
+            <div class="page-title">백업</div>
+            <div class="page-desc">현재 데이터를 JSON 파일로 백업합니다.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <p>백업 파일은 서버에서 생성되거나 다운로드됩니다. 현재 API 구조에 맞춰 동작합니다.</p>
+          <button class="btn warning" onclick="downloadFile('/api/backup')">백업 실행</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let cachedWorks = [];
+    let editDeleteWorks = [];
+    let chartData = [];
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    function showPage(page, el = null) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(page + '-page').classList.add('active');
+
+      document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
+      const targetBtn = el || document.querySelector(`.menu-btn[data-page="${page}"]`);
+      if (targetBtn) targetBtn.classList.add('active');
+
+      if (window.innerWidth <= 840) {
+        document.getElementById('sidebar').classList.remove('open');
+      }
+
+      if (page === 'works') loadWorks();
+      if (page === 'materials') loadMaterials();
+      if (page === 'monthly') loadMonthly();
+      if (page === 'settlement') loadSettlement();
+      if (page === 'edit' || page === 'delete') loadEditDeleteData();
+    }
+
+    function todayStr() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function money(v) {
+      const n = Number(v || 0);
+      return n.toLocaleString() + '원';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function computeTotalCost() {
+      const material = Number(document.getElementById('f_material_cost').value || 0);
+      const labor = Number(document.getElementById('f_labor_cost').value || 0);
+      document.getElementById('f_total_cost').value = material + labor;
+    }
+
+    function addMaterialRow(name = '', qty = '', unit = '') {
+      const wrap = document.getElementById('materialRows');
+      const row = document.createElement('div');
+      row.className = 'material-row';
+      row.innerHTML = `
+        <input class="input material-name" placeholder="자재명" value="${escapeHtml(name)}" />
+        <input class="input material-qty" type="number" min="0" step="0.1" placeholder="수량" value="${escapeHtml(qty)}" />
+        <input class="input material-unit" placeholder="단위(병, 말, 봉)" value="${escapeHtml(unit)}" />
+        <button type="button" class="btn danger" onclick="this.parentElement.remove()">삭제</button>
+      `;
+      wrap.appendChild(row);
+    }
+
+    function collectMaterials() {
+      const names = [...document.querySelectorAll('.material-name')].map(v => v.value.trim());
+      const qtys = [...document.querySelectorAll('.material-qty')].map(v => v.value.trim());
+      const units = [...document.querySelectorAll('.material-unit')].map(v => v.value.trim());
+
+      const items = [];
+      for (let i = 0; i < names.length; i++) {
+        if (!names[i]) continue;
+        const q = qtys[i] || '0';
+        const u = units[i] || '';
+        items.push(`${names[i]}|${q}|${u}`);
+      }
+      return items.join(', ');
+    }
+
+    function resetWorkForm() {
+      document.getElementById('workForm').reset();
+      document.getElementById('f_date').value = todayStr();
+      document.getElementById('f_material_cost').value = 0;
+      document.getElementById('f_labor_cost').value = 0;
+      document.getElementById('f_total_cost').value = 0;
+      document.getElementById('materialRows').innerHTML = '';
+      addMaterialRow();
+    }
+
+    async function requestJson(url, options = {}) {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `요청 실패: ${res.status}`);
+      }
+      return await res.json();
+    }
+
+    async function loadWorks() {
+      try {
+        const data = await requestJson('/api/works_light');
+        cachedWorks = Array.isArray(data) ? data : (data.data || []);
+
+        const dateFilter = document.getElementById('searchDate').value;
+        const keyword = (document.getElementById('searchKeyword').value || '').trim().toLowerCase();
+
+        let works = [...cachedWorks];
+
+        if (dateFilter) {
+          works = works.filter(w => String(w.날짜 || '').startsWith(dateFilter));
+        }
+
+        if (keyword) {
+          works = works.filter(w => {
+            const text = [
+              w.작업내용, w.작물, w.사용자재, w.비고, w.날씨
+            ].join(' ').toLowerCase();
+            return text.includes(keyword);
+          });
+        }
+
+        renderTopStats(works);
+        renderWorkCards(works);
+      } catch (err) {
+        document.getElementById('workListArea').innerHTML = `<div class="empty">작업목록을 불러오지 못했습니다.<br>${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderTopStats(works) {
+      const totalWorks = works.length;
+      const totalMaterial = works.reduce((a, b) => a + Number(b.자재비 || 0), 0);
+      const totalLabor = works.reduce((a, b) => a + Number(b.인건비 || 0), 0);
+      const total = works.reduce((a, b) => a + Number(b.총금액 || (Number(b.자재비 || 0) + Number(b.인건비 || 0))), 0);
+
+      document.getElementById('topStats').innerHTML = `
+        <div class="stat-card"><div class="stat-title">총 작업 수</div><div class="stat-value">${totalWorks.toLocaleString()}</div></div>
+        <div class="stat-card"><div class="stat-title">자재비 합계</div><div class="stat-value">${Number(totalMaterial).toLocaleString()}원</div></div>
+        <div class="stat-card"><div class="stat-title">인건비 합계</div><div class="stat-value">${Number(totalLabor).toLocaleString()}원</div></div>
+        <div class="stat-card"><div class="stat-title">총금액 합계</div><div class="stat-value">${Number(total).toLocaleString()}원</div></div>
+      `;
+    }
+
+    function renderWorkCards(works) {
+      const area = document.getElementById('workListArea');
+      if (!works.length) {
+        area.innerHTML = `<div class="empty">표시할 작업이 없습니다.</div>`;
+        return;
+      }
+
+      const grouped = {};
+      works.forEach(w => {
+        const date = w.날짜 || '날짜없음';
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(w);
+      });
+
+      const dates = Object.keys(grouped).sort((a, b) => String(b).localeCompare(String(a)));
+      let html = '';
+
+      dates.forEach(date => {
+        const list = grouped[date];
+        html += `
+          <div class="date-group">
+            <div class="date-header">
+              <div class="date-title">${escapeHtml(date)}</div>
+              <div class="date-count">${list.length}건</div>
+            </div>
+            <div class="work-cards">
+        `;
+
+        list.forEach((w, idx) => {
+          const total = Number(w.총금액 || (Number(w.자재비 || 0) + Number(w.인건비 || 0)));
+          html += `
+            <div class="work-card">
+              <div class="work-card-header">
+                <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
+                <div class="work-badge">${escapeHtml(w.날씨 || '기록')}</div>
+              </div>
+              <div class="meta-list">
+                <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
+                <div class="meta-row"><div class="meta-label">시간</div><div class="meta-value">${escapeHtml(w.시작시간 || '')} ${w.종료시간 ? '~ ' + escapeHtml(w.종료시간) : ''}</div></div>
+                <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
+                <div class="meta-row"><div class="meta-label">자재비</div><div class="meta-value">${money(w.자재비)}</div></div>
+                <div class="meta-row"><div class="meta-label">인건비</div><div class="meta-value">${money(w.인건비)}</div></div>
+                <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value"><strong>${money(total)}</strong></div></div>
+                <div class="meta-row"><div class="meta-label">비고</div><div class="meta-value">${escapeHtml(w.비고 || '-')}</div></div>
+              </div>
+              <div class="work-actions">
+                <button class="mini-btn edit" onclick="prefillEditFromWorks(${findWorkIndex(w)})">수정</button>
+                <button class="mini-btn delete" onclick="quickDeleteFromWorks(${findWorkIndex(w)})">삭제</button>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `</div></div>`;
+      });
+
+      area.innerHTML = html;
+    }
+
+    function findWorkIndex(work) {
+      return cachedWorks.findIndex(w => JSON.stringify(w) === JSON.stringify(work));
+    }
+
+    function resetWorkFilters() {
+      document.getElementById('searchDate').value = '';
+      document.getElementById('searchKeyword').value = '';
+      loadWorks();
+    }
+
+    document.getElementById('f_material_cost').addEventListener('input', computeTotalCost);
+    document.getElementById('f_labor_cost').addEventListener('input', computeTotalCost);
+
+    document.getElementById('workForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      try {
+        const payload = {
+          날짜: document.getElementById('f_date').value,
+          시작시간: document.getElementById('f_start').value,
+          종료시간: document.getElementById('f_end').value,
+          날씨: document.getElementById('f_weather').value,
+          작물: document.getElementById('f_crop').value,
+          작업내용: document.getElementById('f_work').value,
+          사용자재: collectMaterials(),
+          자재비: Number(document.getElementById('f_material_cost').value || 0),
+          인건비: Number(document.getElementById('f_labor_cost').value || 0),
+          총금액: Number(document.getElementById('f_total_cost').value || 0),
+          비고: document.getElementById('f_note').value
+        };
+
+        await requestJson('/api/works', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        alert('작업이 저장되었습니다.');
+        resetWorkForm();
+        showPage('works');
+      } catch (err) {
+        alert('저장 실패: ' + err.message);
+      }
+    });
+
+    async function loadEditDeleteData() {
+      try {
+        const data = await requestJson('/api/works_light');
+        editDeleteWorks = Array.isArray(data) ? data : (data.data || []);
+        renderEditList();
+        renderDeleteList();
+      } catch (err) {
+        document.getElementById('editListArea').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+        document.getElementById('deleteListArea').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderEditList() {
+      const keyword = (document.getElementById('editSearch').value || '').trim().toLowerCase();
+      const list = editDeleteWorks.filter(w => !keyword || [w.날짜, w.작업내용, w.작물, w.사용자재].join(' ').toLowerCase().includes(keyword));
+      const area = document.getElementById('editListArea');
+      if (!list.length) {
+        area.innerHTML = `<div class="empty">수정할 항목이 없습니다.</div>`;
+        return;
+      }
+      area.innerHTML = list.map((w, i) => `
+        <div class="work-card" style="margin-bottom:12px;">
+          <div class="work-card-header">
+            <div>
+              <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
+              <div style="color:#6b7280; font-size:13px; margin-top:4px;">${escapeHtml(w.날짜 || '')}</div>
+            </div>
+            <button class="btn primary" onclick="editItem(${i})">이 항목 수정</button>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
+            <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
+            <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value">${money(w.총금액 || 0)}</div></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderDeleteList() {
+      const keyword = (document.getElementById('deleteSearch').value || '').trim().toLowerCase();
+      const list = editDeleteWorks.filter(w => !keyword || [w.날짜, w.작업내용, w.작물, w.사용자재].join(' ').toLowerCase().includes(keyword));
+      const area = document.getElementById('deleteListArea');
+      if (!list.length) {
+        area.innerHTML = `<div class="empty">삭제할 항목이 없습니다.</div>`;
+        return;
+      }
+      area.innerHTML = list.map((w, i) => `
+        <div class="work-card" style="margin-bottom:12px;">
+          <div class="work-card-header">
+            <div>
+              <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
+              <div style="color:#6b7280; font-size:13px; margin-top:4px;">${escapeHtml(w.날짜 || '')}</div>
+            </div>
+            <button class="btn danger" onclick="deleteItem(${i})">이 항목 삭제</button>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
+            <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
+            <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value">${money(w.총금액 || 0)}</div></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function parseMaterialString(materialText) {
+      if (!materialText) return [];
+      return String(materialText).split(',').map(s => s.trim()).filter(Boolean).map(item => {
+        const parts = item.split('|');
+        return {
+          name: parts[0] || '',
+          qty: parts[1] || '',
+          unit: parts[2] || ''
+        };
+      });
+    }
+
+    function prefillEditForm(item) {
+      document.getElementById('f_date').value = item.날짜 || todayStr();
+      document.getElementById('f_start').value = item.시작시간 || '';
+      document.getElementById('f_end').value = item.종료시간 || '';
+      document.getElementById('f_weather').value = item.날씨 || '';
+      document.getElementById('f_crop').value = item.작물 || '';
+      document.getElementById('f_work').value = item.작업내용 || '';
+      document.getElementById('f_material_cost').value = Number(item.자재비 || 0);
+      document.getElementById('f_labor_cost').value = Number(item.인건비 || 0);
+      document.getElementById('f_total_cost').value = Number(item.총금액 || 0);
+      document.getElementById('f_note').value = item.비고 || '';
+
+      const rows = document.getElementById('materialRows');
+      rows.innerHTML = '';
+      const parsed = parseMaterialString(item.사용자재 || '');
+      if (parsed.length) {
+        parsed.forEach(m => addMaterialRow(m.name, m.qty, m.unit));
+      } else {
+        addMaterialRow();
+      }
+    }
+
+    function editItem(i) {
+      const item = editDeleteWorks[i];
+      prefillEditForm(item);
+      showPage('input');
+      alert('기존 값이 입력 화면에 채워졌습니다. 수정 후 저장하세요.\n현재 코드는 새 저장 방식입니다.\n기존 행을 실제 UPDATE 하려면 별도 /api/works/<id> PUT API가 필요합니다.');
+    }
+
+    function prefillEditFromWorks(i) {
+      if (i < 0) return;
+      const item = cachedWorks[i];
+      prefillEditForm(item);
+      showPage('input');
+      alert('기존 값이 입력 화면에 채워졌습니다. 수정 후 저장하세요.');
+    }
+
+    async function deleteItem(i) {
+      const item = editDeleteWorks[i];
+      await deleteWorkByItem(item);
+    }
+
+    async function quickDeleteFromWorks(i) {
+      if (i < 0) return;
+      const item = cachedWorks[i];
+      await deleteWorkByItem(item);
+    }
+
+    async function deleteWorkByItem(item) {
+      try {
+        if (!confirm(`삭제하시겠습니까?\n${item.날짜 || ''} / ${item.작업내용 || ''}`)) return;
+
+        const res = await fetch('/api/works', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || '삭제 실패');
+        }
+
+        alert('삭제되었습니다.');
+        loadWorks();
+        loadEditDeleteData();
+      } catch (err) {
+        alert('삭제 실패: ' + err.message + '\n현재 백엔드에 DELETE API가 없으면 추가해야 합니다.');
+      }
+    }
+
+    async function loadMaterials() {
+      try {
+        const data = await requestJson('/api/materials_all');
+        const list = Array.isArray(data) ? data : (data.data || []);
+        const hasStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) > 0);
+        const noStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) <= 0);
+
+        renderMaterialBox('materialsHasStock', hasStock, true);
+        renderMaterialBox('materialsNoStock', noStock, false);
+      } catch (err) {
+        document.getElementById('materialsHasStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+        document.getElementById('materialsNoStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderMaterialBox(targetId, list, hasStock) {
+      const area = document.getElementById(targetId);
+      if (!list.length) {
+        area.innerHTML = `<div class="empty">${hasStock ? '재고 있는' : '재고 없는'} 자재가 없습니다.</div>`;
+        return;
+      }
+
+      area.innerHTML = `
+        <div class="list-table-wrap" style="box-shadow:none; border:1px solid #eef2f7;">
+          <table style="min-width:100%;">
+            <thead>
+              <tr>
+                <th>자재명</th>
+                <th>재고</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(m => {
+                const name = m.자재명 ?? m.name ?? '';
+                const qty = Number(m.재고 ?? m.수량 ?? 0);
+                return `
+                  <tr>
+                    <td>${escapeHtml(name)}</td>
+                    <td>${qty}</td>
+                    <td>
+                      <div class="inline">
+                        <button class="btn" onclick="updateMaterialPrompt('${escapeHtml(name).replace(/'/g, "\\'")}', ${qty})">재고수정</button>
+                        <button class="btn danger" onclick="deleteMaterialPrompt('${escapeHtml(name).replace(/'/g, "\\'")}')">삭제</button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function updateMaterialPrompt(name, currentQty) {
+      const newQty = prompt('재고 수정', currentQty);
+      if (newQty === null) return;
+      try {
+        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 재고: Number(newQty) })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        alert('재고가 수정되었습니다.');
+        loadMaterials();
+      } catch (err) {
+        alert('재고 수정 실패: ' + err.message);
+      }
+    }
+
+    async function deleteMaterialPrompt(name) {
+      if (!confirm(`${name} 자재를 삭제하시겠습니까?`)) return;
+      try {
+        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(await res.text());
+        alert('삭제되었습니다.');
+        loadMaterials();
+      } catch (err) {
+        alert('자재 삭제 실패: ' + err.message);
+      }
+    }
+
+    async function loadMonthly() {
+      try {
+        const data = await requestJson('/api/monthly_json');
+        chartData = Array.isArray(data) ? data : (data.data || []);
+        renderMonthlyCards(chartData);
+        drawMonthlyChart(chartData);
+      } catch (err) {
+        document.getElementById('monthlyCards').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderMonthlyCards(data) {
+      const area = document.getElementById('monthlyCards');
+      if (!data.length) {
+        area.innerHTML = `<div class="empty">월별 데이터가 없습니다.</div>`;
+        return;
+      }
+
+      area.innerHTML = data.map(row => {
+        const month = row.월 || row.month || '-';
+        const total = Number(row.총금액 || row.total || 0);
+        return `
+          <div class="stat-card">
+            <div class="stat-title">${escapeHtml(month)}</div>
+            <div class="stat-value">${total.toLocaleString()}원</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function drawMonthlyChart(data) {
+      const canvas = document.getElementById('monthlyCanvas');
+      const ctx = canvas.getContext('2d');
+      const ratio = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = 320 * ratio;
+      ctx.scale(ratio, ratio);
+
+      ctx.clearRect(0, 0, rect.width, 320);
+
+      if (!data.length) return;
+
+      const labels = data.map(d => String(d.월 || d.month || ''));
+      const values = data.map(d => Number(d.총금액 || d.total || 0));
+      const maxVal = Math.max(...values, 1);
+
+      const padding = 40;
+      const chartW = rect.width - padding * 2;
+      const chartH = 240;
+      const baseY = 270;
+      const barGap = 12;
+      const barW = Math.max(20, (chartW - barGap * (values.length - 1)) / values.length);
+
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding, baseY);
+      ctx.lineTo(rect.width - padding, baseY);
+      ctx.stroke();
+
+      ctx.font = '12px Malgun Gothic';
+      ctx.fillStyle = '#475569';
+      ctx.textAlign = 'center';
+
+      values.forEach((v, i) => {
+        const x = padding + i * (barW + barGap);
+        const h = (v / maxVal) * chartH;
+        const y = baseY - h;
+
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillRect(x, y, barW, h);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.fillText(v.toLocaleString(), x + barW / 2, y - 8);
+
+        ctx.fillStyle = '#475569';
+        ctx.fillText(labels[i], x + barW / 2, baseY + 18);
+      });
+    }
+
+    async function loadSettlement() {
+      try {
+        const data = await requestJson('/api/monthly_json');
+        const list = Array.isArray(data) ? data : (data.data || []);
+        const tbody = document.getElementById('settlementBody');
+
+        if (!list.length) {
+          tbody.innerHTML = `<tr><td colspan="4">데이터가 없습니다.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = list.map(row => `
+          <tr>
+            <td>${escapeHtml(row.월 || row.month || '-')}</td>
+            <td>${money(row.자재비 || row.material_cost || 0)}</td>
+            <td>${money(row.인건비 || row.labor_cost || 0)}</td>
+            <td><strong>${money(row.총금액 || row.total || 0)}</strong></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        document.getElementById('settlementBody').innerHTML = `<tr><td colspan="4">불러오기 실패: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function downloadFile(url) {
+      window.location.href = url;
+    }
+
+    window.addEventListener('resize', () => {
+      const monthlyPage = document.getElementById('monthly-page');
+      if (monthlyPage.classList.contains('active') && chartData.length) {
+        drawMonthlyChart(chartData);
+      }
+    });
+
+    window.onload = function() {
+      document.getElementById('f_date').value = todayStr();
+      addMaterialRow();
+      computeTotalCost();
+      showPage('works');
+    };
+  </script>
+</body>
+</html>

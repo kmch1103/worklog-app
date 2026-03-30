@@ -2,3 +2,4 @@ flask
 psycopg[binary]
 pandas
 openpyxl
+gunicorn

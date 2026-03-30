@@ -13,183 +13,207 @@ def db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 # ---------------------------
-# ✅ 메인 UI (기존 UI 유지)
+# 메인 UI
 # ---------------------------
 @app.route("/")
 def home():
     return render_template_string("""
     <h2>작업일지</h2>
 
+    <button onclick="goInput()">작업입력</button>
     <button onclick="loadWorks()">작업목록</button>
     <button onclick="loadMaterials()">자재관리</button>
 
     <div id="content"></div>
 
-    <script>
-    async function loadWorks(){
-        const res = await fetch('/api/works_light');
-        const data = await res.json();
+<script>
+function goInput(){
+    location.href='/input'
+}
 
-        let html = "<h3>작업목록</h3>";
-        data.forEach(w=>{
-            html += `<div>${w.날짜} - ${w.작업내용}</div>`;
-        });
+async function loadWorks(){
+    const res = await fetch('/api/works_light');
+    const data = await res.json();
 
-        document.getElementById("content").innerHTML = html;
-    }
+    let html = "<h3>작업목록</h3>";
 
-    async function loadMaterials(){
-        const res = await fetch('/api/materials_all');
-        const data = await res.json();
+    data.forEach(w=>{
+        html += `
+        <div>
+            ${w.날짜} - ${w.작업내용}
+            <button onclick="edit(${w.번호})">수정</button>
+        </div>`;
+    });
 
-        let has="", none="";
+    document.getElementById("content").innerHTML = html;
+}
 
-        data.forEach(m=>{
-            let row = `
-            <div>
-                ${m.자재명} (${m.재고})
-                <input type="number" id="qty_${m.자재명}" value="${m.재고}">
-                <button onclick="update('${m.자재명}')">수정</button>
-                <button onclick="del('${m.자재명}')">삭제</button>
-            </div>
-            `;
+function edit(id){
+    location.href='/edit/'+id
+}
 
-            if(m.재고 > 0) has += row;
-            else none += row;
-        });
+async function loadMaterials(){
+    const res = await fetch('/api/materials_all');
+    const data = await res.json();
 
-        document.getElementById("content").innerHTML =
-            "<h3>재고 있음</h3>"+has+
-            "<h3>재고 없음</h3>"+none;
-    }
+    let has="", none="";
 
-    function update(name){
-        let qty = document.getElementById("qty_"+name).value;
+    data.forEach(m=>{
+        let row = `
+        <div>
+            ${m.자재명} (${m.재고})
+            <input value="${m.재고}" id="q_${m.자재명}">
+            <button onclick="u('${m.자재명}')">수정</button>
+        </div>`;
 
-        fetch('/api/materials/'+name,{
-            method:"PUT",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({재고:qty})
-        }).then(loadMaterials);
-    }
+        if(m.재고>0) has+=row;
+        else none+=row;
+    });
 
-    function del(name){
-        if(!confirm("삭제?")) return;
+    document.getElementById("content").innerHTML =
+        "<h3>재고 있음</h3>"+has+
+        "<h3>재고 없음</h3>"+none;
+}
 
-        fetch('/api/materials/'+name,{
-            method:"DELETE"
-        }).then(loadMaterials);
-    }
-    </script>
+function u(name){
+    let v=document.getElementById("q_"+name).value;
+
+    fetch('/api/materials/'+name,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({재고:v})
+    }).then(loadMaterials)
+}
+</script>
     """)
 
 # ---------------------------
-# ✅ 자재 전체
+# 입력 화면
+# ---------------------------
+@app.route("/input")
+def input_page():
+    return render_template_string("""
+    <h2>작업 입력</h2>
+
+    날짜 <input id="date"><br><br>
+    작업내용 <input id="task"><br><br>
+
+    자재명 <input id="mat"><br>
+    수량 <input id="qty" type="number"><br><br>
+
+    <button onclick="save()">저장</button>
+    <button onclick="cancel()">취소</button>
+
+<script>
+function save(){
+    const data={
+        date:document.getElementById("date").value,
+        task:document.getElementById("task").value,
+        materials:[{
+            name:document.getElementById("mat").value,
+            qty:document.getElementById("qty").value,
+            unit:"개"
+        }]
+    }
+
+    fetch('/api/works',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data)
+    }).then(()=>location.href='/')
+}
+
+function cancel(){
+    location.href='/'
+}
+</script>
+    """)
+
+# ---------------------------
+# 수정 화면
+# ---------------------------
+@app.route("/edit/<int:id>")
+def edit_page(id):
+    return render_template_string(f"""
+    <h2>작업 수정</h2>
+
+    작업ID: {id}<br><br>
+
+    작업내용 <input id="task"><br><br>
+
+    <button onclick="save()">수정</button>
+    <button onclick="cancel()">취소</button>
+
+<script>
+function save(){{
+    alert("수정 기능은 다음 단계에서 확장")
+    location.href='/'
+}}
+
+function cancel(){{
+    location.href='/'
+}}
+</script>
+    """)
+
+# ---------------------------
+# 자재 API
 # ---------------------------
 @app.route("/api/materials_all")
 def materials_all():
-    conn = db(); cur = conn.cursor()
-    cur.execute('SELECT "자재명","단위","재고" FROM "자재" ORDER BY "자재명"')
-    rows = [dict(r) for r in cur.fetchall()]
-    cur.close(); conn.close()
+    conn=db();cur=conn.cursor()
+    cur.execute('SELECT "자재명","단위","재고" FROM "자재"')
+    rows=[dict(r) for r in cur.fetchall()]
+    cur.close();conn.close()
     return jsonify(rows)
 
-# ---------------------------
-# ✅ 자재 수정
-# ---------------------------
 @app.route("/api/materials/<name>", methods=["PUT"])
 def update_material(name):
-    qty = float(request.json.get("재고",0))
-    conn = db(); cur = conn.cursor()
+    qty=float(request.json.get("재고",0))
+    conn=db();cur=conn.cursor()
     cur.execute('UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s',(qty,name))
     conn.commit()
-    cur.close(); conn.close()
+    cur.close();conn.close()
     return jsonify({"ok":True})
 
 # ---------------------------
-# ✅ 자재 삭제
-# ---------------------------
-@app.route("/api/materials/<name>", methods=["DELETE"])
-def delete_material(name):
-    conn = db(); cur = conn.cursor()
-    cur.execute('DELETE FROM "자재" WHERE "자재명"=%s',(name,))
-    conn.commit()
-    cur.close(); conn.close()
-    return jsonify({"ok":True})
-
-# ---------------------------
-# ✅ 작업 저장 (🔥 자재 자동등록 + 증가)
+# 작업 저장 (자재 자동등록)
 # ---------------------------
 @app.route("/api/works", methods=["POST"])
 def add_work():
-    data = request.json or {}
-    conn = db(); cur = conn.cursor()
+    data=request.json or {}
+    conn=db();cur=conn.cursor()
 
-    materials = data.get("materials", [])
-
-    for m in materials:
-        name = m.get("name")
-        qty = float(m.get("qty",0))
-        unit = m.get("unit","")
-
+    for m in data.get("materials",[]):
         cur.execute("""
-            INSERT INTO "자재" ("자재명","단위","재고")
-            VALUES (%s,%s,%s)
-            ON CONFLICT ("자재명")
-            DO UPDATE SET "재고" = COALESCE("자재"."재고",0) + EXCLUDED."재고"
-        """,(name,unit,qty))
-
-    today = data.get("date") or date.today().isoformat()
+        INSERT INTO "자재" ("자재명","단위","재고")
+        VALUES (%s,%s,%s)
+        ON CONFLICT ("자재명")
+        DO UPDATE SET "재고"="자재"."재고"+EXCLUDED."재고"
+        """,(m["name"],m["unit"],float(m["qty"])))
 
     cur.execute("""
-        INSERT INTO "작업일지" ("날짜","작업내용","생성시각")
-        VALUES (%s,%s,%s)
-    """,(today,data.get("task",""),datetime.now().isoformat()))
+    INSERT INTO "작업일지" ("날짜","작업내용","생성시각")
+    VALUES (%s,%s,%s)
+    """,(data.get("date") or date.today().isoformat(),
+         data.get("task",""),
+         datetime.now().isoformat()))
 
     conn.commit()
-    cur.close()
-    conn.close()
-
+    cur.close();conn.close()
     return jsonify({"ok":True})
 
 # ---------------------------
-# ✅ 초경량 작업 조회 (속도 개선)
+# 빠른 조회
 # ---------------------------
 @app.route("/api/works_light")
-def works_light():
-    conn = db(); cur = conn.cursor()
-
-    cur.execute("""
-        SELECT "번호","날짜","작업내용"
-        FROM "작업일지"
-        ORDER BY "날짜" DESC
-        LIMIT 100
-    """)
-
-    rows = [dict(r) for r in cur.fetchall()]
-    cur.close(); conn.close()
-
+def works():
+    conn=db();cur=conn.cursor()
+    cur.execute('SELECT "번호","날짜","작업내용" FROM "작업일지" ORDER BY "날짜" DESC LIMIT 100')
+    rows=[dict(r) for r in cur.fetchall()]
+    cur.close();conn.close()
     return jsonify(rows)
 
-# ---------------------------
-# ✅ 달력 비교
-# ---------------------------
-@app.route("/api/calendar_compare/<int:y>/<int:m>")
-def calendar_compare(y,m):
-    conn = db(); cur = conn.cursor()
-
-    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s',(f"{y}-{m:02d}%",))
-    now = [dict(r) for r in cur.fetchall()]
-
-    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s',(f"{y-1}-{m:02d}%",))
-    prev = [dict(r) for r in cur.fetchall()]
-
-    cur.close(); conn.close()
-
-    return jsonify({"this":now,"last":prev})
-
-# ---------------------------
-# 실행
 # ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)

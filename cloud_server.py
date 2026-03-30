@@ -1,8 +1,8 @@
-# cloud_server_full_final.py
-import os
 import json
-from datetime import datetime, date
-from flask import Flask, jsonify, request, render_template_string
+import os
+from datetime import date, datetime
+
+from flask import Flask, jsonify, render_template_string, request
 import psycopg
 from psycopg.rows import dict_row
 
@@ -12,10 +12,80 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 def db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
+# ---------------------------
+# ✅ 메인 UI (기존 UI 유지)
+# ---------------------------
 @app.route("/")
 def home():
-    return render_template_string("<h2>작업일지 정상 실행</h2>")
+    return render_template_string("""
+    <h2>작업일지</h2>
 
+    <button onclick="loadWorks()">작업목록</button>
+    <button onclick="loadMaterials()">자재관리</button>
+
+    <div id="content"></div>
+
+    <script>
+    async function loadWorks(){
+        const res = await fetch('/api/works_light');
+        const data = await res.json();
+
+        let html = "<h3>작업목록</h3>";
+        data.forEach(w=>{
+            html += `<div>${w.날짜} - ${w.작업내용}</div>`;
+        });
+
+        document.getElementById("content").innerHTML = html;
+    }
+
+    async function loadMaterials(){
+        const res = await fetch('/api/materials_all');
+        const data = await res.json();
+
+        let has="", none="";
+
+        data.forEach(m=>{
+            let row = `
+            <div>
+                ${m.자재명} (${m.재고})
+                <input type="number" id="qty_${m.자재명}" value="${m.재고}">
+                <button onclick="update('${m.자재명}')">수정</button>
+                <button onclick="del('${m.자재명}')">삭제</button>
+            </div>
+            `;
+
+            if(m.재고 > 0) has += row;
+            else none += row;
+        });
+
+        document.getElementById("content").innerHTML =
+            "<h3>재고 있음</h3>"+has+
+            "<h3>재고 없음</h3>"+none;
+    }
+
+    function update(name){
+        let qty = document.getElementById("qty_"+name).value;
+
+        fetch('/api/materials/'+name,{
+            method:"PUT",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({재고:qty})
+        }).then(loadMaterials);
+    }
+
+    function del(name){
+        if(!confirm("삭제?")) return;
+
+        fetch('/api/materials/'+name,{
+            method:"DELETE"
+        }).then(loadMaterials);
+    }
+    </script>
+    """)
+
+# ---------------------------
+# ✅ 자재 전체
+# ---------------------------
 @app.route("/api/materials_all")
 def materials_all():
     conn = db(); cur = conn.cursor()
@@ -24,23 +94,32 @@ def materials_all():
     cur.close(); conn.close()
     return jsonify(rows)
 
+# ---------------------------
+# ✅ 자재 수정
+# ---------------------------
 @app.route("/api/materials/<name>", methods=["PUT"])
 def update_material(name):
-    qty = float(request.json.get("재고", 0))
+    qty = float(request.json.get("재고",0))
     conn = db(); cur = conn.cursor()
-    cur.execute('UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s', (qty, name))
+    cur.execute('UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s',(qty,name))
     conn.commit()
     cur.close(); conn.close()
-    return jsonify({"ok": True})
+    return jsonify({"ok":True})
 
+# ---------------------------
+# ✅ 자재 삭제
+# ---------------------------
 @app.route("/api/materials/<name>", methods=["DELETE"])
 def delete_material(name):
     conn = db(); cur = conn.cursor()
-    cur.execute('DELETE FROM "자재" WHERE "자재명"=%s', (name,))
+    cur.execute('DELETE FROM "자재" WHERE "자재명"=%s',(name,))
     conn.commit()
     cur.close(); conn.close()
-    return jsonify({"ok": True})
+    return jsonify({"ok":True})
 
+# ---------------------------
+# ✅ 작업 저장 (🔥 자재 자동등록 + 증가)
+# ---------------------------
 @app.route("/api/works", methods=["POST"])
 def add_work():
     data = request.json or {}
@@ -50,45 +129,67 @@ def add_work():
 
     for m in materials:
         name = m.get("name")
-        qty = float(m.get("qty", 0))
-        unit = m.get("unit", "")
+        qty = float(m.get("qty",0))
+        unit = m.get("unit","")
 
-        cur.execute(
-            'INSERT INTO "자재" ("자재명","단위","재고") VALUES (%s,%s,%s) '
-            'ON CONFLICT ("자재명") DO UPDATE SET "재고" = COALESCE("자재"."재고",0) + EXCLUDED."재고"',
-            (name, unit, qty)
-        )
+        cur.execute("""
+            INSERT INTO "자재" ("자재명","단위","재고")
+            VALUES (%s,%s,%s)
+            ON CONFLICT ("자재명")
+            DO UPDATE SET "재고" = COALESCE("자재"."재고",0) + EXCLUDED."재고"
+        """,(name,unit,qty))
 
     today = data.get("date") or date.today().isoformat()
 
-    cur.execute(
-        'INSERT INTO "작업일지" ("날짜","작업내용","사용자재","생성시각") VALUES (%s,%s,%s,%s)',
-        (today, data.get("task", ""), json.dumps(materials, ensure_ascii=False), datetime.now().isoformat())
-    )
+    cur.execute("""
+        INSERT INTO "작업일지" ("날짜","작업내용","생성시각")
+        VALUES (%s,%s,%s)
+    """,(today,data.get("task",""),datetime.now().isoformat()))
 
     conn.commit()
     cur.close()
     conn.close()
 
-    return jsonify({"ok": True})
+    return jsonify({"ok":True})
 
+# ---------------------------
+# ✅ 초경량 작업 조회 (속도 개선)
+# ---------------------------
 @app.route("/api/works_light")
 def works_light():
     conn = db(); cur = conn.cursor()
-    cur.execute('SELECT "번호","날짜","작업내용" FROM "작업일지" ORDER BY "날짜" DESC LIMIT 100')
+
+    cur.execute("""
+        SELECT "번호","날짜","작업내용"
+        FROM "작업일지"
+        ORDER BY "날짜" DESC
+        LIMIT 100
+    """)
+
     rows = [dict(r) for r in cur.fetchall()]
     cur.close(); conn.close()
+
     return jsonify(rows)
 
+# ---------------------------
+# ✅ 달력 비교
+# ---------------------------
 @app.route("/api/calendar_compare/<int:y>/<int:m>")
-def calendar_compare(y, m):
+def calendar_compare(y,m):
     conn = db(); cur = conn.cursor()
-    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s', (f"{y}-{m:02d}%",))
-    now = [dict(r) for r in cur.fetchall()]
-    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s', (f"{y-1}-{m:02d}%",))
-    prev = [dict(r) for r in cur.fetchall()]
-    cur.close(); conn.close()
-    return jsonify({"this": now, "last": prev})
 
+    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s',(f"{y}-{m:02d}%",))
+    now = [dict(r) for r in cur.fetchall()]
+
+    cur.execute('SELECT "날짜","작업내용" FROM "작업일지" WHERE "날짜" LIKE %s',(f"{y-1}-{m:02d}%",))
+    prev = [dict(r) for r in cur.fetchall()]
+
+    cur.close(); conn.close()
+
+    return jsonify({"this":now,"last":prev})
+
+# ---------------------------
+# 실행
+# ---------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)

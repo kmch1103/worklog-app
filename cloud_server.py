@@ -8,16 +8,12 @@ app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Railway/컨테이너에서는 /app/data 대신 /tmp 사용
 if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("PORT"):
     DB_PATH = Path(os.environ.get("DB_PATH", "/tmp/worklog.db"))
 else:
     DB_PATH = BASE_DIR / "data" / "worklog.db"
 
 
-# ---------------------------
-# DB 공통
-# ---------------------------
 def ensure_db_dir():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -38,9 +34,21 @@ def fetch_all_dicts(query, params=()):
     return rows
 
 
+def parse_json():
+    return request.get_json(silent=True) or {}
+
+
+def normalize_multi_value(value):
+    if isinstance(value, list):
+        cleaned = [str(v).strip() for v in value if str(v).strip()]
+        return ",".join(cleaned)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
 def init_db():
     ensure_db_dir()
-
     conn = get_conn()
     cur = conn.cursor()
 
@@ -58,6 +66,18 @@ def init_db():
             labor_cost REAL DEFAULT 0,
             work_hours REAL DEFAULT 0,
             memo TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_date TEXT NOT NULL,
+            title TEXT NOT NULL,
+            details TEXT DEFAULT '',
+            status TEXT DEFAULT 'planned',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -95,17 +115,6 @@ def init_db():
         )
     """)
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS material_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            material_name TEXT NOT NULL,
-            log_type TEXT NOT NULL,
-            qty REAL DEFAULT 0,
-            note TEXT DEFAULT '',
-            created_at TEXT NOT NULL
-        )
-    """)
-
     now = datetime.now().isoformat(timespec="seconds")
 
     for table_name, defaults in option_tables.items():
@@ -115,7 +124,7 @@ def init_db():
                 (name, idx),
             )
 
-    for idx, name in enumerate(["다이센", "기계유제", "바스타", "노블레스"], start=1):
+    for name in ["다이센", "기계유제", "바스타", "노블레스"]:
         cur.execute(
             """
             INSERT OR IGNORE INTO materials
@@ -129,28 +138,9 @@ def init_db():
     conn.close()
 
 
-def parse_json():
-    return request.get_json(silent=True) or {}
-
-
-def normalize_multi_value(value):
-    if isinstance(value, list):
-        cleaned = [str(v).strip() for v in value if str(v).strip()]
-        return ",".join(cleaned)
-    if value is None:
-        return ""
-    return str(value).strip()
-
-
-# ---------------------------
-# 시작 시 DB 초기화
-# ---------------------------
 init_db()
 
 
-# ---------------------------
-# 화면
-# ---------------------------
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -161,39 +151,21 @@ def health():
     return jsonify({"ok": True, "db_path": str(DB_PATH)})
 
 
-# ---------------------------
-# 작업일지 API
-# ---------------------------
 @app.route("/api/works", methods=["GET"])
 def get_works():
-    rows = fetch_all_dicts(
-        "SELECT * FROM works ORDER BY start_date DESC, id DESC"
-    )
+    rows = fetch_all_dicts("SELECT * FROM works ORDER BY start_date DESC, id DESC")
     return jsonify(rows)
-
-
-@app.route("/api/works/<int:work_id>", methods=["GET"])
-def get_work(work_id):
-    rows = fetch_all_dicts(
-        "SELECT * FROM works WHERE id = ?",
-        (work_id,),
-    )
-    if not rows:
-        return jsonify({"ok": False, "error": "작업일지를 찾을 수 없습니다."}), 404
-    return jsonify(rows[0])
 
 
 @app.route("/api/works", methods=["POST"])
 def create_work():
     data = parse_json()
-
     start_date = str(data.get("start_date", "")).strip()
     if not start_date:
         return jsonify({"ok": False, "error": "시작일은 필수입니다."}), 400
 
     end_date = str(data.get("end_date") or start_date).strip() or start_date
     now = datetime.now().isoformat(timespec="seconds")
-
     payload = (
         start_date,
         end_date,
@@ -226,14 +198,12 @@ def create_work():
     work_id = cur.lastrowid
     conn.commit()
     conn.close()
-
     return jsonify({"ok": True, "id": work_id})
 
 
 @app.route("/api/works/<int:work_id>", methods=["PUT"])
 def update_work(work_id):
     data = parse_json()
-
     start_date = str(data.get("start_date", "")).strip()
     if not start_date:
         return jsonify({"ok": False, "error": "시작일은 필수입니다."}), 400
@@ -273,7 +243,6 @@ def update_work(work_id):
 
     if changed == 0:
         return jsonify({"ok": False, "error": "수정할 작업일지를 찾을 수 없습니다."}), 404
-
     return jsonify({"ok": True})
 
 
@@ -288,13 +257,91 @@ def delete_work(work_id):
 
     if changed == 0:
         return jsonify({"ok": False, "error": "삭제할 작업일지를 찾을 수 없습니다."}), 404
-
     return jsonify({"ok": True})
 
 
-# ---------------------------
-# 옵션 API
-# ---------------------------
+@app.route("/api/plans", methods=["GET"])
+def get_plans():
+    rows = fetch_all_dicts("SELECT * FROM plans ORDER BY plan_date DESC, id DESC")
+    return jsonify(rows)
+
+
+@app.route("/api/plans", methods=["POST"])
+def create_plan():
+    data = parse_json()
+    plan_date = str(data.get("plan_date", "")).strip()
+    title = str(data.get("title", "")).strip()
+    details = str(data.get("details", "")).strip()
+    status = str(data.get("status", "planned")).strip() or "planned"
+
+    if not plan_date:
+        return jsonify({"ok": False, "error": "계획일은 필수입니다."}), 400
+    if not title:
+        return jsonify({"ok": False, "error": "계획 제목은 필수입니다."}), 400
+
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO plans (plan_date, title, details, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (plan_date, title, details, status, now, now),
+    )
+    plan_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "id": plan_id})
+
+
+@app.route("/api/plans/<int:plan_id>", methods=["PUT"])
+def update_plan(plan_id):
+    data = parse_json()
+    plan_date = str(data.get("plan_date", "")).strip()
+    title = str(data.get("title", "")).strip()
+    details = str(data.get("details", "")).strip()
+    status = str(data.get("status", "planned")).strip() or "planned"
+
+    if not plan_date:
+        return jsonify({"ok": False, "error": "계획일은 필수입니다."}), 400
+    if not title:
+        return jsonify({"ok": False, "error": "계획 제목은 필수입니다."}), 400
+
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE plans
+        SET plan_date = ?, title = ?, details = ?, status = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (plan_date, title, details, status, now, plan_id),
+    )
+    conn.commit()
+    changed = cur.rowcount
+    conn.close()
+
+    if changed == 0:
+        return jsonify({"ok": False, "error": "수정할 계획을 찾을 수 없습니다."}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/api/plans/<int:plan_id>", methods=["DELETE"])
+def delete_plan(plan_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM plans WHERE id = ?", (plan_id,))
+    conn.commit()
+    changed = cur.rowcount
+    conn.close()
+
+    if changed == 0:
+        return jsonify({"ok": False, "error": "삭제할 계획을 찾을 수 없습니다."}), 404
+    return jsonify({"ok": True})
+
+
 OPTION_TABLES = {
     "weather": "options_weather",
     "crops": "options_crops",
@@ -313,18 +360,6 @@ def get_all_options():
             f"SELECT id, name, sort_order, is_active FROM {table_name} WHERE is_active = 1 ORDER BY sort_order, id"
         )
     return jsonify(result)
-
-
-@app.route("/api/options/<option_type>", methods=["GET"])
-def get_option_items(option_type):
-    table_name = OPTION_TABLES.get(option_type)
-    if not table_name:
-        return jsonify({"ok": False, "error": "잘못된 옵션 타입입니다."}), 400
-
-    rows = fetch_all_dicts(
-        f"SELECT id, name, sort_order, is_active FROM {table_name} ORDER BY sort_order, id"
-    )
-    return jsonify(rows)
 
 
 @app.route("/api/options/<option_type>", methods=["POST"])
@@ -364,7 +399,6 @@ def update_option_item(option_type, item_id):
     data = parse_json()
     name = str(data.get("name", "")).strip()
     is_active = 1 if int(data.get("is_active", 1)) else 0
-
     if not name:
         return jsonify({"ok": False, "error": "옵션 이름은 필수입니다."}), 400
 
@@ -380,12 +414,10 @@ def update_option_item(option_type, item_id):
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({"ok": False, "error": "이미 존재하는 항목입니다."}), 400
-
     conn.close()
 
     if changed == 0:
         return jsonify({"ok": False, "error": "대상을 찾을 수 없습니다."}), 404
-
     return jsonify({"ok": True})
 
 
@@ -404,18 +436,12 @@ def delete_option_item(option_type, item_id):
 
     if changed == 0:
         return jsonify({"ok": False, "error": "삭제할 대상을 찾을 수 없습니다."}), 404
-
     return jsonify({"ok": True})
 
 
-# ---------------------------
-# 자재 API
-# ---------------------------
 @app.route("/api/materials", methods=["GET"])
 def get_materials():
-    rows = fetch_all_dicts(
-        "SELECT * FROM materials ORDER BY name COLLATE NOCASE"
-    )
+    rows = fetch_all_dicts("SELECT * FROM materials ORDER BY name COLLATE NOCASE")
     return jsonify(rows)
 
 
@@ -453,62 +479,6 @@ def add_material():
 
     conn.close()
     return jsonify({"ok": True, "id": material_id})
-
-
-@app.route("/api/materials/<int:material_id>", methods=["PUT"])
-def update_material(material_id):
-    data = parse_json()
-    name = str(data.get("name", "")).strip()
-    if not name:
-        return jsonify({"ok": False, "error": "자재명은 필수입니다."}), 400
-
-    now = datetime.now().isoformat(timespec="seconds")
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            UPDATE materials
-            SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, memo = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                name,
-                str(data.get("unit", "")).strip(),
-                float(data.get("stock_qty") or 0),
-                float(data.get("unit_price") or 0),
-                str(data.get("memo", "")).strip(),
-                now,
-                material_id,
-            ),
-        )
-        conn.commit()
-        changed = cur.rowcount
-    except sqlite3.IntegrityError:
-        conn.close()
-        return jsonify({"ok": False, "error": "이미 존재하는 자재입니다."}), 400
-
-    conn.close()
-
-    if changed == 0:
-        return jsonify({"ok": False, "error": "수정할 자재를 찾을 수 없습니다."}), 404
-
-    return jsonify({"ok": True})
-
-
-@app.route("/api/materials/<int:material_id>", methods=["DELETE"])
-def delete_material(material_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM materials WHERE id = ?", (material_id,))
-    conn.commit()
-    changed = cur.rowcount
-    conn.close()
-
-    if changed == 0:
-        return jsonify({"ok": False, "error": "삭제할 자재를 찾을 수 없습니다."}), 404
-
-    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

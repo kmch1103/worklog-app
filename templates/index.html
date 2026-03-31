@@ -1,1875 +1,370 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>작업일지 클라우드 시스템</title>
-  <style>
-    :root {
-      --bg: #f3f6fb;
-      --sidebar: #1f2937;
-      --sidebar-2: #111827;
-      --menu: #374151;
-      --menu-hover: #4b5563;
-      --menu-active: #2563eb;
-      --card: #ffffff;
-      --text: #111827;
-      --muted: #6b7280;
-      --line: #e5e7eb;
-      --danger: #dc2626;
-      --success: #16a34a;
-      --warning: #d97706;
-      --shadow: 0 4px 14px rgba(0,0,0,0.08);
-      --radius: 16px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    .app {
-      display: flex;
-      min-height: 100vh;
-    }
-
-    .sidebar {
-      width: 240px;
-      background: linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-2) 100%);
-      color: #fff;
-      padding: 20px 16px;
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow-y: auto;
-      box-shadow: 2px 0 12px rgba(0,0,0,0.12);
-      z-index: 20;
-    }
-
-    .logo {
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 8px;
-      letter-spacing: -0.4px;
-    }
-
-    .logo-sub {
-      font-size: 12px;
-      color: #cbd5e1;
-      margin-bottom: 20px;
-    }
-
-    .menu-title {
-      font-size: 12px;
-      color: #94a3b8;
-      margin: 18px 6px 10px;
-    }
-
-    .menu-btn {
-      width: 100%;
-      border: none;
-      background: var(--menu);
-      color: #fff;
-      padding: 13px 14px;
-      margin-bottom: 10px;
-      border-radius: 12px;
-      text-align: left;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.2s ease;
-    }
-
-    .menu-btn:hover { background: var(--menu-hover); }
-    .menu-btn.active { background: var(--menu-active); }
-
-    .content {
-      flex: 1;
-      padding: 22px;
-      min-width: 0;
-    }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 18px;
-      flex-wrap: wrap;
-    }
-
-    .page-title {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-    }
-
-    .page-desc {
-      color: var(--muted);
-      font-size: 14px;
-      margin-top: 4px;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .input, .select, .textarea, .btn {
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      padding: 11px 12px;
-      font-size: 14px;
-      outline: none;
-    }
-
-    .input, .select, .textarea {
-      background: #fff;
-      width: 100%;
-    }
-
-    .textarea {
-      min-height: 92px;
-      resize: vertical;
-      font-family: inherit;
-    }
-
-    .btn {
-      background: #fff;
-      cursor: pointer;
-      font-weight: 700;
-    }
-
-    .btn.primary {
-      background: #2563eb;
-      border-color: #2563eb;
-      color: #fff;
-    }
-
-    .btn.success {
-      background: var(--success);
-      border-color: var(--success);
-      color: #fff;
-    }
-
-    .btn.warning {
-      background: var(--warning);
-      border-color: var(--warning);
-      color: #fff;
-    }
-
-    .btn.danger {
-      background: var(--danger);
-      border-color: var(--danger);
-      color: #fff;
-    }
-
-    .btn:hover { opacity: 0.93; }
-
-    .page { display: none; }
-    .page.active { display: block; }
-
-    .panel {
-      background: var(--card);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 18px;
-      margin-bottom: 18px;
-    }
-
-    .grid {
-      display: grid;
-      gap: 14px;
-    }
-
-    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-    .field label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      color: #374151;
-    }
-
-    .date-group {
-      margin-bottom: 22px;
-    }
-
-    .date-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .date-title {
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: -0.3px;
-    }
-
-    .date-count {
-      font-size: 13px;
-      color: var(--muted);
-      background: #eef2ff;
-      padding: 6px 10px;
-      border-radius: 999px;
-    }
-
-    .work-cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 14px;
-    }
-
-    .work-card {
-      background: #fff;
-      border: 1px solid #edf0f5;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .work-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 10px;
-    }
-
-    .work-title {
-      font-size: 18px;
-      font-weight: 800;
-      line-height: 1.3;
-    }
-
-    .work-badge {
-      font-size: 12px;
-      background: #dbeafe;
-      color: #1d4ed8;
-      padding: 5px 8px;
-      border-radius: 999px;
-      white-space: nowrap;
-      font-weight: 700;
-    }
-
-    .meta-list {
-      display: grid;
-      gap: 7px;
-      font-size: 14px;
-    }
-
-    .meta-row {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-    }
-
-    .meta-label {
-      width: 76px;
-      color: var(--muted);
-      flex-shrink: 0;
-      font-weight: 700;
-    }
-
-    .meta-value {
-      flex: 1;
-      word-break: break-word;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 14px;
-    }
-
-    .stat-card {
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-      padding: 18px;
-      border: 1px solid #eef2f7;
-    }
-
-    .stat-title {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      font-weight: 700;
-    }
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.6px;
-    }
-
-    .list-table-wrap {
-      overflow-x: auto;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 740px;
-    }
-
-    th, td {
-      padding: 13px 12px;
-      border-bottom: 1px solid #eef2f7;
-      text-align: left;
-      font-size: 14px;
-      vertical-align: top;
-    }
-
-    th {
-      background: #f8fafc;
-      font-size: 13px;
-      color: #475569;
-    }
-
-    .empty {
-      padding: 36px 16px;
-      text-align: center;
-      color: var(--muted);
-      font-weight: 700;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: var(--shadow);
-    }
-
-    .inline {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .material-row {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr auto;
-      gap: 10px;
-      margin-bottom: 10px;
-      align-items: center;
-    }
-
-    .detail-row {
-      display: grid;
-      grid-template-columns: 1.5fr 0.9fr 0.9fr 1fr 1fr 1fr 1fr auto;
-      gap: 10px;
-      margin-bottom: 10px;
-      align-items: center;
-    }
-
-    .mini-row {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr auto;
-      gap: 10px;
-      margin-bottom: 10px;
-      align-items: center;
-    }
-
-    .edit-badge {
-      font-size: 12px;
-      color: #92400e;
-      background: #fef3c7;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-weight: 700;
-    }
-
-    .sub-panel {
-      padding: 14px;
-      margin-top: 16px;
-      background: #f8fbff;
-      box-shadow: none;
-      border: 1px solid #e5edf8;
-      border-radius: 14px;
-    }
-
-    .sticky-actions {
-      position: sticky;
-      bottom: 0;
-      background: rgba(243,246,251,0.92);
-      backdrop-filter: blur(6px);
-      padding-top: 10px;
-    }
-
-    .summary-box {
-      background: #eff6ff;
-      color: #1e3a8a;
-      padding: 12px 14px;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 700;
-    }
-
-    .mobile-top {
-      display: none;
-      margin-bottom: 12px;
-    }
-
-    .toggle-menu-btn {
-      width: 100%;
-      border: none;
-      background: #1f2937;
-      color: #fff;
-      border-radius: 12px;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .option-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .option-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: #eef2ff;
-      color: #1e3a8a;
-      padding: 8px 10px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .chip-del {
-      border: none;
-      background: transparent;
-      color: #b91c1c;
-      cursor: pointer;
-      font-weight: 800;
-      padding: 0;
-    }
-
-    canvas {
-      width: 100% !important;
-      max-height: 380px;
-      background: #fff;
-      border-radius: 16px;
-    }
-
-    @media (max-width: 1024px) {
-      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-
-    @media (max-width: 840px) {
-      .app { display: block; }
-      .mobile-top { display: block; }
-      .sidebar {
-        position: fixed;
-        left: -260px;
-        top: 0;
-        height: 100vh;
-        transition: left 0.25s ease;
-      }
-      .sidebar.open { left: 0; }
-      .content { padding: 14px; }
-      .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
-      .material-row { grid-template-columns: 1fr; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>작업일지 수정본</title>
+<style>
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e2e5ea;--text:#222;--muted:#6b7280;--primary:#2563eb;--danger:#dc2626;--chip:#eef2ff;--chip-on:#dbeafe;}
+  *{box-sizing:border-box} body{margin:0;font-family:"Malgun Gothic",sans-serif;background:var(--bg);color:var(--text)}
+  .app{display:flex;min-height:100vh}.side{width:220px;background:#1f2937;color:#fff;padding:18px}.side h1{font-size:20px;margin:0 0 16px}.side button{display:block;width:100%;margin:8px 0;padding:12px;border:0;border-radius:10px;background:#374151;color:#fff;cursor:pointer;text-align:left}
+  .main{flex:1;padding:18px}.panel,.card,.opt-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}.topbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.topbar input{padding:10px;border:1px solid var(--line);border-radius:10px;min-width:240px}.btn{padding:10px 14px;border:0;border-radius:10px;background:var(--primary);color:#fff;cursor:pointer}.btn.sub{background:#4b5563}.btn.red{background:var(--danger)}
+  .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.stack{display:grid;gap:10px}.label{font-size:12px;color:var(--muted);margin-bottom:4px}.field input,.field select,.field textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px}.field textarea{min-height:80px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:8px 12px;border-radius:999px;background:var(--chip);border:1px solid #c7d2fe;cursor:pointer}.chip.on{background:var(--chip-on);font-weight:700}
+  .cards-wrap{display:grid;gap:14px}.day-group h3{margin:0 0 8px}.day-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}.card .meta{color:var(--muted);font-size:13px;line-height:1.5}.card .title{font-size:17px;font-weight:700;margin-bottom:6px}.hidden{display:none}.sec-title{font-weight:700;margin:8px 0}.list{display:grid;gap:8px}.mini{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fafafa}.opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.small{font-size:12px;color:var(--muted)}
+  @media (max-width:860px){.app{display:block}.side{width:auto}.row,.row3{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-  <div class="app">
-    <aside class="sidebar" id="sidebar">
-      <div class="logo">작업일지</div>
-      <div class="logo-sub">클라우드 시스템</div>
-
-      <div class="menu-title">메뉴</div>
-      <button class="menu-btn active" data-page="journal" onclick="showPage('journal', this)">작업일지</button>
-      <button class="menu-btn" data-page="materials" onclick="showPage('materials', this)">자재관리</button>
-      <button class="menu-btn" data-page="monthly" onclick="showPage('monthly', this)">월별수익</button>
-      <button class="menu-btn" data-page="excel" onclick="showPage('excel', this)">엑셀</button>
-      <button class="menu-btn" data-page="settlement" onclick="showPage('settlement', this)">월정산</button>
-      <button class="menu-btn" data-page="backup" onclick="showPage('backup', this)">백업</button>
-      <button class="menu-btn" data-page="options" onclick="showPage('options', this)">옵션관리</button>
-    </aside>
-
-    <main class="content">
-      <div class="mobile-top">
-        <button class="toggle-menu-btn" onclick="toggleSidebar()">메뉴 열기 / 닫기</button>
+<div class="app">
+  <aside class="side">
+    <h1>작업일지</h1>
+    <button onclick="showPage('works')">작업일지</button>
+    <button onclick="openEntry()">새 작업 입력</button>
+    <button onclick="showPage('options')">옵션관리</button>
+  </aside>
+  <main class="main">
+    <section id="page-works">
+      <div class="topbar">
+        <input id="searchQ" placeholder="날짜, 작물, 작업내용, 자재, 병충해 검색">
+        <button class="btn sub" onclick="loadWorks()">검색</button>
+        <button class="btn" onclick="openEntry()">입력 열기</button>
       </div>
-
-      
-      <div class="page active" id="journal-page">
+      <div id="entryPanel" class="panel hidden stack">
+        <div class="row">
+          <div class="field"><div class="label">날씨</div><select id="weatherSel"></select></div>
+          <div class="field"><div class="label">시작일</div><input type="date" id="taskDate"></div>
+        </div>
+        <div class="row">
+          <div class="field"><div class="label">연속 일수</div><input type="number" id="dayCount" value="1" min="1" oninput="calcEndDate()"></div>
+          <div class="field"><div class="label">종료일</div><input type="date" id="taskEndDate" readonly></div>
+        </div>
+        <div>
+          <div class="sec-title">작물 다중선택</div>
+          <div id="cropChips" class="chips"></div>
+        </div>
+        <div class="row3">
+          <div class="field"><div class="label">작업내용</div><select id="taskKind"></select></div>
+          <div class="field"><div class="label">사용기계</div><select id="machineSel"></select></div>
+          <div class="field"><div class="label">작업시간(숫자)</div><input id="workHours" placeholder="예: 3"></div>
+        </div>
+        <div class="row">
+          <div class="field"><div class="label">시작시간</div><input type="time" id="startTime"></div>
+          <div class="field"><div class="label">종료시간</div><input type="time" id="endTime"></div>
+        </div>
+        <div>
+          <div class="sec-title">사용자재 다중선택</div>
+          <div class="row3">
+            <div class="field"><select id="matSelect"></select></div>
+            <div class="field"><input id="matQty" type="number" step="0.1" value="1" placeholder="수량"></div>
+            <div class="field"><input id="matUnitView" readonly placeholder="단위"></div>
+          </div>
+          <div style="margin-top:8px"><button class="btn sub" type="button" onclick="addSelectedMaterial()">자재 추가</button></div>
+          <div id="selectedMaterials" class="list" style="margin-top:8px"></div>
+        </div>
+        <div>
+          <div class="sec-title">병충해 다중선택</div>
+          <div id="pestChips" class="chips"></div>
+        </div>
+        <div>
+          <div class="sec-title">인력 선택</div>
+          <div id="workersBox" class="list"></div>
+          <div style="margin-top:8px"><button class="btn sub" type="button" onclick="addWorkerRow()">인력 추가</button></div>
+        </div>
+        <div class="field"><div class="label">비고</div><textarea id="noteText"></textarea></div>
         <div class="topbar">
-          <div>
-            <div class="page-title">작업일지</div>
-            <div class="page-desc">작업일지 화면에서 바로 입력, 수정, 삭제할 수 있습니다. 같은 날짜 작업은 옆 카드로 표시됩니다.</div>
-          </div>
-          <div class="toolbar">
-            <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadJournal()" />
-            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재/병충해/기계 검색" style="width:260px" oninput="filterJournalLocal()" />
-            <button class="btn" onclick="resetJournalFilters()">초기화</button>
-            <button class="btn primary" onclick="loadJournal()">새로고침</button>
-            <button class="btn success" onclick="openWorkModal()">새 작업 입력</button>
-          </div>
-        </div>
-
-
-
-
-        <div class="stats-grid" id="topStats"></div>
-        <div id="journalListArea"></div>
-
-        <datalist id="weather-options"></datalist>
-        <datalist id="crop-options"></datalist>
-        <datalist id="pest-options"></datalist>
-        <datalist id="material-options"></datalist>
-        <datalist id="machine-options"></datalist>
-      </div>
-
-<div class="page" id="materials-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">자재관리</div>
-            <div class="page-desc">재고 있음 / 없음으로 구분해서 표시합니다.</div>
-          </div>
-          <div class="toolbar">
-            <button class="btn primary" onclick="loadMaterials()">새로고침</button>
-          </div>
-        </div>
-
-        <div class="grid grid-2">
-          <div class="panel">
-            <h3 style="margin-top:0;">재고 있는 자재</h3>
-            <div id="materialsHasStock"></div>
-          </div>
-          <div class="panel">
-            <h3 style="margin-top:0;">재고 없는 자재</h3>
-            <div id="materialsNoStock"></div>
-          </div>
+          <button class="btn" onclick="saveWork()">저장</button>
+          <button class="btn sub" onclick="closeEntry()">닫기</button>
+          <span id="editBadge" class="small"></span>
         </div>
       </div>
+      <div id="worksList" class="cards-wrap"></div>
+    </section>
 
-      <div class="page" id="monthly-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">월별수익</div>
-            <div class="page-desc">월별 총금액 카드와 간단 차트를 함께 표시합니다.</div>
+    <section id="page-options" class="hidden stack">
+      <div class="opt-grid">
+        <div class="opt-box"><div class="sec-title">작물</div><div class="row"><input id="optCrop"><button class="btn" onclick="saveOption('옵션_작물','optCrop')">추가</button></div><div id="cropOptList" class="list"></div></div>
+        <div class="opt-box"><div class="sec-title">작업내용</div><div class="row"><input id="optTask"><button class="btn" onclick="saveOption('옵션_작업내용','optTask')">추가</button></div><div id="taskOptList" class="list"></div></div>
+        <div class="opt-box"><div class="sec-title">날씨</div><div class="row"><input id="optWeather"><button class="btn" onclick="saveOption('옵션_날씨','optWeather')">추가</button></div><div id="weatherOptList" class="list"></div></div>
+        <div class="opt-box"><div class="sec-title">사용기계</div><div class="row"><input id="optMachine"><button class="btn" onclick="saveOption('옵션_기계','optMachine')">추가</button></div><div id="machineOptList" class="list"></div></div>
+      </div>
+      <div class="opt-grid">
+        <div class="opt-box">
+          <div class="sec-title">자재관리</div>
+          <div class="row3">
+            <input id="matName" placeholder="자재명">
+            <input id="matUnit" placeholder="단위">
+            <input id="matPrice" type="number" placeholder="가격">
           </div>
-          <div class="toolbar">
-            <button class="btn primary" onclick="loadMonthly()">불러오기</button>
+          <div class="row" style="margin-top:8px">
+            <input id="matStock" type="number" step="0.1" placeholder="재고">
+            <button class="btn" onclick="saveMaterial()">자재 저장</button>
           </div>
+          <div id="materialsList" class="list" style="margin-top:10px"></div>
         </div>
-        <div id="monthlyCards" class="stats-grid"></div>
-        <div class="panel">
-          <canvas id="monthlyCanvas" height="140"></canvas>
+        <div class="opt-box">
+          <div class="sec-title">병충해관리</div>
+          <div class="stack">
+            <input id="pestName" placeholder="이름">
+            <input id="pestDrug" placeholder="권장약제">
+            <textarea id="pestSymptom" placeholder="증상"></textarea>
+            <button class="btn" onclick="savePest()">병충해 저장</button>
+          </div>
+          <div id="pestsList" class="list" style="margin-top:10px"></div>
         </div>
       </div>
+    </section>
+  </main>
+</div>
+<script>
+let OPTS = {};
+let selectedMaterials = [];
+let editRowId = null;
+const qs = s => document.querySelector(s);
+const qsa = s => [...document.querySelectorAll(s)];
 
-      <div class="page" id="excel-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">엑셀</div>
-            <div class="page-desc">작업일지 엑셀과 월별 정산 엑셀을 바로 다운로드합니다.</div>
-          </div>
-        </div>
-        <div class="grid grid-2">
-          <div class="panel">
-            <h3 style="margin-top:0;">작업일지 엑셀</h3>
-            <p>날짜, 작업내용, 사용자재, 자재비, 인건비, 총금액 포함</p>
-            <button class="btn success" onclick="downloadFile('/api/export_excel')">작업일지 엑셀 다운로드</button>
-          </div>
-          <div class="panel">
-            <h3 style="margin-top:0;">월별 정산 엑셀</h3>
-            <p>월별 자재비, 인건비, 총금액 합계 포함</p>
-            <button class="btn success" onclick="downloadFile('/api/export_monthly')">월정산 엑셀 다운로드</button>
-          </div>
-        </div>
-      </div>
+function showPage(name){
+  qs('#page-works').classList.toggle('hidden', name !== 'works');
+  qs('#page-options').classList.toggle('hidden', name !== 'options');
+}
 
-      <div class="page" id="settlement-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">월정산</div>
-            <div class="page-desc">월별 합산 데이터를 표 형태로 확인합니다.</div>
-          </div>
-        </div>
-        <div class="list-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>월</th>
-                <th>자재비</th>
-                <th>인건비</th>
-                <th>총금액</th>
-              </tr>
-            </thead>
-            <tbody id="settlementBody"></tbody>
-          </table>
-        </div>
-      </div>
+function toggleChip(el){ el.classList.toggle('on'); }
+function chipValues(boxId){ return qsa('#'+boxId+' .chip.on').map(el => el.dataset.value); }
+function renderChipBox(boxId, arr, key=null){
+  qs('#'+boxId).innerHTML = (arr||[]).map(v => {
+    const val = key ? v[key] : v;
+    return `<div class="chip" data-value="${val}" onclick="toggleChip(this)">${val}</div>`;
+  }).join('');
+}
 
-      <div class="page" id="backup-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">백업</div>
-            <div class="page-desc">현재 데이터를 JSON 파일로 백업합니다.</div>
-          </div>
-        </div>
-        <div class="panel">
-          <p>백업 파일은 서버에서 생성되거나 다운로드됩니다.</p>
-          <button class="btn warning" onclick="downloadFile('/api/backup')">백업 실행</button>
-        </div>
-      </div>
+function calcEndDate(){
+  const d = qs('#taskDate').value;
+  const n = Number(qs('#dayCount').value || 1);
+  if(!d) return;
+  const x = new Date(d);
+  x.setDate(x.getDate() + Math.max(n,1) - 1);
+  qs('#taskEndDate').value = x.toISOString().slice(0,10);
+}
 
-      <div class="page" id="options-page">
-        <div class="topbar">
-          <div>
-            <div class="page-title">옵션관리</div>
-            <div class="page-desc">날씨, 작물, 작업내용, 사용자재, 병충해 선택 목록을 관리합니다. 현재는 브라우저 저장 방식입니다.</div>
-          </div>
-        </div>
+function updateMatUnit(){
+  const name = qs('#matSelect').value;
+  const found = (OPTS['자재'] || []).find(x => x['자재명'] === name);
+  qs('#matUnitView').value = found ? (found['단위'] || '') : '';
+}
 
-        <div class="grid grid-2">
-          <div class="panel">
-            <h3 style="margin-top:0;">날씨</h3>
-            <div class="inline">
-              <input class="input" id="opt_weather" placeholder="예: 맑음" />
-              <button class="btn primary" onclick="addOptionItem('weather')">추가</button>
-            </div>
-            <div class="option-list" id="weather-option-list"></div>
-          </div>
+function renderSelectedMaterials(){
+  qs('#selectedMaterials').innerHTML = selectedMaterials.length ? selectedMaterials.map((m, i) =>
+    `<div class="mini">${m.name} / ${m.qty} ${m.unit} <button class="btn red" style="padding:4px 8px;margin-left:8px" onclick="removeMaterial(${i})">삭제</button></div>`
+  ).join('') : '<div class="small">선택된 자재 없음</div>';
+}
+function addSelectedMaterial(){
+  const name = qs('#matSelect').value;
+  const qty = Number(qs('#matQty').value || 0);
+  const unit = qs('#matUnitView').value;
+  if(!name || qty <= 0) return alert('자재와 수량을 확인하세요.');
+  selectedMaterials.push({name, qty, unit});
+  renderSelectedMaterials();
+}
+function removeMaterial(i){ selectedMaterials.splice(i,1); renderSelectedMaterials(); }
 
-          <div class="panel">
-            <h3 style="margin-top:0;">작물</h3>
-            <div class="inline">
-              <input class="input" id="opt_crop" placeholder="예: 한라봉" />
-              <button class="btn primary" onclick="addOptionItem('crop')">추가</button>
-            </div>
-            <div class="option-list" id="crop-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">작업내용</h3>
-            <div class="inline">
-              <input class="input" id="opt_work" placeholder="예: 방제 작업" />
-              <button class="btn primary" onclick="addOptionItem('work')">추가</button>
-            </div>
-            <div class="option-list" id="work-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">사용자재</h3>
-            <div class="inline">
-              <input class="input" id="opt_material" placeholder="예: 톱신페스트" />
-              <button class="btn primary" onclick="addOptionItem('material')">추가</button>
-            </div>
-            <div class="option-list" id="material-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">사용기계</h3>
-            <div class="inline">
-              <input class="input" id="opt_machine" placeholder="예: 미세분무기" />
-              <button class="btn primary" onclick="addOptionItem('machine')">추가</button>
-            </div>
-            <div class="option-list" id="machine-option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3 style="margin-top:0;">병충해</h3>
-            <div class="inline">
-              <input class="input" id="opt_pest" placeholder="예: 응애" />
-              <button class="btn primary" onclick="addOptionItem('pest')">추가</button>
-            </div>
-            <div class="option-list" id="pest-option-list"></div>
-          </div>
-        </div>
-      </div>
-    </main>
+function addWorkerRow(data={group:'남자',count:1,pay:0,remark:''}){
+  const div = document.createElement('div');
+  div.className='mini worker-row';
+  div.innerHTML = `<div class="row3">
+    <select class="wg"><option ${data.group==='남자'?'selected':''}>남자</option><option ${data.group==='여자'?'selected':''}>여자</option><option ${data.group==='기타'?'selected':''}>기타</option></select>
+    <input class="wc" type="number" value="${data.count||1}" placeholder="인원수">
+    <input class="wp" type="number" value="${data.pay||0}" placeholder="단가">
   </div>
-
-  <script>
-    let cachedWorks = [];
-    let chartData = [];
-    const DRAFT_KEY = 'worklog_journal_draft_v2';
-    const PAGE_KEY = 'worklog_last_page_v2';
-
-    const defaultOptions = {
-      weather: ['맑음', '흐림', '비', '눈', '바람', '기타'],
-      crop: ['한라봉', '천혜향', '유라조생', '극조생'],
-      work: ['물관리', '방제', '묶기', '수확', '전정', '기타'],
-      material: ['톱신페스트', '다이센', '카스피', '기계유제'],
-      machine: ['미세분무기', '방제기', '예초기', '굴삭기'],
-      pest: ['응애', '진딧물', '총채벌레', '검은점무늬병']
-    };
-
-    function getOptions(key) {
-      const saved = localStorage.getItem('worklog_options_' + key);
-      if (!saved) return [...(defaultOptions[key] || [])];
-      try { return JSON.parse(saved); } catch { return [...(defaultOptions[key] || [])]; }
-    }
-
-    function setOptions(key, arr) {
-      localStorage.setItem('worklog_options_' + key, JSON.stringify(arr));
-    }
-
-    function renderOptionLists() {
-      ['weather','crop','work','material','machine','pest'].forEach(key => {
-        const arr = getOptions(key);
-        const datalist = document.getElementById(key + '-options');
-        if (datalist) {
-          datalist.innerHTML = arr.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-        }
-        const list = document.getElementById(key + '-option-list');
-        if (list) {
-          list.innerHTML = arr.map(v => `
-            <span class="option-chip">
-              ${escapeHtml(v)}
-              <button class="chip-del" onclick="removeOptionItem('${key}', '${escapeJs(v)}')">×</button>
-            </span>
-          `).join('');
-        }
-      });
-      syncDynamicDatalists();
-    }
-
-    function addOptionItem(key) {
-      const input = document.getElementById('opt_' + key);
-      const value = (input?.value || '').trim();
-      if (!value) return;
-      const arr = getOptions(key);
-      if (!arr.includes(value)) arr.push(value);
-      setOptions(key, arr);
-      input.value = '';
-      renderOptionLists();
-    }
-
-    function removeOptionItem(key, value) {
-      const arr = getOptions(key).filter(v => v !== value);
-      setOptions(key, arr);
-      renderOptionLists();
-    }
-
-    function escapeJs(str) {
-      return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    }
-
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('open');
-    }
-
-    function toggleEntryPanel(forceOpen = null) {
-      const panel = document.getElementById('journalEntryPanel');
-      if (forceOpen === true) {
-        panel.style.display = '';
-        return;
-      }
-      if (forceOpen === false) {
-        panel.style.display = 'none';
-        return;
-      }
-      panel.style.display = panel.style.display === 'none' ? '' : 'none';
-    }
-
-    function showPage(page, el = null) {
-      if(page === 'input'){
-        openWorkModal();
-        return;
-      }
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      const targetPage = document.getElementById(page + '-page');
-      if (targetPage) targetPage.classList.add('active');
-
-      document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
-      const targetBtn = el || document.querySelector(`.menu-btn[data-page="${page}"]`);
-      if (targetBtn) targetBtn.classList.add('active');
-
-      localStorage.setItem(PAGE_KEY, page);
-
-      if (window.innerWidth <= 840) {
-        document.getElementById('sidebar').classList.remove('open');
-      }
-
-      if (page === 'journal') loadJournal();
-      if (page === 'materials') loadMaterials();
-      if (page === 'monthly') loadMonthly();
-      if (page === 'settlement') loadSettlement();
-      if (page === 'options') renderOptionLists();
-    }
-
-    function todayStr() {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      return `${yyyy}-${mm}-${dd}`;
-    }
-
-    function money(v) {
-      const n = Number(v || 0);
-      return n.toLocaleString() + '원';
-    }
-
-    function escapeHtml(str) {
-      return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function computeDays() {
-      const s = document.getElementById('f_start_date').value;
-      const e = document.getElementById('f_end_date').value;
-      if (!s || !e) {
-        document.getElementById('f_days').value = '';
-        return;
-      }
-      const sd = new Date(s);
-      const ed = new Date(e);
-      const diff = Math.floor((ed - sd) / (1000 * 60 * 60 * 24)) + 1;
-      document.getElementById('f_days').value = diff > 0 ? diff : 1;
-      saveDraft();
-    }
-
-    function syncDynamicDatalists() {
-      const weatherItems = getOptions('weather');
-      const cropItems = getOptions('crop');
-      const pestItems = getOptions('pest');
-      const materialItems = getOptions('material');
-      const machineItems = getOptions('machine');
-
-      document.querySelectorAll('.weather-name-list').forEach(dl => {
-        dl.innerHTML = weatherItems.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-      });
-      document.querySelectorAll('.crop-name-list').forEach(dl => {
-        dl.innerHTML = cropItems.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-      });
-      document.querySelectorAll('.pest-name-list').forEach(dl => {
-        dl.innerHTML = pestItems.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-      });
-      document.querySelectorAll('.material-name-list').forEach(dl => {
-        dl.innerHTML = materialItems.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-      });
-      document.querySelectorAll('.machine-name-list').forEach(dl => {
-        dl.innerHTML = machineItems.map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
-      });
-    }
-
-    function createUniqueListId(prefix) {
-      return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-    }
-
-    function attachAutoSaveEvents(root) {
-      root.querySelectorAll('input, select, textarea').forEach(el => {
-        el.addEventListener('input', saveDraft);
-        el.addEventListener('change', () => {
-          handleCardPaymentVisibility(root);
-          computeCostsFromRows();
-          saveDraft();
-        });
-      });
-    }
-
-    function handleCardPaymentVisibility(row) {
-      const payment = row.querySelector('.pay-method');
-      const cardType = row.querySelector('.card-type');
-      if (!payment || !cardType) return;
-      cardType.disabled = payment.value !== '카드사용';
-      if (payment.value !== '카드사용') cardType.value = '';
-    }
-
-    function addSimpleRow(targetId, label, datalistId, value = '') {
-      const wrap = document.getElementById(targetId);
-      const rowId = createUniqueListId(targetId);
-      const row = document.createElement('div');
-      const listClass = targetId === 'weatherRows' ? 'weather-name-list' : targetId === 'cropRows' ? 'crop-name-list' : 'pest-name-list';
-      row.className = 'mini-row';
-      row.innerHTML = `
-        <div>
-          <input class="input simple-value" list="${rowId}" placeholder="${label}" value="${escapeHtml(value)}" />
-          <datalist id="${rowId}" class="${listClass}"></datalist>
-        </div>
-        <div></div>
-        <button type="button" class="btn danger" onclick="removeRow(this)">삭제</button>
-      `;
-      wrap.appendChild(row);
-      syncDynamicDatalists();
-      attachAutoSaveEvents(row);
-      saveDraft();
-    }
-
-    function addDetailRow(targetId, listClass, placeholder, value = {}) {
-      const wrap = document.getElementById(targetId);
-      const rowId = createUniqueListId(targetId);
-      const row = document.createElement('div');
-      row.className = 'detail-row';
-      row.innerHTML = `
-        <div>
-          <input class="input item-name" list="${rowId}" placeholder="${placeholder}" value="${escapeHtml(value.name || '')}" />
-          <datalist id="${rowId}" class="${listClass}"></datalist>
-        </div>
-        <input class="input item-qty" type="number" min="0" step="0.1" placeholder="수량" value="${escapeHtml(value.qty || '')}" />
-        <input class="input item-unit" placeholder="단위" value="${escapeHtml(value.unit || '')}" />
-        <select class="select trade-type">
-          <option value="">구매/대여</option>
-          <option value="구매" ${value.trade === '구매' ? 'selected' : ''}>구매</option>
-          <option value="대여" ${value.trade === '대여' ? 'selected' : ''}>대여</option>
-          <option value="사용" ${value.trade === '사용' ? 'selected' : ''}>사용</option>
-        </select>
-        <select class="select pay-method">
-          <option value="">결제방식</option>
-          <option value="현금구입" ${value.payment === '현금구입' ? 'selected' : ''}>현금구입</option>
-          <option value="외상" ${value.payment === '외상' ? 'selected' : ''}>외상</option>
-          <option value="계좌이체" ${value.payment === '계좌이체' ? 'selected' : ''}>계좌이체</option>
-          <option value="카드사용" ${value.payment === '카드사용' ? 'selected' : ''}>카드사용</option>
-        </select>
-        <select class="select card-type">
-          <option value="">일시불/할부</option>
-          <option value="일시불" ${value.card === '일시불' ? 'selected' : ''}>일시불</option>
-          <option value="2개월" ${value.card === '2개월' ? 'selected' : ''}>2개월</option>
-          <option value="3개월" ${value.card === '3개월' ? 'selected' : ''}>3개월</option>
-          <option value="6개월" ${value.card === '6개월' ? 'selected' : ''}>6개월</option>
-          <option value="12개월" ${value.card === '12개월' ? 'selected' : ''}>12개월</option>
-        </select>
-        <input class="input item-amount" type="number" min="0" step="1" placeholder="금액" value="${escapeHtml(value.amount || '')}" />
-        <button type="button" class="btn danger" onclick="removeRow(this)">삭제</button>
-      `;
-      wrap.appendChild(row);
-      syncDynamicDatalists();
-      handleCardPaymentVisibility(row);
-      attachAutoSaveEvents(row);
-      computeCostsFromRows();
-      saveDraft();
-    }
-
-    function addMaterialRow(value = {}) {
-      addDetailRow('materialRows', 'material-name-list', '자재명', value);
-    }
-
-    function addMachineRow(value = {}) {
-      addDetailRow('machineRows', 'machine-name-list', '기계명', value);
-    }
-
-    function addLaborRow(value = {}) {
-      const wrap = document.getElementById('laborRows');
-      const row = document.createElement('div');
-      row.className = 'mini-row';
-      row.innerHTML = `
-        <input class="input labor-name" placeholder="인건비 항목" value="${escapeHtml(value.name || '')}" />
-        <input class="input labor-amount" type="number" min="0" step="1" placeholder="금액" value="${escapeHtml(value.amount || '')}" />
-        <button type="button" class="btn danger" onclick="removeRow(this)">삭제</button>
-      `;
-      wrap.appendChild(row);
-      attachAutoSaveEvents(row);
-      computeCostsFromRows();
-      saveDraft();
-    }
-
-    function removeRow(btn) {
-      btn.parentElement.remove();
-      computeCostsFromRows();
-      saveDraft();
-    }
-
-    function collectSimpleRows(targetId) {
-      return [...document.querySelectorAll(`#${targetId} .simple-value`)]
-        .map(v => v.value.trim())
-        .filter(Boolean);
-    }
-
-    function collectDetailRows(targetId) {
-      return [...document.querySelectorAll(`#${targetId} .detail-row`)].map(row => ({
-        name: row.querySelector('.item-name')?.value.trim() || '',
-        qty: row.querySelector('.item-qty')?.value.trim() || '',
-        unit: row.querySelector('.item-unit')?.value.trim() || '',
-        trade: row.querySelector('.trade-type')?.value || '',
-        payment: row.querySelector('.pay-method')?.value || '',
-        card: row.querySelector('.card-type')?.value || '',
-        amount: row.querySelector('.item-amount')?.value.trim() || '0'
-      })).filter(v => v.name);
-    }
-
-    function collectLaborRows() {
-      return [...document.querySelectorAll('#laborRows .mini-row')].map(row => ({
-        name: row.querySelector('.labor-name')?.value.trim() || '',
-        amount: row.querySelector('.labor-amount')?.value.trim() || '0'
-      })).filter(v => v.name || Number(v.amount || 0) > 0);
-    }
-
-    function stringifyDetails(list, typeLabel) {
-      return list.map(item => {
-        const cardPart = item.payment === '카드사용' && item.card ? ` / ${item.card}` : '';
-        return `${typeLabel}:${item.name}|수량:${item.qty || 0}|단위:${item.unit || '-'}|구분:${item.trade || '-'}|결제:${item.payment || '-'}${cardPart}|금액:${item.amount || 0}`;
-      }).join(', ');
-    }
-
-    function computeCostsFromRows() {
-      const materialTotal = collectDetailRows('materialRows').reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const machineTotal = collectDetailRows('machineRows').reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const laborTotal = collectLaborRows().reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const totalMaterial = materialTotal + machineTotal;
-
-      document.getElementById('f_material_cost').value = totalMaterial;
-      document.getElementById('f_labor_cost').value = laborTotal;
-      document.getElementById('f_total_cost').value = totalMaterial + laborTotal;
-    }
-
-    function resetDynamicRows() {
-      document.getElementById('weatherRows').innerHTML = '';
-      document.getElementById('cropRows').innerHTML = '';
-      document.getElementById('pestRows').innerHTML = '';
-      document.getElementById('machineRows').innerHTML = '';
-      document.getElementById('materialRows').innerHTML = '';
-      document.getElementById('laborRows').innerHTML = '';
-
-      addSimpleRow('weatherRows', '날씨', 'weather-options');
-      addSimpleRow('cropRows', '작물', 'crop-options');
-      addSimpleRow('pestRows', '병충해', 'pest-options');
-      addMachineRow();
-      addMaterialRow();
-      addLaborRow();
-    }
-
-    function setEditMode(isEdit) {
-      document.getElementById('editModeBadge').style.display = isEdit ? 'inline-flex' : 'none';
-      document.getElementById('cancelEditBtn').style.display = isEdit ? 'inline-flex' : 'none';
-      document.getElementById('saveBtn').textContent = isEdit ? '수정저장' : '저장';
-    }
-
-    function resetWorkForm(skipDraftRemove = false) {
-      document.getElementById('workForm').reset();
-      document.getElementById('f_row_id').value = '';
-      document.getElementById('f_start_date').value = todayStr();
-      document.getElementById('f_end_date').value = todayStr();
-      resetDynamicRows();
-      computeDays();
-      computeCostsFromRows();
-      setEditMode(false);
-      toggleEntryPanel(true);
-      if (!skipDraftRemove) localStorage.removeItem(DRAFT_KEY);
-    }
-
-    function startNewEntry() {
-      showPage('journal');
-      resetWorkForm();
-      toggleEntryPanel(true);
-      document.getElementById('f_work').focus();
-    }
-
-    function cancelEdit() {
-      resetWorkForm();
-    }
-
-    function saveDraft() {
-      const payload = gatherFormPayload(false);
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
-    }
-
-    function restoreDraft() {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return false;
-      try {
-        const draft = JSON.parse(raw);
-        fillForm(draft, false);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    function fillForm(data, isEdit = true) {
-      document.getElementById('f_row_id').value = data.row_id || data.rowId || '';
-      document.getElementById('f_start_date').value = data.시작날짜 || data.날짜 || todayStr();
-      document.getElementById('f_end_date').value = data.종료날짜 || data.시작날짜 || data.날짜 || todayStr();
-      document.getElementById('f_start_time').value = data.시작시간 || '';
-      document.getElementById('f_end_time').value = data.종료시간 || '';
-      document.getElementById('f_work').value = data.작업내용 || '';
-      document.getElementById('f_note').value = data.비고 || '';
-
-      document.getElementById('weatherRows').innerHTML = '';
-      (Array.isArray(data.날씨목록) ? data.날씨목록 : splitMultiValue(data.날씨)).forEach(v => addSimpleRow('weatherRows', '날씨', 'weather-options', v));
-      if (!document.querySelector('#weatherRows .mini-row')) addSimpleRow('weatherRows', '날씨', 'weather-options');
-
-      document.getElementById('cropRows').innerHTML = '';
-      (Array.isArray(data.작물목록) ? data.작물목록 : splitMultiValue(data.작물)).forEach(v => addSimpleRow('cropRows', '작물', 'crop-options', v));
-      if (!document.querySelector('#cropRows .mini-row')) addSimpleRow('cropRows', '작물', 'crop-options');
-
-      document.getElementById('pestRows').innerHTML = '';
-      (Array.isArray(data.병충해목록) ? data.병충해목록 : splitMultiValue(data.병충해)).forEach(v => addSimpleRow('pestRows', '병충해', 'pest-options', v));
-      if (!document.querySelector('#pestRows .mini-row')) addSimpleRow('pestRows', '병충해', 'pest-options');
-
-      document.getElementById('machineRows').innerHTML = '';
-      const machineList = Array.isArray(data.사용기계목록) ? data.사용기계목록 : parseDetailText(data.사용기계상세 || data.사용기계 || '', '기계');
-      machineList.forEach(item => addMachineRow(item));
-      if (!document.querySelector('#machineRows .detail-row')) addMachineRow();
-
-      document.getElementById('materialRows').innerHTML = '';
-      const materialList = Array.isArray(data.사용자재목록) ? data.사용자재목록 : parseDetailText(data.사용자재상세 || data.사용자재 || '', '자재');
-      materialList.forEach(item => addMaterialRow(item));
-      if (!document.querySelector('#materialRows .detail-row')) addMaterialRow();
-
-      document.getElementById('laborRows').innerHTML = '';
-      const laborList = Array.isArray(data.인건비목록) ? data.인건비목록 : parseLaborText(data.인건비상세 || '');
-      laborList.forEach(item => addLaborRow(item));
-      if (!document.querySelector('#laborRows .mini-row')) addLaborRow();
-
-      computeDays();
-      computeCostsFromRows();
-      setEditMode(isEdit);
-      toggleEntryPanel(true);
-      if (isEdit) saveDraft();
-    }
-
-    function splitMultiValue(text) {
-      return String(text || '').split(',').map(v => v.trim()).filter(Boolean);
-    }
-
-    function parseDetailText(text, typeLabel) {
-      const rows = String(text || '').split(', ').map(v => v.trim()).filter(Boolean);
-      return rows.map(row => {
-        const clean = row.replace(`${typeLabel}:`, '');
-        const parts = clean.split('|');
-        const result = { name: '', qty: '', unit: '', trade: '', payment: '', card: '', amount: '' };
-        parts.forEach((p, idx) => {
-          if (idx === 0 && !p.includes(':')) result.name = p;
-          if (p.startsWith('수량:')) result.qty = p.replace('수량:', '');
-          if (p.startsWith('단위:')) result.unit = p.replace('단위:', '');
-          if (p.startsWith('구분:')) result.trade = p.replace('구분:', '');
-          if (p.startsWith('결제:')) {
-            const pay = p.replace('결제:', '').split(' / ');
-            result.payment = pay[0] || '';
-            result.card = pay[1] || '';
-          }
-          if (p.startsWith('금액:')) result.amount = p.replace('금액:', '');
-          if (!result.name && idx === 0) result.name = p;
-        });
-        return result;
-      }).filter(v => v.name);
-    }
-
-    function parseLaborText(text) {
-      return String(text || '').split(', ').map(v => v.trim()).filter(Boolean).map(row => {
-        const parts = row.split('|');
-        return {
-          name: (parts[0] || '').replace('인건비:', ''),
-          amount: (parts[1] || '').replace('금액:', '')
-        };
-      }).filter(v => v.name || Number(v.amount || 0) > 0);
-    }
-
-    function gatherFormPayload(includeRowId = true) {
-      const weatherList = collectSimpleRows('weatherRows');
-      const cropList = collectSimpleRows('cropRows');
-      const pestList = collectSimpleRows('pestRows');
-      const machineList = collectDetailRows('machineRows');
-      const materialList = collectDetailRows('materialRows');
-      const laborList = collectLaborRows();
-
-      computeCostsFromRows();
-
-      const payload = {
-        날짜: document.getElementById('f_start_date').value,
-        시작날짜: document.getElementById('f_start_date').value,
-        종료날짜: document.getElementById('f_end_date').value,
-        연속일수: Number(document.getElementById('f_days').value || 1),
-        시작시간: document.getElementById('f_start_time').value,
-        종료시간: document.getElementById('f_end_time').value,
-        날씨: weatherList.join(', '),
-        날씨목록: weatherList,
-        작물: cropList.join(', '),
-        작물목록: cropList,
-        병충해: pestList.join(', '),
-        병충해목록: pestList,
-        작업내용: document.getElementById('f_work').value,
-        사용기계: machineList.map(v => v.name).join(', '),
-        사용기계목록: machineList,
-        사용기계상세: stringifyDetails(machineList, '기계'),
-        사용자재: materialList.map(v => v.name).join(', '),
-        사용자재목록: materialList,
-        사용자재상세: stringifyDetails(materialList, '자재'),
-        인건비상세: laborList.map(v => `인건비:${v.name}|금액:${v.amount || 0}`).join(', '),
-        인건비목록: laborList,
-        자재비: Number(document.getElementById('f_material_cost').value || 0),
-        인건비: Number(document.getElementById('f_labor_cost').value || 0),
-        총금액: Number(document.getElementById('f_total_cost').value || 0),
-        비고: document.getElementById('f_note').value
-      };
-      if (includeRowId) payload.row_id = document.getElementById('f_row_id').value;
-      return payload;
-    }
-
-    async function requestJson(url, options = {}) {
-      const res = await fetch(url, { credentials: 'same-origin', ...options });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `요청 실패: ${res.status}`);
-      }
-      return await res.json();
-    }
-
-    async function loadJournal() {
-      try {
-        const data = await requestJson('/api/works_light');
-        cachedWorks = Array.isArray(data) ? data : (data.data || []);
-
-        const dateFilter = document.getElementById('searchDate').value;
-        const keyword = (document.getElementById('searchKeyword').value || '').trim().toLowerCase();
-
-        let works = [...cachedWorks];
-
-        if (dateFilter) {
-          works = works.filter(w => String(w.시작날짜 || w.날짜 || '').startsWith(dateFilter) || String(w.종료날짜 || '').startsWith(dateFilter));
-        }
-
-        if (keyword) {
-          works = works.filter(w => {
-            const text = [
-              w.작업내용, w.작물, w.사용자재, w.사용기계, w.비고, w.날씨, w.병충해
-            ].join(' ').toLowerCase();
-            return text.includes(keyword);
-          });
-        }
-
-        renderTopStats(works);
-        renderJournalCards(works);
-      } catch (err) {
-        document.getElementById('journalListArea').innerHTML = `<div class="empty">작업일지를 불러오지 못했습니다.<br>${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderTopStats(works) {
-      const totalWorks = works.length;
-      const totalMaterial = works.reduce((a, b) => a + Number(b.자재비 || 0), 0);
-      const totalLabor = works.reduce((a, b) => a + Number(b.인건비 || 0), 0);
-      const total = works.reduce((a, b) => a + Number(b.총금액 || 0), 0);
-
-      document.getElementById('topStats').innerHTML = `
-        <div class="stat-card"><div class="stat-title">총 작업일지 수</div><div class="stat-value">${totalWorks.toLocaleString()}</div></div>
-        <div class="stat-card"><div class="stat-title">자재비 합계</div><div class="stat-value">${Number(totalMaterial).toLocaleString()}원</div></div>
-        <div class="stat-card"><div class="stat-title">인건비 합계</div><div class="stat-value">${Number(totalLabor).toLocaleString()}원</div></div>
-        <div class="stat-card"><div class="stat-title">총금액 합계</div><div class="stat-value">${Number(total).toLocaleString()}원</div></div>
-      `;
-    }
-
-    function renderJournalCards(works) {
-      const area = document.getElementById('journalListArea');
-      if (!works.length) {
-        area.innerHTML = `<div class="empty">표시할 작업일지가 없습니다.</div>`;
-        return;
-      }
-
-      const grouped = {};
-      works.forEach(w => {
-        const date = w.시작날짜 || w.날짜 || '날짜없음';
-        if (!grouped[date]) grouped[date] = [];
-        grouped[date].push(w);
-      });
-
-      const dates = Object.keys(grouped).sort((a, b) => String(b).localeCompare(String(a)));
-      let html = '';
-
-      dates.forEach(date => {
-        const list = grouped[date];
-        html += `
-          <div class="date-group">
-            <div class="date-header">
-              <div class="date-title">${escapeHtml(date)}</div>
-              <div class="date-count">${list.length}건</div>
-            </div>
-            <div class="work-cards">
-        `;
-
-        list.forEach((w, idx) => {
-          const total = Number(w.총금액 || 0);
-          html += `
-            <div class="work-card">
-              <div class="work-card-header">
-                <div class="work-title">${escapeHtml(w.작업내용 || '작업')}</div>
-                <div class="work-badge">${idx + 1}번째</div>
-              </div>
-              <div class="meta-list">
-                <div class="meta-row"><div class="meta-label">기간</div><div class="meta-value">${escapeHtml(w.시작날짜 || w.날짜 || '-')} ${w.종료날짜 ? '~ ' + escapeHtml(w.종료날짜) : ''}</div></div>
-                <div class="meta-row"><div class="meta-label">연속일수</div><div class="meta-value">${escapeHtml(w.연속일수 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">날씨</div><div class="meta-value">${escapeHtml(w.날씨 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">작물</div><div class="meta-value">${escapeHtml(w.작물 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">시간</div><div class="meta-value">${escapeHtml(w.시작시간 || '')} ${w.종료시간 ? '~ ' + escapeHtml(w.종료시간) : ''}</div></div>
-                <div class="meta-row"><div class="meta-label">병충해</div><div class="meta-value">${escapeHtml(w.병충해 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">기계</div><div class="meta-value">${escapeHtml(w.사용기계 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">자재</div><div class="meta-value">${escapeHtml(w.사용자재 || '-')}</div></div>
-                <div class="meta-row"><div class="meta-label">자재비</div><div class="meta-value">${money(w.자재비)}</div></div>
-                <div class="meta-row"><div class="meta-label">인건비</div><div class="meta-value">${money(w.인건비)}</div></div>
-                <div class="meta-row"><div class="meta-label">총금액</div><div class="meta-value"><strong>${money(total)}</strong></div></div>
-                <div class="meta-row"><div class="meta-label">비고</div><div class="meta-value">${escapeHtml(w.비고 || '-')}</div></div>
-              </div>
-              <div class="inline" style="margin-top:8px;">
-                <button class="btn" onclick="editWork('${escapeJs(w.row_id || '')}')">수정</button>
-                <button class="btn danger" onclick="deleteWork('${escapeJs(w.row_id || '')}', '${escapeJs(w.작업내용 || '')}')">삭제</button>
-              </div>
-            </div>
-          `;
-        });
-
-        html += `</div></div>`;
-      });
-
-      area.innerHTML = html;
-    }
-
-    async function editWork(rowId) {
-      const target = cachedWorks.find(w => String(w.row_id || '') === String(rowId));
-      if (!target) {
-        alert('수정할 데이터를 찾지 못했습니다.');
-        return;
-      }
-      fillForm(target, true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    async function deleteWork(rowId, taskName) {
-      if (!confirm(`${taskName || '이 작업'}을 삭제하시겠습니까?`)) return;
-      try {
-        await requestJson(`/api/works/${encodeURIComponent(rowId)}`, { method: 'DELETE' });
-        alert('삭제되었습니다.');
-        await loadJournal();
-        resetWorkForm();
-      } catch (err) {
-        alert('삭제 실패: ' + err.message);
-      }
-    }
-
-    function resetJournalFilters() {
-      document.getElementById('searchDate').value = '';
-      document.getElementById('searchKeyword').value = '';
-      loadJournal();
-    }
-
-    document.addEventListener('input', function(e) {
-      if (e.target.closest('#workForm')) {
-        if (['f_start_date', 'f_end_date'].includes(e.target.id)) computeDays();
-        if (e.target.classList.contains('item-amount') || e.target.classList.contains('labor-amount')) computeCostsFromRows();
-        saveDraft();
-      }
-    });
-
-    document.getElementById('f_start_date').addEventListener('change', computeDays);
-    document.getElementById('f_end_date').addEventListener('change', computeDays);
-
-    document.getElementById('workForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      try {
-        const rowId = document.getElementById('f_row_id').value;
-        const payload = gatherFormPayload(true);
-        const isEdit = !!rowId;
-
-        await requestJson(isEdit ? `/api/works/${encodeURIComponent(rowId)}` : '/api/works', {
-          method: isEdit ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        alert(isEdit ? '작업일지가 수정되었습니다.' : '작업일지가 저장되었습니다.');
-        localStorage.removeItem(DRAFT_KEY);
-        resetWorkForm(true);
-        showPage('journal');
-      } catch (err) {
-        alert('저장 실패: ' + err.message);
-      }
-    });
-
-    async function loadMaterials() {
-      try {
-        const data = await requestJson('/api/materials_all');
-        const list = Array.isArray(data) ? data : (data.data || []);
-        const hasStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) > 0);
-        const noStock = list.filter(m => Number(m.재고 ?? m.수량 ?? 0) <= 0);
-
-        renderMaterialBox('materialsHasStock', hasStock, true);
-        renderMaterialBox('materialsNoStock', noStock, false);
-      } catch (err) {
-        document.getElementById('materialsHasStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-        document.getElementById('materialsNoStock').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderMaterialBox(targetId, list, hasStock) {
-      const area = document.getElementById(targetId);
-      if (!list.length) {
-        area.innerHTML = `<div class="empty">${hasStock ? '재고 있는' : '재고 없는'} 자재가 없습니다.</div>`;
-        return;
-      }
-
-      area.innerHTML = `
-        <div class="list-table-wrap" style="box-shadow:none; border:1px solid #eef2f7;">
-          <table style="min-width:100%;">
-            <thead>
-              <tr>
-                <th>자재명</th>
-                <th>재고</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${list.map(m => {
-                const name = m.자재명 ?? m.name ?? '';
-                const qty = Number(m.재고 ?? m.수량 ?? 0);
-                return `
-                  <tr>
-                    <td>${escapeHtml(name)}</td>
-                    <td>${qty}</td>
-                    <td>
-                      <div class="inline">
-                        <button class="btn" onclick="updateMaterialPrompt('${escapeJs(name)}', ${qty})">재고수정</button>
-                        <button class="btn danger" onclick="deleteMaterialPrompt('${escapeJs(name)}')">삭제</button>
-                      </div>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    async function updateMaterialPrompt(name, currentQty) {
-      const newQty = prompt('재고 수정', currentQty);
-      if (newQty === null) return;
-      try {
-        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 재고: Number(newQty) })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        alert('재고가 수정되었습니다.');
-        loadMaterials();
-      } catch (err) {
-        alert('재고 수정 실패: ' + err.message);
-      }
-    }
-
-    async function deleteMaterialPrompt(name) {
-      if (!confirm(`${name} 자재를 삭제하시겠습니까?`)) return;
-      try {
-        const res = await fetch(`/api/materials/${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(await res.text());
-        alert('삭제되었습니다.');
-        loadMaterials();
-      } catch (err) {
-        alert('자재 삭제 실패: ' + err.message);
-      }
-    }
-
-    async function loadMonthly() {
-      try {
-        const data = await requestJson('/api/monthly_json');
-        chartData = Array.isArray(data) ? data : (data.data || []);
-        renderMonthlyCards(chartData);
-        drawMonthlyChart(chartData);
-      } catch (err) {
-        document.getElementById('monthlyCards').innerHTML = `<div class="empty">불러오기 실패: ${escapeHtml(err.message)}</div>`;
-      }
-    }
-
-    function renderMonthlyCards(data) {
-      const area = document.getElementById('monthlyCards');
-      if (!data.length) {
-        area.innerHTML = `<div class="empty">월별 데이터가 없습니다.</div>`;
-        return;
-      }
-
-      area.innerHTML = data.map(row => {
-        const month = row.월 || row.month || '-';
-        const total = Number(row.총금액 || row.total || 0);
-        return `
-          <div class="stat-card">
-            <div class="stat-title">${escapeHtml(month)}</div>
-            <div class="stat-value">${total.toLocaleString()}원</div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function drawMonthlyChart(data) {
-      const canvas = document.getElementById('monthlyCanvas');
-      const ctx = canvas.getContext('2d');
-      const ratio = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * ratio;
-      canvas.height = 320 * ratio;
-      ctx.scale(ratio, ratio);
-      ctx.clearRect(0, 0, rect.width, 320);
-      if (!data.length) return;
-
-      const labels = data.map(d => String(d.월 || d.month || ''));
-      const values = data.map(d => Number(d.총금액 || d.total || 0));
-      const maxVal = Math.max(...values, 1);
-      const padding = 40;
-      const chartW = rect.width - padding * 2;
-      const chartH = 240;
-      const baseY = 270;
-      const barGap = 12;
-      const barW = Math.max(20, (chartW - barGap * (values.length - 1)) / values.length);
-
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padding, baseY);
-      ctx.lineTo(rect.width - padding, baseY);
-      ctx.stroke();
-
-      ctx.font = '12px Malgun Gothic';
-      ctx.fillStyle = '#475569';
-      ctx.textAlign = 'center';
-
-      values.forEach((v, i) => {
-        const x = padding + i * (barW + barGap);
-        const h = (v / maxVal) * chartH;
-        const y = baseY - h;
-        ctx.fillStyle = '#60a5fa';
-        ctx.fillRect(x, y, barW, h);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillText(v.toLocaleString(), x + barW / 2, y - 8);
-        ctx.fillStyle = '#475569';
-        ctx.fillText(labels[i], x + barW / 2, baseY + 18);
-      });
-    }
-
-    async function loadSettlement() {
-      try {
-        const data = await requestJson('/api/monthly_json');
-        const list = Array.isArray(data) ? data : (data.data || []);
-        const tbody = document.getElementById('settlementBody');
-
-        if (!list.length) {
-          tbody.innerHTML = `<tr><td colspan="4">데이터가 없습니다.</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = list.map(row => `
-          <tr>
-            <td>${escapeHtml(row.월 || row.month || '-')}</td>
-            <td>${money(row.자재비 || row.material_cost || 0)}</td>
-            <td>${money(row.인건비 || row.labor_cost || 0)}</td>
-            <td><strong>${money(row.총금액 || row.total || 0)}</strong></td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        document.getElementById('settlementBody').innerHTML = `<tr><td colspan="4">불러오기 실패: ${escapeHtml(err.message)}</td></tr>`;
-      }
-    }
-
-    function downloadFile(url) {
-      window.location.href = url;
-    }
-
-    window.addEventListener('resize', () => {
-      const monthlyPage = document.getElementById('monthly-page');
-      if (monthlyPage.classList.contains('active') && chartData.length) {
-        drawMonthlyChart(chartData);
-      }
-    });
-
-    window.onload = function() {
-      renderOptionLists();
-      resetWorkForm(true);
-      const restored = restoreDraft();
-      const lastPage = localStorage.getItem(PAGE_KEY) || 'journal';
-      showPage('journal');
-    };
-      function fillOptionsToForm(){
-
-  // 작물
-  const crops = getOptions('crop');
-  document.getElementById("cropRows").innerHTML =
-    crops.map(v =>
-      `<label><input type="checkbox" value="${v}"> ${v}</label>`
-    ).join('');
-
-  // 병충해
-  const pests = getOptions('pest');
-  document.getElementById("pestRows").innerHTML =
-    pests.map(v =>
-      `<label><input type="checkbox" value="${v}"> ${v}</label>`
-    ).join('');
-
-  // 작업내용
-  const works = getOptions('work');
-  const workSelect = document.getElementById("f_work");
-  if(workSelect){
-    workSelect.setAttribute("list","work-options");
-  }
+  <div class="row" style="margin-top:8px">
+    <input class="wr" value="${data.remark||''}" placeholder="비고">
+    <button class="btn red" type="button" onclick="this.closest('.worker-row').remove()">삭제</button>
+  </div>`;
+  qs('#workersBox').appendChild(div);
+}
+function collectWorkers(){
+  return qsa('.worker-row').map(row => {
+    const g = row.querySelector('.wg').value;
+    const c = row.querySelector('.wc').value || 0;
+    const p = row.querySelector('.wp').value || 0;
+    const r = row.querySelector('.wr').value || '';
+    return Number(c) > 0 ? `${g}|${c}|${p}|${r}` : '';
+  }).filter(Boolean).join(';');
 }
 
-
-      
-      if (!restored) resetWorkForm(true);
-     
-    };
-    function openWorkModal(){
-  document.getElementById("workModal").style.display = "block";
-  renderMultiOptions();
-  fillOptionsToForm();      
+function resetEntry(){
+  editRowId = null;
+  qs('#editBadge').textContent = '';
+  qs('#taskDate').value = new Date().toISOString().slice(0,10);
+  qs('#dayCount').value = 1;
+  calcEndDate();
+  qs('#startTime').value = '';
+  qs('#endTime').value = '';
+  qs('#workHours').value = '';
+  qs('#noteText').value = '';
+  qsa('#cropChips .chip, #pestChips .chip').forEach(c => c.classList.remove('on'));
+  selectedMaterials = [];
+  renderSelectedMaterials();
+  qs('#workersBox').innerHTML = '';
+  addWorkerRow();
 }
 
-function closeWorkModal(){
-  document.getElementById("workModal").style.display = "none";
-}
+function openEntry(){ showPage('works'); qs('#entryPanel').classList.remove('hidden'); if(!editRowId) resetEntry(); }
+function closeEntry(){ qs('#entryPanel').classList.add('hidden'); }
 
-function toggleCardOption(){
-  const val = document.getElementById("payment_type").value;
-  document.getElementById("card_option").style.display = val === "카드" ? "block" : "none";
-}
-
-function renderMultiOptions(){
-  const crops = getOptions('crop');
-  const pests = getOptions('pest');
-
-  document.getElementById("cropMulti").innerHTML =
-    crops.map(v => `<label><input type="checkbox" value="${v}"> ${v}</label>`).join('');
-
-  document.getElementById("pestMulti").innerHTML =
-    pests.map(v => `<label><input type="checkbox" value="${v}"> ${v}</label>`).join('');
-}
-
-function saveWork(){
-  const crops = [...document.querySelectorAll('#cropMulti input:checked')].map(v=>v.value).join(',');
-  const pests = [...document.querySelectorAll('#pestMulti input:checked')].map(v=>v.value).join(',');
-
-  const data = {
-    날짜: new Date().toISOString().slice(0,10),
-    작물: crops,
-    병충해: pests,
-    사용기계: document.getElementById("machine_name").value,
-    사용기계구분: document.getElementById("machine_type").value,
-    결제방식: document.getElementById("payment_type").value,
-    카드구분: document.getElementById("card_option").value
+function makeTaskItem(){
+  const start = qs('#taskDate').value;
+  const end = qs('#taskEndDate').value || start;
+  return {
+    날짜: start,
+    종료날짜: end,
+    작물: chipValues('cropChips').join(','),
+    작업내용: qs('#taskKind').value,
+    시작시간: qs('#startTime').value,
+    종료시간: qs('#endTime').value,
+    작업시간: qs('#workHours').value,
+    사용기계: qs('#machineSel').value,
+    사용자재: selectedMaterials.map(m => `${m.name}|${m.qty}|${m.unit}`).join(';'),
+    병충해: chipValues('pestChips').join(','),
+    인력내역: collectWorkers(),
+    비고: qs('#noteText').value
   };
-
-  fetch('/api/works', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(data)
-  }).then(()=>{
-    closeWorkModal();
-    loadJournal();
-  });
 }
-  </script>
-  <!-- 작업 입력 팝업 -->
-<div id="workModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999;">
-  <div style="background:#fff; width:90%; max-width:700px; margin:40px auto; padding:20px; border-radius:16px;">
 
-    <h3>작업 입력</h3>
+async function saveWork(){
+  const payload = { 날씨: qs('#weatherSel').value, task_items: [makeTaskItem()] };
+  const url = editRowId ? `/api/works/${editRowId}` : '/api/works';
+  const method = editRowId ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  const data = await res.json();
+  if(!res.ok || !data.ok) return alert(data.error || '저장 실패');
+  closeEntry();
+  resetEntry();
+  await loadOptions();
+  await loadWorks();
+}
 
-    <!-- 작물 -->
-    <div>
-      <label>작물 (다중선택)</label>
-      <div id="cropMulti"></div>
+function workCardHtml(w, t){
+  const mats = (t['사용자재'] || '').split(';').filter(Boolean).map(x => x.split('|')[0]).join(', ');
+  return `<div class="card">
+    <div class="title">${t['작업내용'] || ''}</div>
+    <div class="meta">작물: ${t['작물'] || '-'}<br>날짜: ${t['날짜'] || ''}${t['종료날짜'] && t['종료날짜'] !== t['날짜'] ? ' ~ ' + t['종료날짜'] : ''}<br>기계: ${t['사용기계'] || '-'}<br>자재: ${mats || '-'}<br>병충해: ${t['병충해'] || '-'}<br>인건비: ${w['인건비_표시'] || '0원'}</div>
+    <div class="topbar" style="margin-top:10px">
+      <button class="btn sub" onclick="editWork(${w.row_id})">수정</button>
+      <button class="btn red" onclick="deleteWork(${w.row_id})">삭제</button>
     </div>
+  </div>`;
+}
 
-    <!-- 병충해 -->
-    <div>
-      <label>병충해 (다중선택)</label>
-      <div id="pestMulti"></div>
-    </div>
+async function loadWorks(){
+  const q = qs('#searchQ').value.trim();
+  const res = await fetch('/api/works_light?q=' + encodeURIComponent(q));
+  const rows = await res.json();
+  const map = {};
+  rows.forEach(w => {
+    const d = w['날짜'] || '-';
+    if(!map[d]) map[d] = [];
+    (w.task_items || []).forEach(t => map[d].push(workCardHtml(w, t)));
+  });
+  const dates = Object.keys(map).sort().reverse();
+  qs('#worksList').innerHTML = dates.length ? dates.map(d =>
+    `<div class="day-group"><h3>${d}</h3><div class="day-cards">${map[d].join('')}</div></div>`
+  ).join('') : '<div class="panel">작업 내역이 없습니다.</div>';
+}
 
-    <!-- 사용기계 -->
-    <div>
-      <label>사용기계</label>
-      <input id="machine_name" class="input">
-      <select id="machine_type" class="select">
-        <option>구매</option>
-        <option>대여</option>
-        <option>사용</option>
-        <option>반납</option>
-        <option>반품</option>
-      </select>
-    </div>
+async function editWork(rowId){
+  const res = await fetch(`/api/works/${rowId}`);
+  const w = await res.json();
+  if(!res.ok) return alert(w.error || '불러오기 실패');
+  editRowId = rowId;
+  qs('#editBadge').textContent = `수정 중: row_id ${rowId}`;
+  qs('#weatherSel').value = w['날씨'] || '';
+  const t = (w.task_items || [])[0] || {};
+  qs('#taskDate').value = t['날짜'] || '';
+  qs('#taskEndDate').value = t['종료날짜'] || t['날짜'] || '';
+  if(t['날짜'] && t['종료날짜']){
+    const a = new Date(t['날짜']);
+    const b = new Date(t['종료날짜']);
+    qs('#dayCount').value = Math.max(1, Math.round((b-a)/(1000*60*60*24))+1);
+  }
+  qs('#taskKind').value = t['작업내용'] || '';
+  qs('#machineSel').value = t['사용기계'] || '';
+  qs('#startTime').value = t['시작시간'] || '';
+  qs('#endTime').value = t['종료시간'] || '';
+  qs('#workHours').value = t['작업시간'] || '';
+  qs('#noteText').value = t['비고'] || '';
+  qsa('#cropChips .chip').forEach(c => c.classList.toggle('on', (t['작물']||'').split(',').map(x=>x.trim()).includes(c.dataset.value)));
+  qsa('#pestChips .chip').forEach(c => c.classList.toggle('on', (t['병충해']||'').split(',').map(x=>x.trim()).includes(c.dataset.value)));
+  selectedMaterials = (t['사용자재'] || '').split(';').filter(Boolean).map(x => {
+    const p = x.split('|'); return {name:p[0]||'', qty:Number(p[1]||0), unit:p[2]||''};
+  });
+  renderSelectedMaterials();
+  qs('#workersBox').innerHTML = '';
+  (t['인력내역'] || '').split(';').filter(Boolean).forEach(x => {
+    const p = x.split('|'); addWorkerRow({group:p[0]||'남자', count:p[1]||1, pay:p[2]||0, remark:p[3]||''});
+  });
+  if(!qsa('.worker-row').length) addWorkerRow();
+  openEntry();
+}
 
-    <!-- 결제 -->
-    <div>
-      <label>결제방식</label>
-      <select id="payment_type" class="select" onchange="toggleCardOption()">
-        <option>현금</option>
-        <option>외상</option>
-        <option>계좌이체</option>
-        <option>카드</option>
-      </select>
+async function deleteWork(rowId){
+  if(!confirm('삭제할까요?')) return;
+  const res = await fetch(`/api/works/${rowId}`, {method:'DELETE'});
+  const data = await res.json();
+  if(!res.ok || !data.ok) return alert(data.error || '삭제 실패');
+  await loadOptions();
+  await loadWorks();
+}
 
-      <select id="card_option" class="select" style="display:none;">
-        <option>일시불</option>
-        <option>할부</option>
-      </select>
-    </div>
+async function saveOption(tbl, inputId){
+  const el = qs('#' + inputId);
+  const value = el.value.trim();
+  if(!value) return;
+  await fetch(`/api/options/${tbl}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({항목:value})});
+  el.value = '';
+  await loadOptions();
+}
+async function deleteOption(tbl, value){
+  await fetch(`/api/options/${tbl}/${encodeURIComponent(value)}`, {method:'DELETE'});
+  await loadOptions();
+}
+async function saveMaterial(){
+  const payload = {자재명:qs('#matName').value.trim(), 단위:qs('#matUnit').value.trim(), 가격:qs('#matPrice').value||0, 재고:qs('#matStock').value||0};
+  if(!payload.자재명) return alert('자재명을 입력하세요.');
+  await fetch('/api/materials', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  qs('#matName').value=''; qs('#matUnit').value=''; qs('#matPrice').value=''; qs('#matStock').value='';
+  await loadOptions();
+}
+async function savePest(){
+  const payload = {이름:qs('#pestName').value.trim(), 권장약제:qs('#pestDrug').value.trim(), 증상:qs('#pestSymptom').value.trim()};
+  if(!payload.이름) return alert('병충해 이름을 입력하세요.');
+  await fetch('/api/pests', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  qs('#pestName').value=''; qs('#pestDrug').value=''; qs('#pestSymptom').value='';
+  await loadOptions();
+}
 
-    <div style="margin-top:20px;">
-      <button class="btn primary" onclick="saveWork()">저장</button>
-      <button class="btn" onclick="closeWorkModal()">닫기</button>
-    </div>
+function renderOptionList(boxId, tbl, arr){
+  qs('#'+boxId).innerHTML = (arr||[]).map(v => `<div class="mini">${v} <button class="btn red" style="padding:4px 8px;margin-left:8px" onclick="deleteOption('${tbl}','${String(v).replaceAll("'","\\'")}')">삭제</button></div>`).join('') || '<div class="small">없음</div>';
+}
 
-  </div>
-</div>
-
-<div id="workModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999;">
-  <div style="background:#fff; width:95%; max-width:1100px; max-height:90vh; overflow-y:auto; margin:20px auto; padding:20px; border-radius:16px;">
-    
-    <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-      <div>
-        <strong>작업일지 입력 / 수정</strong>
-        <div class="page-desc" style="margin-top:6px;">새 작업 입력 또는 수정할 때만 열리는 팝업입니다.</div>
-      </div>
-      <div class="inline">
-        <span class="edit-badge" id="editModeBadge" style="display:none;">수정 모드</span>
-        <button type="button" class="btn" onclick="closeWorkModal()">닫기</button>
-      </div>
-    </div>
-
-    <div id="journalEntryPanel">
-      <form id="workForm">
-        <input type="hidden" id="f_row_id" />
-
-        <div class="grid grid-3">
-          <div class="field">
-            <label>시작날짜</label>
-            <input class="input" type="date" id="f_start_date" required />
-          </div>
-          <div class="field">
-            <label>종료날짜</label>
-            <input class="input" type="date" id="f_end_date" required />
-          </div>
-          <div class="field">
-            <label>연속일수</label>
-            <input class="input" type="number" id="f_days" min="1" readonly />
-          </div>
-        </div>
-
-        <div class="grid grid-2">
-          <div class="field">
-            <label>시작시간</label>
-            <input class="input" type="time" id="f_start_time" />
-          </div>
-          <div class="field">
-            <label>종료시간</label>
-            <input class="input" type="time" id="f_end_time" />
-          </div>
-        </div>
-
-        <div class="grid grid-1">
-          <div class="sub-panel">
-            <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-              <strong>날씨 (다중입력)</strong>
-              <button type="button" class="btn" onclick="addSimpleRow('weatherRows', '날씨', 'weather-options')">+ 추가</button>
-            </div>
-            <div id="weatherRows"></div>
-          </div>
-        </div>
-
-        <div class="grid grid-1">
-          <div class="sub-panel">
-            <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-              <strong>작물 (다중입력)</strong>
-              <button type="button" class="btn" onclick="addSimpleRow('cropRows', '작물', 'crop-options')">+ 추가</button>
-            </div>
-            <div id="cropRows"></div>
-          </div>
-        </div>
-
-        <div class="grid grid-1">
-          <div class="sub-panel">
-            <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-              <strong>병충해 (다중입력)</strong>
-              <button type="button" class="btn" onclick="addSimpleRow('pestRows', '병충해', 'pest-options')">+ 추가</button>
-            </div>
-            <div id="pestRows"></div>
-          </div>
-        </div>
-
-        <div class="grid grid-1">
-          <div class="field">
-            <label>작업내용</label>
-            <input class="input" list="work-options" id="f_work" placeholder="선택 또는 입력" required />
-            <datalist id="work-options"></datalist>
-          </div>
-        </div>
-
-        <div class="sub-panel">
-          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-            <strong>사용기계 / 기계 구매·대여 내역</strong>
-            <button type="button" class="btn" onclick="addMachineRow()">+ 기계 추가</button>
-          </div>
-          <div id="machineRows"></div>
-          <div class="summary-box">대표사용자재 대신 사용기계를 입력하도록 변경했습니다. 구매/대여, 결제방식, 카드 일시불·할부 선택 가능</div>
-        </div>
-
-        <div class="sub-panel">
-          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-            <strong>사용자재 / 자재 구매·대여 내역</strong>
-            <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
-          </div>
-          <div id="materialRows"></div>
-          <div class="summary-box">사용자재도 구매/대여, 현금구입, 외상, 계좌이체, 카드사용을 기록할 수 있습니다.</div>
-        </div>
-
-        <div class="sub-panel">
-          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-            <strong>인건비 내역 (다중입력)</strong>
-            <button type="button" class="btn" onclick="addLaborRow()">+ 인건비 추가</button>
-          </div>
-          <div id="laborRows"></div>
-        </div>
-
-        <div class="grid grid-3">
-          <div class="field">
-            <label>자재비</label>
-            <input class="input" type="number" id="f_material_cost" value="0" min="0" readonly />
-          </div>
-          <div class="field">
-            <label>인건비</label>
-            <input class="input" type="number" id="f_labor_cost" value="0" min="0" readonly />
-          </div>
-          <div class="field">
-            <label>총금액</label>
-            <input class="input" type="number" id="f_total_cost" value="0" min="0" readonly />
-          </div>
-        </div>
-
-        <div class="field">
-          <label>비고</label>
-          <textarea class="textarea" id="f_note" placeholder="메모를 입력하세요."></textarea>
-        </div>
-
-        <div class="inline sticky-actions" style="margin-top:16px;">
-          <button type="submit" class="btn primary" id="saveBtn">저장</button>
-          <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
-          <button type="button" class="btn danger" id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">수정취소</button>
-          <button type="button" class="btn" onclick="closeWorkModal()">닫기</button>
-        </div>
-      </form>
-    </div>
-
-  </div>
-</div>
-
+async function loadOptions(){
+  const res = await fetch('/api/options');
+  OPTS = await res.json();
+  qs('#weatherSel').innerHTML = (OPTS['옵션_날씨']||[]).map(v => `<option>${v}</option>`).join('');
+  qs('#taskKind').innerHTML = (OPTS['옵션_작업내용']||[]).map(v => `<option>${v}</option>`).join('');
+  qs('#machineSel').innerHTML = (OPTS['옵션_기계']||[]).map(v => `<option>${v}</option>`).join('');
+  qs('#matSelect').innerHTML = (OPTS['자재']||[]).map(m => `<option value="${m['자재명']}">${m['자재명']}</option>`).join('');
+  renderChipBox('cropChips', OPTS['옵션_작물'] || []);
+  renderChipBox('pestChips', OPTS['병충해'] || [], '이름');
+  renderOptionList('cropOptList','옵션_작물', OPTS['옵션_작물'] || []);
+  renderOptionList('taskOptList','옵션_작업내용', OPTS['옵션_작업내용'] || []);
+  renderOptionList('weatherOptList','옵션_날씨', OPTS['옵션_날씨'] || []);
+  renderOptionList('machineOptList','옵션_기계', OPTS['옵션_기계'] || []);
+  qs('#materialsList').innerHTML = (OPTS['자재']||[]).map(m => `<div class="mini">${m['자재명']} / ${m['재고']} ${m['단위']||''}</div>`).join('') || '<div class="small">자재 없음</div>';
+  qs('#pestsList').innerHTML = (OPTS['병충해']||[]).map(p => `<div class="mini">${p['이름']} ${p['권장약제'] ? '/ ' + p['권장약제'] : ''}</div>`).join('') || '<div class="small">병충해 없음</div>';
+  updateMatUnit();
+}
+qs('#matSelect').addEventListener('change', updateMatUnit);
+window.addEventListener('load', async () => { await loadOptions(); resetEntry(); await loadWorks(); });
+</script>
 </body>
 </html>

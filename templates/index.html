@@ -524,7 +524,7 @@
           </div>
           <div class="toolbar">
             <input class="input" id="searchDate" type="date" style="width:170px" onchange="loadJournal()" />
-            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재/병충해/기계 검색" style="width:260px" oninput="loadJournal()" />
+            <input class="input" id="searchKeyword" type="text" placeholder="작업내용/작물/자재/병충해/기계 검색" style="width:260px" oninput="filterJournalLocal()" />
             <button class="btn" onclick="resetJournalFilters()">초기화</button>
             <button class="btn primary" onclick="loadJournal()">새로고침</button>
             <button class="btn success" onclick="openWorkModal()">새 작업 입력</button>

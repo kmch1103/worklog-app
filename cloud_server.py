@@ -2,17 +2,28 @@ from flask import Flask, render_template, request, jsonify
 import sqlite3
 from pathlib import Path
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "data" / "worklog.db"
+
+# Railway/컨테이너에서는 /app/data 대신 /tmp 사용
+if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("PORT"):
+    DB_PATH = Path(os.environ.get("DB_PATH", "/tmp/worklog.db"))
+else:
+    DB_PATH = BASE_DIR / "data" / "worklog.db"
 
 
 # ---------------------------
 # DB 공통
 # ---------------------------
+def ensure_db_dir():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
 def get_conn():
+    ensure_db_dir()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -28,7 +39,7 @@ def fetch_all_dicts(query, params=()):
 
 
 def init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ensure_db_dir()
 
     conn = get_conn()
     cur = conn.cursor()
@@ -132,6 +143,12 @@ def normalize_multi_value(value):
 
 
 # ---------------------------
+# 시작 시 DB 초기화
+# ---------------------------
+init_db()
+
+
+# ---------------------------
 # 화면
 # ---------------------------
 @app.route("/")
@@ -141,7 +158,7 @@ def index():
 
 @app.route("/health")
 def health():
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "db_path": str(DB_PATH)})
 
 
 # ---------------------------
@@ -495,5 +512,4 @@ def delete_material(material_id):
 
 
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)

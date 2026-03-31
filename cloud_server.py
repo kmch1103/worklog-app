@@ -1,498 +1,617 @@
 import json
 import os
-import io
 from datetime import date, datetime
+from pathlib import Path
 
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, jsonify, request, send_from_directory
 import psycopg
 from psycopg.rows import dict_row
-import pandas as pd
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "worklog-cloud-secret")
-
+BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+TFS = "☆"
+TRS = "§"
 
 
-def db():
+# -----------------------------
+# DB helpers
+# -----------------------------
+def db_conn():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not set")
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
-def run_ddl(sql):
-    c = db()
-    cur = c.cursor()
+def parse_float_safe(value, default=0.0):
     try:
-        cur.execute(sql)
-        c.commit()
-    finally:
-        cur.close()
-        c.close()
-
-
-def ensure_schema():
-    run_ddl(
-        '''
-        CREATE TABLE IF NOT EXISTS "자재" (
-            "자재명" TEXT PRIMARY KEY,
-            "단위" TEXT DEFAULT '',
-            "재고" DOUBLE PRECISION DEFAULT 0
-        )
-        '''
-    )
-
-    run_ddl(
-        '''
-        CREATE TABLE IF NOT EXISTS "작업일지" (
-            "날짜" TEXT,
-            "시작날짜" TEXT,
-            "종료날짜" TEXT,
-            "연속일수" INTEGER DEFAULT 1,
-            "작업내용" TEXT,
-            "날씨" TEXT,
-            "작물" TEXT,
-            "병충해" TEXT,
-            "시작시간" TEXT,
-            "종료시간" TEXT,
-            "사용기계" TEXT,
-            "사용기계상세" TEXT,
-            "사용자재" TEXT,
-            "사용자재상세" TEXT,
-            "인건비상세" TEXT,
-            "자재비" DOUBLE PRECISION DEFAULT 0,
-            "인건비" DOUBLE PRECISION DEFAULT 0,
-            "총금액" DOUBLE PRECISION DEFAULT 0,
-            "비고" TEXT,
-            "생성시각" TEXT,
-            "수정시각" TEXT
-        )
-        '''
-    )
-
-    extra_columns = [
-        ('"시작날짜"', 'TEXT'),
-        ('"종료날짜"', 'TEXT'),
-        ('"연속일수"', 'INTEGER DEFAULT 1'),
-        ('"병충해"', 'TEXT'),
-        ('"사용기계"', 'TEXT'),
-        ('"사용기계상세"', 'TEXT'),
-        ('"사용자재상세"', 'TEXT'),
-        ('"인건비상세"', 'TEXT'),
-        ('"수정시각"', 'TEXT'),
-    ]
-    c = db()
-    cur = c.cursor()
-    try:
-        for col, dtype in extra_columns:
-            cur.execute(f'ALTER TABLE "작업일지" ADD COLUMN IF NOT EXISTS {col} {dtype}')
-        cur.execute('ALTER TABLE "자재" ADD COLUMN IF NOT EXISTS "단위" TEXT')
-        c.commit()
-    finally:
-        cur.close()
-        c.close()
-
-
-ensure_schema()
-
-
-def normalize_number(value, default=0):
-    try:
-        return float(value or default)
+        return float(str(value).replace(",", "").replace("시간", "").replace("원", "").strip())
     except Exception:
-        return float(default)
+        return default
 
 
-def normalize_payload(d):
-    work_date = d.get("날짜") or d.get("시작날짜") or d.get("date") or date.today().isoformat()
-    start_date = d.get("시작날짜") or work_date
-    end_date = d.get("종료날짜") or start_date
-    work_name = d.get("작업내용") or d.get("task") or ""
-    weather = d.get("날씨") or ""
-    crop = d.get("작물") or ""
-    pest = d.get("병충해") or ""
-    start_time = d.get("시작시간") or ""
-    end_time = d.get("종료시간") or ""
-    note = d.get("비고") or ""
+def compute_wage_from_detail(detail_str: str) -> int:
+    if not detail_str:
+        return 0
+    total = 0
+    for part in str(detail_str).split(";"):
+        if not part.strip():
+            continue
+        try:
+            _, count, pay, _ = part.split("|")
+            total += int(float(count)) * int(float(pay))
+        except Exception:
+            pass
+    return total
 
-    machine_names = d.get("사용기계") or ""
-    machine_details = d.get("사용기계상세") or ""
-    material_names = d.get("사용자재") or ""
-    material_details = d.get("사용자재상세") or material_names
-    labor_details = d.get("인건비상세") or ""
 
-    days = int(d.get("연속일수") or 1)
-    material_cost = normalize_number(d.get("자재비", d.get("material_cost", 0)), 0)
-    labor_cost = normalize_number(d.get("인건비", d.get("wage_cost", 0)), 0)
-    total_cost = normalize_number(d.get("총금액", material_cost + labor_cost), material_cost + labor_cost)
+def parse_task_list(text: str):
+    if not text or not str(text).strip():
+        return []
+    items = []
+    for rec in str(text).split(TRS):
+        rec = rec.strip()
+        if not rec:
+            continue
+        p = rec.split(TFS)
+        while len(p) < 12:
+            p.append("")
+        items.append(
+            {
+                "날짜": p[0],
+                "종료날짜": p[1],
+                "작물": p[2],
+                "작업내용": p[3],
+                "시작시간": p[4],
+                "종료시간": p[5],
+                "작업시간": p[6],
+                "사용기계": p[7],
+                "사용자재": p[8],
+                "병충해": p[9],
+                "인력내역": p[10],
+                "비고": p[11],
+            }
+        )
+    return items
 
-    materials_list = d.get("사용자재목록") or d.get("materials") or []
-    if isinstance(materials_list, str):
-        materials_list = []
 
+def serialize_task_list(task_list):
+    rows = []
+    for t in task_list:
+        rows.append(
+            TFS.join(
+                [
+                    str(t.get("날짜", "")),
+                    str(t.get("종료날짜", "")),
+                    str(t.get("작물", "")),
+                    str(t.get("작업내용", "")),
+                    str(t.get("시작시간", "")),
+                    str(t.get("종료시간", "")),
+                    str(t.get("작업시간", "")),
+                    str(t.get("사용기계", "")),
+                    str(t.get("사용자재", "")),
+                    str(t.get("병충해", "")),
+                    str(t.get("인력내역", "")),
+                    str(t.get("비고", "")),
+                ]
+            )
+        )
+    return TRS.join(rows)
+
+
+def aggregate_materials(task_items):
+    agg = {}
+    for t in task_items:
+        for part in str(t.get("사용자재", "")).split(";"):
+            if not part.strip():
+                continue
+            pp = part.split("|")
+            if len(pp) >= 3:
+                name = pp[0].strip()
+                qty = parse_float_safe(pp[1], 0)
+                unit = pp[2].strip()
+                if not name:
+                    continue
+                if name in agg:
+                    agg[name]["qty"] += qty
+                else:
+                    agg[name] = {"qty": qty, "unit": unit}
+    return agg
+
+
+def synthesized_task_item_from_row(row):
     return {
-        "날짜": work_date,
-        "시작날짜": start_date,
-        "종료날짜": end_date,
-        "연속일수": days,
-        "작업내용": work_name,
-        "날씨": weather,
-        "작물": crop,
-        "병충해": pest,
-        "시작시간": start_time,
-        "종료시간": end_time,
-        "사용기계": machine_names,
-        "사용기계상세": machine_details,
-        "사용자재": material_names,
-        "사용자재상세": material_details,
-        "인건비상세": labor_details,
-        "자재비": material_cost,
-        "인건비": labor_cost,
-        "총금액": total_cost,
-        "비고": note,
-        "materials_list": materials_list,
+        "날짜": row.get("날짜", "") or "",
+        "종료날짜": row.get("종료날짜", "") or row.get("날짜", "") or "",
+        "작물": row.get("작물", "") or "",
+        "작업내용": row.get("작업내용", "") or "",
+        "시작시간": row.get("시작시간", "") or "",
+        "종료시간": row.get("종료시간", "") or "",
+        "작업시간": row.get("작업시간", "") or "",
+        "사용기계": row.get("사용기계", "") or "",
+        "사용자재": row.get("사용자재", "") or "",
+        "병충해": row.get("적용병충해", "") or "",
+        "인력내역": row.get("인력내역", "") or "",
+        "비고": row.get("비고", "") or "",
     }
 
 
-@app.route("/")
-def home():
-    return render_template("index.html")
+def parse_or_synthesize_task_items(row):
+    items = parse_task_list(row.get("작업목록", "") or "")
+    return items if items else [synthesized_task_item_from_row(row)]
 
 
-@app.route("/input")
-def input_page():
-    return render_template("index.html")
+def ensure_default_options(cur):
+    defaults = {
+        "옵션_날씨": ["맑음", "흐림", "비", "눈", "바람", "기타"],
+        "옵션_작물": ["한라봉", "천혜향", "유라조생", "극조생"],
+        "옵션_작업내용": ["물관리", "방제작업", "전정", "비료주기", "수확", "수리/보수", "기타"],
+        "옵션_기계": ["수동방제기", "양수기", "SS기", "예초기", "기타", "사용안함"],
+        "옵션_단위": ["개", "병", "통", "포", "kg", "g", "L", "ml", "말"],
+    }
+    for tbl, items in defaults.items():
+        for item in items:
+            cur.execute(f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT ("항목") DO NOTHING', (item,))
 
 
-@app.route("/api/materials_all")
-def materials():
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute('SELECT "자재명", COALESCE("재고", 0) AS "재고" FROM "자재" ORDER BY "자재명"')
-        rows = [dict(x) for x in cur.fetchall()]
-        return jsonify(rows)
-    finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/materials/<name>", methods=["PUT"])
-def update_material(name):
-    d = request.json or {}
-    new_qty = normalize_number(d.get("재고", 0), 0)
-
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute(
-            'UPDATE "자재" SET "재고" = %s WHERE "자재명" = %s',
-            (new_qty, name)
+def init_db():
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS "작업일지" (
+            "번호" INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+            "날짜" TEXT,
+            "종료날짜" TEXT,
+            "날씨" TEXT,
+            "작물" TEXT,
+            "작업내용" TEXT,
+            "인건비" INTEGER DEFAULT 0,
+            "시작시간" TEXT,
+            "종료시간" TEXT,
+            "작업시간" TEXT,
+            "사용기계" TEXT,
+            "사용자재" TEXT,
+            "적용병충해" TEXT,
+            "비고" TEXT,
+            "생성시각" TEXT,
+            "수정시각" TEXT,
+            "인력내역" TEXT,
+            "작업목록" TEXT
         )
-        c.commit()
-        return jsonify({"ok": 1})
-    finally:
-        cur.close()
-        c.close()
+        '''
+    )
+    cur.execute(
+        '''CREATE TABLE IF NOT EXISTS "자재" (
+            "자재명" TEXT PRIMARY KEY,
+            "단위" TEXT,
+            "가격" NUMERIC DEFAULT 0,
+            "재고" NUMERIC DEFAULT 0
+        )'''
+    )
+    cur.execute(
+        '''CREATE TABLE IF NOT EXISTS "병충해" (
+            "이름" TEXT PRIMARY KEY,
+            "권장약제" TEXT,
+            "증상" TEXT
+        )'''
+    )
+    for tbl in ("옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"):
+        cur.execute(f'CREATE TABLE IF NOT EXISTS "{tbl}" ("항목" TEXT PRIMARY KEY)')
+    ensure_default_options(cur)
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
-@app.route("/api/materials/<name>", methods=["DELETE"])
-def delete_material(name):
-    c = db()
-    cur = c.cursor()
+if DATABASE_URL:
     try:
-        cur.execute('DELETE FROM "자재" WHERE "자재명" = %s', (name,))
-        c.commit()
-        return jsonify({"ok": 1})
-    finally:
-        cur.close()
-        c.close()
+        init_db()
+    except Exception as e:
+        print("init_db failed:", e)
+
+
+def build_summary_fields(task_items):
+    dates = []
+    end_dates = []
+    crops = []
+    tasks = []
+    pests = []
+    wages = []
+    for item in task_items:
+        if item.get("날짜"):
+            dates.append(item["날짜"])
+        if item.get("종료날짜"):
+            end_dates.append(item["종료날짜"])
+        for c in str(item.get("작물", "")).split(","):
+            c = c.strip()
+            if c and c not in crops:
+                crops.append(c)
+        if item.get("작업내용"):
+            tasks.append(item["작업내용"])
+        for p in str(item.get("병충해", "")).split(","):
+            p = p.strip()
+            if p and p not in pests:
+                pests.append(p)
+        if item.get("인력내역"):
+            wages.append(item["인력내역"])
+
+    rep_start = min(dates) if dates else date.today().isoformat()
+    rep_end = max(end_dates) if end_dates else rep_start
+    rep_task = ", ".join(dict.fromkeys(tasks))
+    rep_crop = ", ".join(crops)
+    rep_pest = ", ".join(pests)
+    rep_wage = ";".join(wages)
+    rep_mats = ";".join(
+        f"{name}|{info['qty']}|{info['unit']}" for name, info in aggregate_materials(task_items).items()
+    )
+    first = task_items[0] if task_items else {}
+    return {
+        "날짜": rep_start,
+        "종료날짜": rep_end,
+        "작물": rep_crop,
+        "작업내용": rep_task,
+        "시작시간": first.get("시작시간", ""),
+        "종료시간": first.get("종료시간", ""),
+        "작업시간": first.get("작업시간", ""),
+        "사용기계": first.get("사용기계", ""),
+        "사용자재": rep_mats,
+        "적용병충해": rep_pest,
+        "비고": first.get("비고", ""),
+        "인력내역": rep_wage,
+        "인건비": compute_wage_from_detail(rep_wage),
+        "작업목록": serialize_task_list(task_items),
+    }
+
+
+def adjust_inventory(cur, old_items=None, new_items=None):
+    old_items = old_items or []
+    new_items = new_items or []
+    old_agg = aggregate_materials(old_items)
+    new_agg = aggregate_materials(new_items)
+    all_names = set(old_agg) | set(new_agg)
+    for name in all_names:
+        old_qty = old_agg.get(name, {}).get("qty", 0)
+        new_qty = new_agg.get(name, {}).get("qty", 0)
+        diff = old_qty - new_qty  # +면 환원, -면 차감
+        if diff != 0:
+            cur.execute(
+                'UPDATE "자재" SET "재고" = COALESCE("재고", 0) + %s WHERE "자재명"=%s',
+                (diff, name),
+            )
+
+
+def hydrate_rows(rows):
+    out = []
+    for row in rows:
+        d = dict(row)
+        d["row_id"] = d["번호"]
+        d["task_items"] = parse_or_synthesize_task_items(d)
+        d["인건비_표시"] = f'{compute_wage_from_detail(d.get("인력내역", "")):,}원'
+        out.append(d)
+    return out
+
+
+# -----------------------------
+# Static
+# -----------------------------
+@app.route("/")
+def index():
+    return send_from_directory(BASE_DIR, "index_fixed.html")
+
+
+@app.route("/health")
+def health():
+    return jsonify({"ok": True})
+
+
+# -----------------------------
+# Options / materials / pests
+# -----------------------------
+@app.route("/api/options")
+def api_options():
+    conn = db_conn()
+    cur = conn.cursor()
+    opts = {}
+    for tbl in ("옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"):
+        cur.execute(f'SELECT "항목" FROM "{tbl}" ORDER BY "항목"')
+        opts[tbl] = [r["항목"] for r in cur.fetchall() if str(r["항목"]).strip()]
+    cur.execute('SELECT "자재명","단위","가격","재고" FROM "자재" ORDER BY "자재명"')
+    opts["자재"] = [dict(r) for r in cur.fetchall()]
+    cur.execute('SELECT "이름","권장약제","증상" FROM "병충해" ORDER BY "이름"')
+    opts["병충해"] = [dict(r) for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify(opts)
+
+
+@app.route("/api/options/<path:tbl>", methods=["POST"])
+def api_add_option(tbl):
+    allowed = {"옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"}
+    if tbl not in allowed:
+        return jsonify({"ok": False, "error": "허용되지 않은 옵션"}), 400
+    value = str((request.json or {}).get("항목", "")).strip()
+    if not value:
+        return jsonify({"ok": False, "error": "값이 비었습니다."}), 400
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute(f'INSERT INTO "{tbl}" ("항목") VALUES (%s) ON CONFLICT ("항목") DO NOTHING', (value,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/options/<path:tbl>/<path:value>", methods=["DELETE"])
+def api_delete_option(tbl, value):
+    allowed = {"옵션_날씨", "옵션_작물", "옵션_작업내용", "옵션_기계", "옵션_단위"}
+    if tbl not in allowed:
+        return jsonify({"ok": False, "error": "허용되지 않은 옵션"}), 400
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute(f'DELETE FROM "{tbl}" WHERE "항목"=%s', (value,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/materials", methods=["POST"])
+def api_save_material():
+    data = request.json or {}
+    name = str(data.get("자재명", "")).strip()
+    if not name:
+        return jsonify({"ok": False, "error": "자재명이 필요합니다."}), 400
+    unit = str(data.get("단위", "")).strip()
+    price = parse_float_safe(data.get("가격", 0), 0)
+    stock = parse_float_safe(data.get("재고", 0), 0)
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute(
+        '''
+        INSERT INTO "자재" ("자재명","단위","가격","재고")
+        VALUES (%s,%s,%s,%s)
+        ON CONFLICT ("자재명") DO UPDATE SET
+            "단위"=EXCLUDED."단위",
+            "가격"=EXCLUDED."가격",
+            "재고"=EXCLUDED."재고"
+        ''',
+        (name, unit, price, stock),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/materials/<path:name>", methods=["PUT"])
+def api_update_material(name):
+    data = request.json or {}
+    stock = parse_float_safe(data.get("재고", 0), 0)
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute('UPDATE "자재" SET "재고"=%s WHERE "자재명"=%s', (stock, name))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pests", methods=["POST"])
+def api_save_pest():
+    data = request.json or {}
+    name = str(data.get("이름", "")).strip()
+    if not name:
+        return jsonify({"ok": False, "error": "병충해 이름이 필요합니다."}), 400
+    drug = str(data.get("권장약제", "")).strip()
+    symptom = str(data.get("증상", "")).strip()
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute(
+        '''
+        INSERT INTO "병충해" ("이름","권장약제","증상")
+        VALUES (%s,%s,%s)
+        ON CONFLICT ("이름") DO UPDATE SET
+            "권장약제"=EXCLUDED."권장약제",
+            "증상"=EXCLUDED."증상"
+        ''',
+        (name, drug, symptom),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+# -----------------------------
+# Works
+# -----------------------------
+@app.route("/api/works_light")
+def api_works_light():
+    q = str(request.args.get("q", "")).strip()
+    conn = db_conn()
+    cur = conn.cursor()
+    if q:
+        like = f"%{q}%"
+        cur.execute(
+            '''
+            SELECT * FROM "작업일지"
+            WHERE COALESCE("날짜",'') ILIKE %s
+               OR COALESCE("작업내용",'') ILIKE %s
+               OR COALESCE("작물",'') ILIKE %s
+               OR COALESCE("사용자재",'') ILIKE %s
+               OR COALESCE("적용병충해",'') ILIKE %s
+            ORDER BY "날짜" DESC, "번호" DESC
+            ''',
+            (like, like, like, like, like),
+        )
+    else:
+        cur.execute('SELECT * FROM "작업일지" ORDER BY "날짜" DESC, "번호" DESC')
+    rows = hydrate_rows(cur.fetchall())
+    cur.close()
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route("/api/works/<int:row_id>")
+def api_get_work(row_id):
+    conn = db_conn()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM "작업일지" WHERE "번호"=%s', (row_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return jsonify({"ok": False, "error": "작업을 찾을 수 없습니다."}), 404
+    return jsonify(hydrate_rows([row])[0])
 
 
 @app.route("/api/works", methods=["POST"])
-def add_work():
-    d = normalize_payload(request.json or {})
-
-    c = db()
-    cur = c.cursor()
+def api_create_work():
+    conn = None
+    cur = None
     try:
-        for m in d["materials_list"]:
-            mat_name = str(m.get("name", "")).strip()
-            mat_unit = str(m.get("unit", "")).strip()
-            mat_qty = normalize_number(m.get("qty", 0), 0)
-
-            if not mat_name:
-                continue
-
-            cur.execute(
-                '''
-                INSERT INTO "자재" ("자재명", "단위", "재고")
-                VALUES (%s, %s, %s)
-                ON CONFLICT ("자재명")
-                DO UPDATE SET "재고" = COALESCE("자재"."재고", 0) + EXCLUDED."재고",
-                              "단위" = CASE
-                                          WHEN EXCLUDED."단위" = '' THEN "자재"."단위"
-                                          ELSE EXCLUDED."단위"
-                                       END
-                ''',
-                (mat_name, mat_unit, mat_qty)
-            )
-
+        data = request.json or {}
+        task_items = data.get("task_items", [])
+        if not task_items:
+            return jsonify({"ok": False, "error": "task_items가 비었습니다."}), 400
+        summary = build_summary_fields(task_items)
+        now = datetime.now().isoformat(timespec="seconds")
+        conn = db_conn()
+        cur = conn.cursor()
+        adjust_inventory(cur, old_items=[], new_items=task_items)
         cur.execute(
             '''
-            INSERT INTO "작업일지"
-            ("날짜", "시작날짜", "종료날짜", "연속일수", "작업내용", "날씨", "작물", "병충해",
-             "시작시간", "종료시간", "사용기계", "사용기계상세", "사용자재", "사용자재상세",
-             "인건비상세", "자재비", "인건비", "총금액", "비고", "생성시각", "수정시각")
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO "작업일지" (
+                "날짜","종료날짜","날씨","작물","작업내용","인건비",
+                "시작시간","종료시간","작업시간","사용기계","사용자재",
+                "적용병충해","비고","생성시각","수정시각","인력내역","작업목록"
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING "번호"
             ''',
             (
-                d["날짜"], d["시작날짜"], d["종료날짜"], d["연속일수"], d["작업내용"], d["날씨"], d["작물"], d["병충해"],
-                d["시작시간"], d["종료시간"], d["사용기계"], d["사용기계상세"], d["사용자재"], d["사용자재상세"],
-                d["인건비상세"], d["자재비"], d["인건비"], d["총금액"], d["비고"], datetime.now().isoformat(), datetime.now().isoformat()
-            )
+                summary["날짜"],
+                summary["종료날짜"],
+                data.get("날씨", ""),
+                summary["작물"],
+                summary["작업내용"],
+                summary["인건비"],
+                summary["시작시간"],
+                summary["종료시간"],
+                summary["작업시간"],
+                summary["사용기계"],
+                summary["사용자재"],
+                summary["적용병충해"],
+                summary["비고"],
+                now,
+                now,
+                summary["인력내역"],
+                summary["작업목록"],
+            ),
         )
-
-        c.commit()
-        return jsonify({"ok": 1})
+        new_id = cur.fetchone()["번호"]
+        conn.commit()
+        return jsonify({"ok": True, "row_id": new_id})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.exception("api_create_work failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
     finally:
-        cur.close()
-        c.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
-@app.route("/api/works/<row_id>", methods=["PUT"])
-def update_work(row_id):
-    d = normalize_payload(request.json or {})
-
-    c = db()
-    cur = c.cursor()
+@app.route("/api/works/<int:row_id>", methods=["PUT"])
+def api_update_work(row_id):
+    conn = None
+    cur = None
     try:
+        data = request.json or {}
+        task_items = data.get("task_items", [])
+        if not task_items:
+            return jsonify({"ok": False, "error": "task_items가 비었습니다."}), 400
+        summary = build_summary_fields(task_items)
+        now = datetime.now().isoformat(timespec="seconds")
+        conn = db_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM "작업일지" WHERE "번호"=%s', (row_id,))
+        old = cur.fetchone()
+        if not old:
+            return jsonify({"ok": False, "error": "작업을 찾을 수 없습니다."}), 404
+        old_items = parse_or_synthesize_task_items(old)
+        adjust_inventory(cur, old_items=old_items, new_items=task_items)
         cur.execute(
             '''
-            UPDATE "작업일지"
-            SET "날짜" = %s,
-                "시작날짜" = %s,
-                "종료날짜" = %s,
-                "연속일수" = %s,
-                "작업내용" = %s,
-                "날씨" = %s,
-                "작물" = %s,
-                "병충해" = %s,
-                "시작시간" = %s,
-                "종료시간" = %s,
-                "사용기계" = %s,
-                "사용기계상세" = %s,
-                "사용자재" = %s,
-                "사용자재상세" = %s,
-                "인건비상세" = %s,
-                "자재비" = %s,
-                "인건비" = %s,
-                "총금액" = %s,
-                "비고" = %s,
-                "수정시각" = %s
-            WHERE ctid::text = %s
+            UPDATE "작업일지" SET
+                "날짜"=%s,"종료날짜"=%s,"날씨"=%s,"작물"=%s,"작업내용"=%s,"인건비"=%s,
+                "시작시간"=%s,"종료시간"=%s,"작업시간"=%s,"사용기계"=%s,"사용자재"=%s,
+                "적용병충해"=%s,"비고"=%s,"수정시각"=%s,"인력내역"=%s,"작업목록"=%s
+            WHERE "번호"=%s
             ''',
             (
-                d["날짜"], d["시작날짜"], d["종료날짜"], d["연속일수"], d["작업내용"], d["날씨"], d["작물"], d["병충해"],
-                d["시작시간"], d["종료시간"], d["사용기계"], d["사용기계상세"], d["사용자재"], d["사용자재상세"],
-                d["인건비상세"], d["자재비"], d["인건비"], d["총금액"], d["비고"], datetime.now().isoformat(), row_id
-            )
+                summary["날짜"],
+                summary["종료날짜"],
+                data.get("날씨", ""),
+                summary["작물"],
+                summary["작업내용"],
+                summary["인건비"],
+                summary["시작시간"],
+                summary["종료시간"],
+                summary["작업시간"],
+                summary["사용기계"],
+                summary["사용자재"],
+                summary["적용병충해"],
+                summary["비고"],
+                now,
+                summary["인력내역"],
+                summary["작업목록"],
+                row_id,
+            ),
         )
-        c.commit()
-        return jsonify({"ok": 1})
+        conn.commit()
+        return jsonify({"ok": True, "row_id": row_id})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.exception("api_update_work failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
     finally:
-        cur.close()
-        c.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
-@app.route("/api/works/<row_id>", methods=["DELETE"])
-def delete_work(row_id):
-    c = db()
-    cur = c.cursor()
+@app.route("/api/works/<int:row_id>", methods=["DELETE"])
+def api_delete_work(row_id):
+    conn = None
+    cur = None
     try:
-        cur.execute('DELETE FROM "작업일지" WHERE ctid::text = %s', (row_id,))
-        c.commit()
-        return jsonify({"ok": 1})
+        conn = db_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM "작업일지" WHERE "번호"=%s', (row_id,))
+        old = cur.fetchone()
+        if not old:
+            return jsonify({"ok": False, "error": "작업을 찾을 수 없습니다."}), 404
+        old_items = parse_or_synthesize_task_items(old)
+        adjust_inventory(cur, old_items=old_items, new_items=[])
+        cur.execute('DELETE FROM "작업일지" WHERE "번호"=%s', (row_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        app.logger.exception("api_delete_work failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
     finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/works_light")
-def works_light():
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute(
-            '''
-            SELECT
-                ctid::text AS row_id,
-                COALESCE("날짜", '') AS "날짜",
-                COALESCE("시작날짜", COALESCE("날짜", '')) AS "시작날짜",
-                COALESCE("종료날짜", COALESCE("날짜", '')) AS "종료날짜",
-                COALESCE("연속일수", 1) AS "연속일수",
-                COALESCE("작업내용", '') AS "작업내용",
-                COALESCE("날씨", '') AS "날씨",
-                COALESCE("작물", '') AS "작물",
-                COALESCE("병충해", '') AS "병충해",
-                COALESCE("시작시간", '') AS "시작시간",
-                COALESCE("종료시간", '') AS "종료시간",
-                COALESCE("사용기계", '') AS "사용기계",
-                COALESCE("사용기계상세", '') AS "사용기계상세",
-                COALESCE("사용자재", '') AS "사용자재",
-                COALESCE("사용자재상세", '') AS "사용자재상세",
-                COALESCE("인건비상세", '') AS "인건비상세",
-                COALESCE("자재비", 0) AS "자재비",
-                COALESCE("인건비", 0) AS "인건비",
-                COALESCE("총금액", COALESCE("자재비", 0) + COALESCE("인건비", 0)) AS "총금액",
-                COALESCE("비고", '') AS "비고"
-            FROM "작업일지"
-            ORDER BY COALESCE("시작날짜", "날짜") DESC, COALESCE("수정시각", "생성시각") DESC
-            LIMIT 300
-            '''
-        )
-        rows = [dict(x) for x in cur.fetchall()]
-        return jsonify(rows)
-    finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/monthly_json")
-def monthly_json():
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute(
-            '''
-            SELECT
-                SUBSTRING(COALESCE("시작날짜", "날짜"), 1, 7) AS month,
-                COALESCE(SUM("자재비"), 0) AS material_cost,
-                COALESCE(SUM("인건비"), 0) AS labor_cost,
-                COALESCE(SUM(COALESCE("총금액", COALESCE("자재비", 0) + COALESCE("인건비", 0))), 0) AS total
-            FROM "작업일지"
-            GROUP BY month
-            ORDER BY month DESC
-            '''
-        )
-        rows = [dict(x) for x in cur.fetchall()]
-        return jsonify(rows)
-    finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/export_excel")
-def export_excel():
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute(
-            '''
-            SELECT
-                COALESCE("날짜", '') AS "날짜",
-                COALESCE("시작날짜", '') AS "시작날짜",
-                COALESCE("종료날짜", '') AS "종료날짜",
-                COALESCE("연속일수", 1) AS "연속일수",
-                COALESCE("작업내용", '') AS "작업내용",
-                COALESCE("날씨", '') AS "날씨",
-                COALESCE("작물", '') AS "작물",
-                COALESCE("병충해", '') AS "병충해",
-                COALESCE("시작시간", '') AS "시작시간",
-                COALESCE("종료시간", '') AS "종료시간",
-                COALESCE("사용기계", '') AS "사용기계",
-                COALESCE("사용기계상세", '') AS "사용기계상세",
-                COALESCE("사용자재", '') AS "사용자재",
-                COALESCE("사용자재상세", '') AS "사용자재상세",
-                COALESCE("인건비상세", '') AS "인건비상세",
-                COALESCE("자재비", 0) AS "자재비",
-                COALESCE("인건비", 0) AS "인건비",
-                COALESCE("총금액", COALESCE("자재비", 0) + COALESCE("인건비", 0)) AS "총금액",
-                COALESCE("비고", '') AS "비고",
-                COALESCE("생성시각", '') AS "생성시각",
-                COALESCE("수정시각", '') AS "수정시각"
-            FROM "작업일지"
-            ORDER BY COALESCE("시작날짜", "날짜") DESC, COALESCE("수정시각", "생성시각") DESC
-            '''
-        )
-        rows = [dict(x) for x in cur.fetchall()]
-        df = pd.DataFrame(rows)
-
-        output = io.BytesIO()
-        df.to_excel(output, index=False)
-        output.seek(0)
-
-        return send_file(
-            output,
-            download_name="작업일지.xlsx",
-            as_attachment=True
-        )
-    finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/export_monthly")
-def export_monthly():
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute(
-            '''
-            SELECT
-                SUBSTRING(COALESCE("시작날짜", "날짜"), 1, 7) AS "월",
-                COALESCE(SUM("자재비"), 0) AS "자재비",
-                COALESCE(SUM("인건비"), 0) AS "인건비",
-                COALESCE(SUM(COALESCE("총금액", COALESCE("자재비", 0) + COALESCE("인건비", 0))), 0) AS "총금액"
-            FROM "작업일지"
-            GROUP BY SUBSTRING(COALESCE("시작날짜", "날짜"), 1, 7)
-            ORDER BY SUBSTRING(COALESCE("시작날짜", "날짜"), 1, 7) DESC
-            '''
-        )
-        rows = [dict(x) for x in cur.fetchall()]
-        df = pd.DataFrame(rows)
-
-        output = io.BytesIO()
-        df.to_excel(output, index=False)
-        output.seek(0)
-
-        return send_file(
-            output,
-            download_name="월정산.xlsx",
-            as_attachment=True
-        )
-    finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/backup")
-def backup():
-    c = db()
-    cur = c.cursor()
-    try:
-        cur.execute('SELECT * FROM "작업일지" ORDER BY COALESCE("시작날짜", "날짜") DESC')
-        rows = [dict(x) for x in cur.fetchall()]
-
-        output = io.BytesIO()
-        output.write(
-            json.dumps(rows, ensure_ascii=False, indent=2).encode("utf-8")
-        )
-        output.seek(0)
-
-        return send_file(
-            output,
-            download_name=f'backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json',
-            as_attachment=True,
-            mimetype="application/json"
-        )
-    finally:
-        cur.close()
-        c.close()
-
-
-@app.route("/api/ping")
-def ping():
-    return jsonify({"ok": 1, "time": datetime.now().isoformat()})
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)

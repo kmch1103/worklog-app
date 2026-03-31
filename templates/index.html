@@ -5,257 +5,119 @@
 <title>작업일지</title>
 
 <style>
-body {
-    font-family: 맑은고딕;
-    margin: 0;
-    background: #f5f6fa;
-}
+body { font-family: 맑은고딕; margin:0; background:#f5f6fa; }
 
-/* ===== 좌측 메뉴 ===== */
 .sidebar {
-    width: 220px;
-    height: 100vh;
-    position: fixed;
-    background: #1f2937;
-    color: white;
-    padding: 20px;
-}
-
-.sidebar h2 {
-    margin-bottom: 20px;
+    width:220px; height:100vh; position:fixed;
+    background:#1f2937; color:white; padding:20px;
 }
 
 .menu-btn {
-    display: block;
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 10px;
-    background: #374151;
-    border: none;
-    color: white;
-    cursor: pointer;
+    display:block; width:100%;
+    padding:12px; margin-bottom:10px;
+    background:#374151; border:none; color:white;
 }
 
-/* ===== 메인 영역 ===== */
 .content {
-    margin-left: 240px;
-    padding: 20px;
+    margin-left:240px; padding:20px;
 }
 
-/* ===== 카드 ===== */
 .card {
-    background: white;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 15px;
+    background:white; padding:15px;
+    border-radius:10px; margin-bottom:10px;
+    cursor:pointer;
 }
 
-/* ===== 입력 영역 ===== */
-.input-box input {
-    margin: 5px;
+.card.selected {
+    border:2px solid blue;
 }
 </style>
 </head>
 
 <body>
 
-<!-- =========================
-     좌측 메뉴
-     ========================= -->
+<!-- 좌측 메뉴 (기존 유지, 입력만 제거) -->
 <div class="sidebar">
     <h2>작업일지</h2>
-
-    <!-- 현재는 작업일지만 사용 -->
     <button class="menu-btn">작업일지</button>
 </div>
 
-
-<!-- =========================
-     메인 화면
-     ========================= -->
 <div class="content">
 
-    <!-- =========================
-         입력 영역 (작업일지 입력)
-         ========================= -->
-    <div class="card">
+<!-- 상단 버튼 -->
+<div>
+    <button onclick="openCreate()">입력</button>
+    <button onclick="editWork()">수정</button>
+    <button onclick="deleteWork()">삭제</button>
+</div>
 
-        <h3>작업 입력</h3>
+<!-- 입력 영역 -->
+<div id="editor" style="display:none; margin-top:20px;">
 
-        <!-- 작업내용 -->
-        <input id="task" placeholder="작업내용 입력">
+<input id="task" placeholder="작업내용"><br><br>
 
-        <br><br>
+날씨:
+<label><input type="checkbox" name="weather" value="맑음">맑음</label>
+<label><input type="checkbox" name="weather" value="비">비</label>
 
-        <!-- =========================
-             다중선택 - 날씨
-             역할: 체크된 값 배열로 저장됨
-             ========================= -->
-        날씨:
-        <label><input type="checkbox" name="weather" value="맑음">맑음</label>
-        <label><input type="checkbox" name="weather" value="비">비</label>
-        <label><input type="checkbox" name="weather" value="흐림">흐림</label>
+<br><br>
 
-        <br><br>
+작물:
+<label><input type="checkbox" name="crop" value="한라봉">한라봉</label>
+<label><input type="checkbox" name="crop" value="천혜향">천혜향</label>
 
-        <!-- =========================
-             다중선택 - 작물
-             ========================= -->
-        작물:
-        <label><input type="checkbox" name="crop" value="한라봉">한라봉</label>
-        <label><input type="checkbox" name="crop" value="천혜향">천혜향</label>
+<br><br>
 
-        <br><br>
-
-        <!-- =========================
-             다중선택 - 병충해
-             ========================= -->
-        병충해:
-        <label><input type="checkbox" name="pest" value="응애">응애</label>
-        <label><input type="checkbox" name="pest" value="진딧물">진딧물</label>
-
-        <br><br>
-
-        <!-- =========================
-             사용자재 입력 (여러개 추가 가능)
-             ========================= -->
-        <h4>사용자재</h4>
-        <div id="materials"></div>
-        <button onclick="addMaterial()">+ 자재 추가</button>
-
-        <br><br>
-
-        <!-- =========================
-             사용기계 입력
-             ========================= -->
-        <h4>사용기계</h4>
-        <div id="machines"></div>
-        <button onclick="addMachine()">+ 기계 추가</button>
-
-        <br><br>
-
-        <!-- =========================
-             인건비 입력 (다중)
-             ========================= -->
-        <h4>인건비</h4>
-        <div id="labor"></div>
-        <button onclick="addLabor()">+ 인건비 추가</button>
-
-        <br><br>
-
-        <button onclick="saveWork()">저장</button>
-
-    </div>
-
-
-    <!-- =========================
-         작업일지 목록
-         ========================= -->
-    <div id="list"></div>
+<button onclick="saveWork()">저장</button>
 
 </div>
 
+<!-- 리스트 -->
+<div id="list"></div>
+
+</div>
 
 <script>
 
-/* =========================
-   체크박스 값 가져오기
-   역할: 다중선택 → 배열 반환
-   ========================= */
+let selected = null
+let editMode = false
+
 function getChecked(name){
     return Array.from(document.querySelectorAll("input[name="+name+"]:checked"))
-        .map(x=>x.value)
+    .map(x=>x.value)
 }
 
-/* =========================
-   사용자재 추가 UI
-   ========================= */
-function addMaterial(){
-    let div = document.createElement("div")
-    div.innerHTML = `
-        자재명 <input>
-        수량 <input type="number">
-        방식
-        <select>
-            <option>사용</option>
-            <option>구매</option>
-            <option>대여</option>
-        </select>
-    `
-    document.getElementById("materials").appendChild(div)
+function openCreate(){
+    editMode = false
+    selected = null
+    document.getElementById("editor").style.display="block"
 }
 
-/* =========================
-   기계 추가 UI
-   ========================= */
-function addMachine(){
-    let div = document.createElement("div")
-    div.innerHTML = `
-        기계명 <input>
-        방식
-        <select onchange="paymentUI(this)">
-            <option>사용</option>
-            <option>구매</option>
-            <option>대여</option>
-        </select>
-        <span class="payment"></span>
-    `
-    document.getElementById("machines").appendChild(div)
+function editWork(){
+    if(!selected){ alert("선택 먼저"); return }
+    editMode = true
+    document.getElementById("editor").style.display="block"
+    document.getElementById("task").value = selected.작업내용
 }
 
-/* =========================
-   결제방식 UI (카드/할부 등)
-   ========================= */
-function paymentUI(sel){
-    let span = sel.parentNode.querySelector(".payment")
-
-    span.innerHTML = `
-        결제
-        <select onchange="cardUI(this)">
-            <option>현금</option>
-            <option>계좌이체</option>
-            <option>카드</option>
-        </select>
-    `
-}
-
-/* 카드 선택시 할부 UI */
-function cardUI(sel){
-    if(sel.value == "카드"){
-        sel.parentNode.innerHTML += `
-            <select>
-                <option>일시불</option>
-                <option>할부</option>
-            </select>
-        `
-    }
-}
-
-/* =========================
-   인건비 추가
-   ========================= */
-function addLabor(){
-    let div = document.createElement("div")
-    div.innerHTML = `
-        인원 <input type="number">
-        금액 <input type="number">
-    `
-    document.getElementById("labor").appendChild(div)
-}
-
-/* =========================
-   저장
-   ========================= */
 function saveWork(){
 
     let data = {
         작업내용: document.getElementById("task").value,
         날씨: getChecked("weather"),
         작물: getChecked("crop"),
-        병충해: getChecked("pest"),
-        사용자재: [],
-        사용기계: [],
-        인건비상세: []
+        사용자재:[]
+    }
+
+    if(editMode && selected){
+        fetch("/api/works",{
+            method:"DELETE",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+                날짜:selected.날짜,
+                작업내용:selected.작업내용
+            })
+        })
     }
 
     fetch("/api/works",{
@@ -265,41 +127,48 @@ function saveWork(){
     }).then(()=>{
         alert("저장완료")
         loadList()
+        document.getElementById("editor").style.display="none"
     })
 }
 
-/* =========================
-   목록 불러오기
-   ========================= */
+function deleteWork(){
+    if(!selected){ alert("선택 먼저"); return }
+
+    fetch("/api/works",{
+        method:"DELETE",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            날짜:selected.날짜,
+            작업내용:selected.작업내용
+        })
+    }).then(loadList)
+}
+
 function loadList(){
     fetch("/api/works_light")
     .then(r=>r.json())
     .then(data=>{
-        let html = ""
+        let html=""
         data.forEach(d=>{
-            html += `
-            <div class="card">
-                <b>${d.작업내용}</b> (${d.날짜})
-                <button onclick="del('${d.날짜}','${d.작업내용}')">삭제</button>
-            </div>
-            `
+            html+=`
+            <div class="card" onclick="select(this, '${d.날짜}', '${d.작업내용}')">
+                ${d.작업내용} (${d.날짜})
+            </div>`
         })
-        document.getElementById("list").innerHTML = html
+        document.getElementById("list").innerHTML=html
     })
 }
 
-/* =========================
-   삭제
-   ========================= */
-function del(date, task){
-    fetch("/api/works",{
-        method:"DELETE",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({날짜:date, 작업내용:task})
-    }).then(()=>loadList())
+function select(el, date, task){
+    document.querySelectorAll(".card").forEach(c=>c.classList.remove("selected"))
+    el.classList.add("selected")
+
+    selected = {
+        날짜:date,
+        작업내용:task
+    }
 }
 
-/* 초기 로딩 */
 loadList()
 
 </script>

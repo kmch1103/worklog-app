@@ -1,370 +1,197 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>작업일지 수정본</title>
-<style>
-  :root{--bg:#f5f6f8;--panel:#fff;--line:#e2e5ea;--text:#222;--muted:#6b7280;--primary:#2563eb;--danger:#dc2626;--chip:#eef2ff;--chip-on:#dbeafe;}
-  *{box-sizing:border-box} body{margin:0;font-family:"Malgun Gothic",sans-serif;background:var(--bg);color:var(--text)}
-  .app{display:flex;min-height:100vh}.side{width:220px;background:#1f2937;color:#fff;padding:18px}.side h1{font-size:20px;margin:0 0 16px}.side button{display:block;width:100%;margin:8px 0;padding:12px;border:0;border-radius:10px;background:#374151;color:#fff;cursor:pointer;text-align:left}
-  .main{flex:1;padding:18px}.panel,.card,.opt-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}.topbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.topbar input{padding:10px;border:1px solid var(--line);border-radius:10px;min-width:240px}.btn{padding:10px 14px;border:0;border-radius:10px;background:var(--primary);color:#fff;cursor:pointer}.btn.sub{background:#4b5563}.btn.red{background:var(--danger)}
-  .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.stack{display:grid;gap:10px}.label{font-size:12px;color:var(--muted);margin-bottom:4px}.field input,.field select,.field textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px}.field textarea{min-height:80px}
-  .chips{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:8px 12px;border-radius:999px;background:var(--chip);border:1px solid #c7d2fe;cursor:pointer}.chip.on{background:var(--chip-on);font-weight:700}
-  .cards-wrap{display:grid;gap:14px}.day-group h3{margin:0 0 8px}.day-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}.card .meta{color:var(--muted);font-size:13px;line-height:1.5}.card .title{font-size:17px;font-weight:700;margin-bottom:6px}.hidden{display:none}.sec-title{font-weight:700;margin:8px 0}.list{display:grid;gap:8px}.mini{padding:8px;border:1px solid var(--line);border-radius:10px;background:#fafafa}.opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.small{font-size:12px;color:var(--muted)}
-  @media (max-width:860px){.app{display:block}.side{width:auto}.row,.row3{grid-template-columns:1fr}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>작업일지 v2 기본구조</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<div class="app">
-  <aside class="side">
-    <h1>작업일지</h1>
-    <button onclick="showPage('works')">작업일지</button>
-    <button onclick="openEntry()">새 작업 입력</button>
-    <button onclick="showPage('options')">옵션관리</button>
-  </aside>
-  <main class="main">
-    <section id="page-works">
-      <div class="topbar">
-        <input id="searchQ" placeholder="날짜, 작물, 작업내용, 자재, 병충해 검색">
-        <button class="btn sub" onclick="loadWorks()">검색</button>
-        <button class="btn" onclick="openEntry()">입력 열기</button>
-      </div>
-      <div id="entryPanel" class="panel hidden stack">
-        <div class="row">
-          <div class="field"><div class="label">날씨</div><select id="weatherSel"></select></div>
-          <div class="field"><div class="label">시작일</div><input type="date" id="taskDate"></div>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>작업일지 v2</h1>
+      <button class="menu-btn active" data-page="works">작업일지</button>
+      <button class="menu-btn" data-page="materials">자재관리</button>
+      <button class="menu-btn" data-page="options">옵션관리</button>
+    </aside>
+
+    <main class="content">
+      <section id="page-works" class="page active">
+        <div class="page-header">
+          <h2>작업일지</h2>
+          <button id="btn-new-work" class="btn primary">새 작업 입력</button>
         </div>
-        <div class="row">
-          <div class="field"><div class="label">연속 일수</div><input type="number" id="dayCount" value="1" min="1" oninput="calcEndDate()"></div>
-          <div class="field"><div class="label">종료일</div><input type="date" id="taskEndDate" readonly></div>
-        </div>
-        <div>
-          <div class="sec-title">작물 다중선택</div>
-          <div id="cropChips" class="chips"></div>
-        </div>
-        <div class="row3">
-          <div class="field"><div class="label">작업내용</div><select id="taskKind"></select></div>
-          <div class="field"><div class="label">사용기계</div><select id="machineSel"></select></div>
-          <div class="field"><div class="label">작업시간(숫자)</div><input id="workHours" placeholder="예: 3"></div>
-        </div>
-        <div class="row">
-          <div class="field"><div class="label">시작시간</div><input type="time" id="startTime"></div>
-          <div class="field"><div class="label">종료시간</div><input type="time" id="endTime"></div>
-        </div>
-        <div>
-          <div class="sec-title">사용자재 다중선택</div>
-          <div class="row3">
-            <div class="field"><select id="matSelect"></select></div>
-            <div class="field"><input id="matQty" type="number" step="0.1" value="1" placeholder="수량"></div>
-            <div class="field"><input id="matUnitView" readonly placeholder="단위"></div>
+
+        <div id="work-form-wrap" class="panel hidden">
+          <h3 id="work-form-title">작업 입력</h3>
+
+          <div class="grid two">
+            <label class="field">
+              <span>시작일</span>
+              <input type="date" id="start_date">
+            </label>
+            <label class="field">
+              <span>종료일</span>
+              <input type="date" id="end_date">
+            </label>
           </div>
-          <div style="margin-top:8px"><button class="btn sub" type="button" onclick="addSelectedMaterial()">자재 추가</button></div>
-          <div id="selectedMaterials" class="list" style="margin-top:8px"></div>
-        </div>
-        <div>
-          <div class="sec-title">병충해 다중선택</div>
-          <div id="pestChips" class="chips"></div>
-        </div>
-        <div>
-          <div class="sec-title">인력 선택</div>
-          <div id="workersBox" class="list"></div>
-          <div style="margin-top:8px"><button class="btn sub" type="button" onclick="addWorkerRow()">인력 추가</button></div>
-        </div>
-        <div class="field"><div class="label">비고</div><textarea id="noteText"></textarea></div>
-        <div class="topbar">
-          <button class="btn" onclick="saveWork()">저장</button>
-          <button class="btn sub" onclick="closeEntry()">닫기</button>
-          <span id="editBadge" class="small"></span>
-        </div>
-      </div>
-      <div id="worksList" class="cards-wrap"></div>
-    </section>
 
-    <section id="page-options" class="hidden stack">
-      <div class="opt-grid">
-        <div class="opt-box"><div class="sec-title">작물</div><div class="row"><input id="optCrop"><button class="btn" onclick="saveOption('옵션_작물','optCrop')">추가</button></div><div id="cropOptList" class="list"></div></div>
-        <div class="opt-box"><div class="sec-title">작업내용</div><div class="row"><input id="optTask"><button class="btn" onclick="saveOption('옵션_작업내용','optTask')">추가</button></div><div id="taskOptList" class="list"></div></div>
-        <div class="opt-box"><div class="sec-title">날씨</div><div class="row"><input id="optWeather"><button class="btn" onclick="saveOption('옵션_날씨','optWeather')">추가</button></div><div id="weatherOptList" class="list"></div></div>
-        <div class="opt-box"><div class="sec-title">사용기계</div><div class="row"><input id="optMachine"><button class="btn" onclick="saveOption('옵션_기계','optMachine')">추가</button></div><div id="machineOptList" class="list"></div></div>
-      </div>
-      <div class="opt-grid">
-        <div class="opt-box">
-          <div class="sec-title">자재관리</div>
-          <div class="row3">
-            <input id="matName" placeholder="자재명">
-            <input id="matUnit" placeholder="단위">
-            <input id="matPrice" type="number" placeholder="가격">
+          <div class="grid two">
+            <label class="field">
+              <span>날씨</span>
+              <select id="weather"></select>
+            </label>
+            <label class="field">
+              <span>작업내용</span>
+              <select id="task_name"></select>
+            </label>
           </div>
-          <div class="row" style="margin-top:8px">
-            <input id="matStock" type="number" step="0.1" placeholder="재고">
-            <button class="btn" onclick="saveMaterial()">자재 저장</button>
+
+          <div class="field">
+            <span>작물</span>
+            <div id="crops-box" class="checks"></div>
           </div>
-          <div id="materialsList" class="list" style="margin-top:10px"></div>
-        </div>
-        <div class="opt-box">
-          <div class="sec-title">병충해관리</div>
-          <div class="stack">
-            <input id="pestName" placeholder="이름">
-            <input id="pestDrug" placeholder="권장약제">
-            <textarea id="pestSymptom" placeholder="증상"></textarea>
-            <button class="btn" onclick="savePest()">병충해 저장</button>
+
+          <div class="field">
+            <span>병충해</span>
+            <div id="pests-box" class="checks"></div>
           </div>
-          <div id="pestsList" class="list" style="margin-top:10px"></div>
+
+          <div class="field">
+            <span>사용자재</span>
+            <div id="materials-box" class="checks"></div>
+          </div>
+
+          <div class="field">
+            <span>사용기계</span>
+            <div id="machines-box" class="checks"></div>
+          </div>
+
+          <div class="grid two">
+            <label class="field">
+              <span>인건비</span>
+              <input type="number" id="labor_cost" min="0" step="1000" value="0">
+            </label>
+            <label class="field">
+              <span>작업시간</span>
+              <input type="number" id="work_hours" min="0" step="0.5" value="0">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>비고</span>
+            <textarea id="memo" rows="4"></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button id="btn-save-work" class="btn primary">저장</button>
+            <button id="btn-cancel-work" class="btn">취소</button>
+          </div>
         </div>
-      </div>
-    </section>
-  </main>
-</div>
-<script>
-let OPTS = {};
-let selectedMaterials = [];
-let editRowId = null;
-const qs = s => document.querySelector(s);
-const qsa = s => [...document.querySelectorAll(s)];
 
-function showPage(name){
-  qs('#page-works').classList.toggle('hidden', name !== 'works');
-  qs('#page-options').classList.toggle('hidden', name !== 'options');
-}
+        <div id="works-list" class="cards"></div>
+      </section>
 
-function toggleChip(el){ el.classList.toggle('on'); }
-function chipValues(boxId){ return qsa('#'+boxId+' .chip.on').map(el => el.dataset.value); }
-function renderChipBox(boxId, arr, key=null){
-  qs('#'+boxId).innerHTML = (arr||[]).map(v => {
-    const val = key ? v[key] : v;
-    return `<div class="chip" data-value="${val}" onclick="toggleChip(this)">${val}</div>`;
-  }).join('');
-}
+      <section id="page-materials" class="page">
+        <div class="page-header">
+          <h2>자재관리</h2>
+        </div>
 
-function calcEndDate(){
-  const d = qs('#taskDate').value;
-  const n = Number(qs('#dayCount').value || 1);
-  if(!d) return;
-  const x = new Date(d);
-  x.setDate(x.getDate() + Math.max(n,1) - 1);
-  qs('#taskEndDate').value = x.toISOString().slice(0,10);
-}
+        <div class="panel">
+          <div class="grid four">
+            <label class="field">
+              <span>자재명</span>
+              <input type="text" id="material_name">
+            </label>
+            <label class="field">
+              <span>단위</span>
+              <input type="text" id="material_unit" placeholder="개, 병, 통">
+            </label>
+            <label class="field">
+              <span>재고수량</span>
+              <input type="number" id="material_stock" min="0" step="1" value="0">
+            </label>
+            <label class="field">
+              <span>단가</span>
+              <input type="number" id="material_price" min="0" step="100" value="0">
+            </label>
+          </div>
+          <label class="field">
+            <span>메모</span>
+            <input type="text" id="material_memo">
+          </label>
+          <div class="form-actions">
+            <button id="btn-save-material" class="btn primary">자재 저장</button>
+          </div>
+        </div>
 
-function updateMatUnit(){
-  const name = qs('#matSelect').value;
-  const found = (OPTS['자재'] || []).find(x => x['자재명'] === name);
-  qs('#matUnitView').value = found ? (found['단위'] || '') : '';
-}
+        <div id="materials-list" class="table-wrap"></div>
+      </section>
 
-function renderSelectedMaterials(){
-  qs('#selectedMaterials').innerHTML = selectedMaterials.length ? selectedMaterials.map((m, i) =>
-    `<div class="mini">${m.name} / ${m.qty} ${m.unit} <button class="btn red" style="padding:4px 8px;margin-left:8px" onclick="removeMaterial(${i})">삭제</button></div>`
-  ).join('') : '<div class="small">선택된 자재 없음</div>';
-}
-function addSelectedMaterial(){
-  const name = qs('#matSelect').value;
-  const qty = Number(qs('#matQty').value || 0);
-  const unit = qs('#matUnitView').value;
-  if(!name || qty <= 0) return alert('자재와 수량을 확인하세요.');
-  selectedMaterials.push({name, qty, unit});
-  renderSelectedMaterials();
-}
-function removeMaterial(i){ selectedMaterials.splice(i,1); renderSelectedMaterials(); }
+      <section id="page-options" class="page">
+        <div class="page-header">
+          <h2>옵션관리</h2>
+        </div>
 
-function addWorkerRow(data={group:'남자',count:1,pay:0,remark:''}){
-  const div = document.createElement('div');
-  div.className='mini worker-row';
-  div.innerHTML = `<div class="row3">
-    <select class="wg"><option ${data.group==='남자'?'selected':''}>남자</option><option ${data.group==='여자'?'selected':''}>여자</option><option ${data.group==='기타'?'selected':''}>기타</option></select>
-    <input class="wc" type="number" value="${data.count||1}" placeholder="인원수">
-    <input class="wp" type="number" value="${data.pay||0}" placeholder="단가">
+        <div class="options-grid">
+          <div class="panel">
+            <h3>날씨</h3>
+            <div class="inline-form">
+              <input type="text" id="new-weather" placeholder="새 날씨">
+              <button class="btn primary" onclick="saveOption('weather', 'new-weather')">추가</button>
+            </div>
+            <div id="options-weather" class="option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>작물</h3>
+            <div class="inline-form">
+              <input type="text" id="new-crops" placeholder="새 작물">
+              <button class="btn primary" onclick="saveOption('crops', 'new-crops')">추가</button>
+            </div>
+            <div id="options-crops" class="option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>작업내용</h3>
+            <div class="inline-form">
+              <input type="text" id="new-tasks" placeholder="새 작업내용">
+              <button class="btn primary" onclick="saveOption('tasks', 'new-tasks')">추가</button>
+            </div>
+            <div id="options-tasks" class="option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>병충해</h3>
+            <div class="inline-form">
+              <input type="text" id="new-pests" placeholder="새 병충해">
+              <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
+            </div>
+            <div id="options-pests" class="option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>사용자재</h3>
+            <div class="inline-form">
+              <input type="text" id="new-materials" placeholder="새 사용자재 옵션">
+              <button class="btn primary" onclick="saveOption('materials', 'new-materials')">추가</button>
+            </div>
+            <div id="options-materials" class="option-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>사용기계</h3>
+            <div class="inline-form">
+              <input type="text" id="new-machines" placeholder="새 사용기계">
+              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
+            </div>
+            <div id="options-machines" class="option-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
-  <div class="row" style="margin-top:8px">
-    <input class="wr" value="${data.remark||''}" placeholder="비고">
-    <button class="btn red" type="button" onclick="this.closest('.worker-row').remove()">삭제</button>
-  </div>`;
-  qs('#workersBox').appendChild(div);
-}
-function collectWorkers(){
-  return qsa('.worker-row').map(row => {
-    const g = row.querySelector('.wg').value;
-    const c = row.querySelector('.wc').value || 0;
-    const p = row.querySelector('.wp').value || 0;
-    const r = row.querySelector('.wr').value || '';
-    return Number(c) > 0 ? `${g}|${c}|${p}|${r}` : '';
-  }).filter(Boolean).join(';');
-}
 
-function resetEntry(){
-  editRowId = null;
-  qs('#editBadge').textContent = '';
-  qs('#taskDate').value = new Date().toISOString().slice(0,10);
-  qs('#dayCount').value = 1;
-  calcEndDate();
-  qs('#startTime').value = '';
-  qs('#endTime').value = '';
-  qs('#workHours').value = '';
-  qs('#noteText').value = '';
-  qsa('#cropChips .chip, #pestChips .chip').forEach(c => c.classList.remove('on'));
-  selectedMaterials = [];
-  renderSelectedMaterials();
-  qs('#workersBox').innerHTML = '';
-  addWorkerRow();
-}
-
-function openEntry(){ showPage('works'); qs('#entryPanel').classList.remove('hidden'); if(!editRowId) resetEntry(); }
-function closeEntry(){ qs('#entryPanel').classList.add('hidden'); }
-
-function makeTaskItem(){
-  const start = qs('#taskDate').value;
-  const end = qs('#taskEndDate').value || start;
-  return {
-    날짜: start,
-    종료날짜: end,
-    작물: chipValues('cropChips').join(','),
-    작업내용: qs('#taskKind').value,
-    시작시간: qs('#startTime').value,
-    종료시간: qs('#endTime').value,
-    작업시간: qs('#workHours').value,
-    사용기계: qs('#machineSel').value,
-    사용자재: selectedMaterials.map(m => `${m.name}|${m.qty}|${m.unit}`).join(';'),
-    병충해: chipValues('pestChips').join(','),
-    인력내역: collectWorkers(),
-    비고: qs('#noteText').value
-  };
-}
-
-async function saveWork(){
-  const payload = { 날씨: qs('#weatherSel').value, task_items: [makeTaskItem()] };
-  const url = editRowId ? `/api/works/${editRowId}` : '/api/works';
-  const method = editRowId ? 'PUT' : 'POST';
-  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-  const data = await res.json();
-  if(!res.ok || !data.ok) return alert(data.error || '저장 실패');
-  closeEntry();
-  resetEntry();
-  await loadOptions();
-  await loadWorks();
-}
-
-function workCardHtml(w, t){
-  const mats = (t['사용자재'] || '').split(';').filter(Boolean).map(x => x.split('|')[0]).join(', ');
-  return `<div class="card">
-    <div class="title">${t['작업내용'] || ''}</div>
-    <div class="meta">작물: ${t['작물'] || '-'}<br>날짜: ${t['날짜'] || ''}${t['종료날짜'] && t['종료날짜'] !== t['날짜'] ? ' ~ ' + t['종료날짜'] : ''}<br>기계: ${t['사용기계'] || '-'}<br>자재: ${mats || '-'}<br>병충해: ${t['병충해'] || '-'}<br>인건비: ${w['인건비_표시'] || '0원'}</div>
-    <div class="topbar" style="margin-top:10px">
-      <button class="btn sub" onclick="editWork(${w.row_id})">수정</button>
-      <button class="btn red" onclick="deleteWork(${w.row_id})">삭제</button>
-    </div>
-  </div>`;
-}
-
-async function loadWorks(){
-  const q = qs('#searchQ').value.trim();
-  const res = await fetch('/api/works_light?q=' + encodeURIComponent(q));
-  const rows = await res.json();
-  const map = {};
-  rows.forEach(w => {
-    const d = w['날짜'] || '-';
-    if(!map[d]) map[d] = [];
-    (w.task_items || []).forEach(t => map[d].push(workCardHtml(w, t)));
-  });
-  const dates = Object.keys(map).sort().reverse();
-  qs('#worksList').innerHTML = dates.length ? dates.map(d =>
-    `<div class="day-group"><h3>${d}</h3><div class="day-cards">${map[d].join('')}</div></div>`
-  ).join('') : '<div class="panel">작업 내역이 없습니다.</div>';
-}
-
-async function editWork(rowId){
-  const res = await fetch(`/api/works/${rowId}`);
-  const w = await res.json();
-  if(!res.ok) return alert(w.error || '불러오기 실패');
-  editRowId = rowId;
-  qs('#editBadge').textContent = `수정 중: row_id ${rowId}`;
-  qs('#weatherSel').value = w['날씨'] || '';
-  const t = (w.task_items || [])[0] || {};
-  qs('#taskDate').value = t['날짜'] || '';
-  qs('#taskEndDate').value = t['종료날짜'] || t['날짜'] || '';
-  if(t['날짜'] && t['종료날짜']){
-    const a = new Date(t['날짜']);
-    const b = new Date(t['종료날짜']);
-    qs('#dayCount').value = Math.max(1, Math.round((b-a)/(1000*60*60*24))+1);
-  }
-  qs('#taskKind').value = t['작업내용'] || '';
-  qs('#machineSel').value = t['사용기계'] || '';
-  qs('#startTime').value = t['시작시간'] || '';
-  qs('#endTime').value = t['종료시간'] || '';
-  qs('#workHours').value = t['작업시간'] || '';
-  qs('#noteText').value = t['비고'] || '';
-  qsa('#cropChips .chip').forEach(c => c.classList.toggle('on', (t['작물']||'').split(',').map(x=>x.trim()).includes(c.dataset.value)));
-  qsa('#pestChips .chip').forEach(c => c.classList.toggle('on', (t['병충해']||'').split(',').map(x=>x.trim()).includes(c.dataset.value)));
-  selectedMaterials = (t['사용자재'] || '').split(';').filter(Boolean).map(x => {
-    const p = x.split('|'); return {name:p[0]||'', qty:Number(p[1]||0), unit:p[2]||''};
-  });
-  renderSelectedMaterials();
-  qs('#workersBox').innerHTML = '';
-  (t['인력내역'] || '').split(';').filter(Boolean).forEach(x => {
-    const p = x.split('|'); addWorkerRow({group:p[0]||'남자', count:p[1]||1, pay:p[2]||0, remark:p[3]||''});
-  });
-  if(!qsa('.worker-row').length) addWorkerRow();
-  openEntry();
-}
-
-async function deleteWork(rowId){
-  if(!confirm('삭제할까요?')) return;
-  const res = await fetch(`/api/works/${rowId}`, {method:'DELETE'});
-  const data = await res.json();
-  if(!res.ok || !data.ok) return alert(data.error || '삭제 실패');
-  await loadOptions();
-  await loadWorks();
-}
-
-async function saveOption(tbl, inputId){
-  const el = qs('#' + inputId);
-  const value = el.value.trim();
-  if(!value) return;
-  await fetch(`/api/options/${tbl}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({항목:value})});
-  el.value = '';
-  await loadOptions();
-}
-async function deleteOption(tbl, value){
-  await fetch(`/api/options/${tbl}/${encodeURIComponent(value)}`, {method:'DELETE'});
-  await loadOptions();
-}
-async function saveMaterial(){
-  const payload = {자재명:qs('#matName').value.trim(), 단위:qs('#matUnit').value.trim(), 가격:qs('#matPrice').value||0, 재고:qs('#matStock').value||0};
-  if(!payload.자재명) return alert('자재명을 입력하세요.');
-  await fetch('/api/materials', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-  qs('#matName').value=''; qs('#matUnit').value=''; qs('#matPrice').value=''; qs('#matStock').value='';
-  await loadOptions();
-}
-async function savePest(){
-  const payload = {이름:qs('#pestName').value.trim(), 권장약제:qs('#pestDrug').value.trim(), 증상:qs('#pestSymptom').value.trim()};
-  if(!payload.이름) return alert('병충해 이름을 입력하세요.');
-  await fetch('/api/pests', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-  qs('#pestName').value=''; qs('#pestDrug').value=''; qs('#pestSymptom').value='';
-  await loadOptions();
-}
-
-function renderOptionList(boxId, tbl, arr){
-  qs('#'+boxId).innerHTML = (arr||[]).map(v => `<div class="mini">${v} <button class="btn red" style="padding:4px 8px;margin-left:8px" onclick="deleteOption('${tbl}','${String(v).replaceAll("'","\\'")}')">삭제</button></div>`).join('') || '<div class="small">없음</div>';
-}
-
-async function loadOptions(){
-  const res = await fetch('/api/options');
-  OPTS = await res.json();
-  qs('#weatherSel').innerHTML = (OPTS['옵션_날씨']||[]).map(v => `<option>${v}</option>`).join('');
-  qs('#taskKind').innerHTML = (OPTS['옵션_작업내용']||[]).map(v => `<option>${v}</option>`).join('');
-  qs('#machineSel').innerHTML = (OPTS['옵션_기계']||[]).map(v => `<option>${v}</option>`).join('');
-  qs('#matSelect').innerHTML = (OPTS['자재']||[]).map(m => `<option value="${m['자재명']}">${m['자재명']}</option>`).join('');
-  renderChipBox('cropChips', OPTS['옵션_작물'] || []);
-  renderChipBox('pestChips', OPTS['병충해'] || [], '이름');
-  renderOptionList('cropOptList','옵션_작물', OPTS['옵션_작물'] || []);
-  renderOptionList('taskOptList','옵션_작업내용', OPTS['옵션_작업내용'] || []);
-  renderOptionList('weatherOptList','옵션_날씨', OPTS['옵션_날씨'] || []);
-  renderOptionList('machineOptList','옵션_기계', OPTS['옵션_기계'] || []);
-  qs('#materialsList').innerHTML = (OPTS['자재']||[]).map(m => `<div class="mini">${m['자재명']} / ${m['재고']} ${m['단위']||''}</div>`).join('') || '<div class="small">자재 없음</div>';
-  qs('#pestsList').innerHTML = (OPTS['병충해']||[]).map(p => `<div class="mini">${p['이름']} ${p['권장약제'] ? '/ ' + p['권장약제'] : ''}</div>`).join('') || '<div class="small">병충해 없음</div>';
-  updateMatUnit();
-}
-qs('#matSelect').addEventListener('change', updateMatUnit);
-window.addEventListener('load', async () => { await loadOptions(); resetEntry(); await loadWorks(); });
-</script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -531,140 +531,8 @@
           </div>
         </div>
 
-        <div class="panel">
-          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-            <div>
-              <strong>작업일지 입력 / 수정</strong>
-              <div class="page-desc" style="margin-top:6px;">요청하신 기본 구조는 유지하고, 작업일지 화면 안에서만 입력·수정·삭제가 되도록 바꾼 버전입니다.</div>
-            </div>
-            <div class="inline">
-              <span class="edit-badge" id="editModeBadge" style="display:none;">수정 모드</span>
-              <button type="button" class="btn" onclick="toggleEntryPanel()">입력창 열기 / 닫기</button>
-            </div>
-          </div>
 
-          <div id="journalEntryPanel">
-            <form id="workForm">
-              <input type="hidden" id="f_row_id" />
 
-              <div class="grid grid-3">
-                <div class="field">
-                  <label>시작날짜</label>
-                  <input class="input" type="date" id="f_start_date" required />
-                </div>
-                <div class="field">
-                  <label>종료날짜</label>
-                  <input class="input" type="date" id="f_end_date" required />
-                </div>
-                <div class="field">
-                  <label>연속일수</label>
-                  <input class="input" type="number" id="f_days" min="1" readonly />
-                </div>
-              </div>
-
-              <div class="grid grid-2">
-                <div class="field">
-                  <label>시작시간</label>
-                  <input class="input" type="time" id="f_start_time" />
-                </div>
-                <div class="field">
-                  <label>종료시간</label>
-                  <input class="input" type="time" id="f_end_time" />
-                </div>
-              </div>
-
-              <div class="grid grid-1">
-                <div class="sub-panel">
-                  <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                    <strong>날씨 (다중입력)</strong>
-                    <button type="button" class="btn" onclick="addSimpleRow('weatherRows', '날씨', 'weather-options')">+ 추가</button>
-                  </div>
-                  <div id="weatherRows"></div>
-                </div>
-              </div>
-
-              <div class="grid grid-1">
-                <div class="sub-panel">
-                  <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                    <strong>작물 (다중입력)</strong>
-                    <button type="button" class="btn" onclick="addSimpleRow('cropRows', '작물', 'crop-options')">+ 추가</button>
-                  </div>
-                  <div id="cropRows"></div>
-                </div>
-              </div>
-
-              <div class="grid grid-1">
-                <div class="sub-panel">
-                  <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                    <strong>병충해 (다중입력)</strong>
-                    <button type="button" class="btn" onclick="addSimpleRow('pestRows', '병충해', 'pest-options')">+ 추가</button>
-                  </div>
-                  <div id="pestRows"></div>
-                </div>
-              </div>
-
-              <div class="grid grid-1">
-                <div class="field">
-                  <label>작업내용</label>
-                  <input class="input" list="work-options" id="f_work" placeholder="선택 또는 입력" required />
-                  <datalist id="work-options"></datalist>
-                </div>
-              </div>
-
-              <div class="sub-panel">
-                <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                  <strong>사용기계 / 기계 구매·대여 내역</strong>
-                  <button type="button" class="btn" onclick="addMachineRow()">+ 기계 추가</button>
-                </div>
-                <div id="machineRows"></div>
-                <div class="summary-box">대표사용자재 대신 사용기계를 입력하도록 변경했습니다. 구매/대여, 결제방식, 카드 일시불·할부 선택 가능</div>
-              </div>
-
-              <div class="sub-panel">
-                <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                  <strong>사용자재 / 자재 구매·대여 내역</strong>
-                  <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
-                </div>
-                <div id="materialRows"></div>
-                <div class="summary-box">사용자재도 구매/대여, 현금구입, 외상, 계좌이체, 카드사용을 기록할 수 있습니다.</div>
-              </div>
-
-              <div class="sub-panel">
-                <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
-                  <strong>인건비 내역 (다중입력)</strong>
-                  <button type="button" class="btn" onclick="addLaborRow()">+ 인건비 추가</button>
-                </div>
-                <div id="laborRows"></div>
-              </div>
-
-              <div class="grid grid-3">
-                <div class="field">
-                  <label>자재비</label>
-                  <input class="input" type="number" id="f_material_cost" value="0" min="0" readonly />
-                </div>
-                <div class="field">
-                  <label>인건비</label>
-                  <input class="input" type="number" id="f_labor_cost" value="0" min="0" readonly />
-                </div>
-                <div class="field">
-                  <label>총금액</label>
-                  <input class="input" type="number" id="f_total_cost" value="0" min="0" readonly />
-                </div>
-              </div>
-
-              <div class="field">
-                <label>비고</label>
-                <textarea class="textarea" id="f_note" placeholder="메모를 입력하세요."></textarea>
-              </div>
-
-              <div class="inline sticky-actions" style="margin-top:16px;">
-                <button type="submit" class="btn primary" id="saveBtn">저장</button>
-                <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
-                <button type="button" class="btn danger" id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">수정취소</button>
-              </div>
-            </form>
-          </div>
-        </div>
 
         <div class="stats-grid" id="topStats"></div>
         <div id="journalListArea"></div>
@@ -1834,5 +1702,146 @@ function saveWork(){
 
   </div>
 </div>
+
+<div id="workModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999;">
+  <div style="background:#fff; width:95%; max-width:1100px; max-height:90vh; overflow-y:auto; margin:20px auto; padding:20px; border-radius:16px;">
+    
+    <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+      <div>
+        <strong>작업일지 입력 / 수정</strong>
+        <div class="page-desc" style="margin-top:6px;">새 작업 입력 또는 수정할 때만 열리는 팝업입니다.</div>
+      </div>
+      <div class="inline">
+        <span class="edit-badge" id="editModeBadge" style="display:none;">수정 모드</span>
+        <button type="button" class="btn" onclick="closeWorkModal()">닫기</button>
+      </div>
+    </div>
+
+    <div id="journalEntryPanel">
+      <form id="workForm">
+        <input type="hidden" id="f_row_id" />
+
+        <div class="grid grid-3">
+          <div class="field">
+            <label>시작날짜</label>
+            <input class="input" type="date" id="f_start_date" required />
+          </div>
+          <div class="field">
+            <label>종료날짜</label>
+            <input class="input" type="date" id="f_end_date" required />
+          </div>
+          <div class="field">
+            <label>연속일수</label>
+            <input class="input" type="number" id="f_days" min="1" readonly />
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="field">
+            <label>시작시간</label>
+            <input class="input" type="time" id="f_start_time" />
+          </div>
+          <div class="field">
+            <label>종료시간</label>
+            <input class="input" type="time" id="f_end_time" />
+          </div>
+        </div>
+
+        <div class="grid grid-1">
+          <div class="sub-panel">
+            <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+              <strong>날씨 (다중입력)</strong>
+              <button type="button" class="btn" onclick="addSimpleRow('weatherRows', '날씨', 'weather-options')">+ 추가</button>
+            </div>
+            <div id="weatherRows"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-1">
+          <div class="sub-panel">
+            <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+              <strong>작물 (다중입력)</strong>
+              <button type="button" class="btn" onclick="addSimpleRow('cropRows', '작물', 'crop-options')">+ 추가</button>
+            </div>
+            <div id="cropRows"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-1">
+          <div class="sub-panel">
+            <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+              <strong>병충해 (다중입력)</strong>
+              <button type="button" class="btn" onclick="addSimpleRow('pestRows', '병충해', 'pest-options')">+ 추가</button>
+            </div>
+            <div id="pestRows"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-1">
+          <div class="field">
+            <label>작업내용</label>
+            <input class="input" list="work-options" id="f_work" placeholder="선택 또는 입력" required />
+            <datalist id="work-options"></datalist>
+          </div>
+        </div>
+
+        <div class="sub-panel">
+          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+            <strong>사용기계 / 기계 구매·대여 내역</strong>
+            <button type="button" class="btn" onclick="addMachineRow()">+ 기계 추가</button>
+          </div>
+          <div id="machineRows"></div>
+          <div class="summary-box">대표사용자재 대신 사용기계를 입력하도록 변경했습니다. 구매/대여, 결제방식, 카드 일시불·할부 선택 가능</div>
+        </div>
+
+        <div class="sub-panel">
+          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+            <strong>사용자재 / 자재 구매·대여 내역</strong>
+            <button type="button" class="btn" onclick="addMaterialRow()">+ 자재 추가</button>
+          </div>
+          <div id="materialRows"></div>
+          <div class="summary-box">사용자재도 구매/대여, 현금구입, 외상, 계좌이체, 카드사용을 기록할 수 있습니다.</div>
+        </div>
+
+        <div class="sub-panel">
+          <div class="inline" style="justify-content:space-between; margin-bottom:10px;">
+            <strong>인건비 내역 (다중입력)</strong>
+            <button type="button" class="btn" onclick="addLaborRow()">+ 인건비 추가</button>
+          </div>
+          <div id="laborRows"></div>
+        </div>
+
+        <div class="grid grid-3">
+          <div class="field">
+            <label>자재비</label>
+            <input class="input" type="number" id="f_material_cost" value="0" min="0" readonly />
+          </div>
+          <div class="field">
+            <label>인건비</label>
+            <input class="input" type="number" id="f_labor_cost" value="0" min="0" readonly />
+          </div>
+          <div class="field">
+            <label>총금액</label>
+            <input class="input" type="number" id="f_total_cost" value="0" min="0" readonly />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>비고</label>
+          <textarea class="textarea" id="f_note" placeholder="메모를 입력하세요."></textarea>
+        </div>
+
+        <div class="inline sticky-actions" style="margin-top:16px;">
+          <button type="submit" class="btn primary" id="saveBtn">저장</button>
+          <button type="button" class="btn" onclick="resetWorkForm()">초기화</button>
+          <button type="button" class="btn danger" id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">수정취소</button>
+          <button type="button" class="btn" onclick="closeWorkModal()">닫기</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+
 </body>
 </html>

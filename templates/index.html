@@ -1596,12 +1596,40 @@
       const restored = restoreDraft();
       const lastPage = localStorage.getItem(PAGE_KEY) || 'journal';
       showPage('journal');
+    };
+      function fillOptionsToForm(){
+
+  // 작물
+  const crops = getOptions('crop');
+  document.getElementById("cropRows").innerHTML =
+    crops.map(v =>
+      `<label><input type="checkbox" value="${v}"> ${v}</label>`
+    ).join('');
+
+  // 병충해
+  const pests = getOptions('pest');
+  document.getElementById("pestRows").innerHTML =
+    pests.map(v =>
+      `<label><input type="checkbox" value="${v}"> ${v}</label>`
+    ).join('');
+
+  // 작업내용
+  const works = getOptions('work');
+  const workSelect = document.getElementById("f_work");
+  if(workSelect){
+    workSelect.setAttribute("list","work-options");
+  }
+}
+
+
+      
       if (!restored) resetWorkForm(true);
-      toggleEntryPanel(true);
+     
     };
     function openWorkModal(){
   document.getElementById("workModal").style.display = "block";
   renderMultiOptions();
+  fillOptionsToForm();      
 }
 
 function closeWorkModal(){

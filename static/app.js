@@ -1,10 +1,11 @@
 /* =========================================================
-   작업일지 v2 - app.js 전체 교체본
+   작업일지 v3 - app.js 전체 교체본
    목적:
-   1) 기존 뼈대는 유지
-   2) 작업달력에서 계획 추가 / 삭제 가능
-   3) 작업달력에서 날짜 선택 후 작업입력 가능
-   4) 기존 구조를 크게 뒤집지 않고 최소 추가 방식
+   1) 기존 뼈대 유지
+   2) 작업달력에서 계획 추가 / 수정 / 삭제
+   3) 작업달력에서 날짜 선택 후 작업입력
+   4) 계획 완료 체크
+   5) 계획 -> 작업 변환
    ---------------------------------------------------------
    주의:
    - 이 파일은 app.js 전체 교체본입니다.
@@ -33,7 +34,7 @@
   const state = {
     currentView: "calendar",
     currentYear: new Date().getFullYear(),
-    currentMonth: new Date().getMonth(), // 0~11
+    currentMonth: new Date().getMonth(),
     selectedDate: null,
     works: [],
     plans: [],
@@ -75,15 +76,6 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
-  }
-
-  function splitMultiValue(value) {
-    if (!value) return [];
-    if (Array.isArray(value)) return value.filter(Boolean);
-    return String(value)
-      .split(",")
-      .map(v => v.trim())
-      .filter(Boolean);
   }
 
   function joinMultiValue(arr) {
@@ -149,6 +141,14 @@
     return getPlansByDate(state.selectedDate);
   }
 
+  function normalizeOptionList(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map(v => {
+      if (typeof v === "string") return v;
+      return v?.name || v?.value || "";
+    }).filter(Boolean);
+  }
+
   /* =========================
      레이아웃 탐색
      ========================= */
@@ -198,6 +198,7 @@
      ========================= */
   function bindSidebarMenu() {
     const buttons = getSidebarButtons();
+
     buttons.forEach(btn => {
       btn.addEventListener("click", () => {
         const label = btn.textContent.trim();
@@ -242,7 +243,7 @@
   }
 
   /* =========================
-     초기 데이터 로드
+     데이터 로드
      ========================= */
   async function loadAllData() {
     const [works, plans, options, materialsMaster] = await Promise.all([
@@ -257,17 +258,22 @@
     state.materialsMaster = Array.isArray(materialsMaster) ? materialsMaster : [];
 
     state.options = {
-      weather: options.weather || options.options_weather || [],
-      crops: options.crops || options.options_crops || [],
-      tasks: options.tasks || options.options_tasks || [],
-      pests: options.pests || options.options_pests || [],
-      materials: options.materials || options.options_materials || [],
-      machines: options.machines || options.options_machines || []
+      weather: normalizeOptionList(options.weather || options.options_weather || []),
+      crops: normalizeOptionList(options.crops || options.options_crops || []),
+      tasks: normalizeOptionList(options.tasks || options.options_tasks || []),
+      pests: normalizeOptionList(options.pests || options.options_pests || []),
+      materials: normalizeOptionList(options.materials || options.options_materials || []),
+      machines: normalizeOptionList(options.machines || options.options_machines || [])
     };
   }
 
+  async function refreshDataAndRerender() {
+    await loadAllData();
+    render();
+  }
+
   /* =========================
-     렌더
+     렌더 분기
      ========================= */
   function render() {
     switch (state.currentView) {
@@ -336,14 +342,15 @@
         <style>
           .wl-wrap{padding:28px 20px 30px 20px;}
           .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-          .wl-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;}
+          .wl-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
           .wl-title{font-size:22px;font-weight:700;}
-          .wl-month-nav{display:flex;align-items:center;gap:14px;}
+          .wl-month-nav{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
           .wl-btn{
             border:none;border-radius:12px;padding:10px 14px;cursor:pointer;
             background:#e7ebf2;font-weight:600;
           }
           .wl-btn.primary{background:#3d6af2;color:#fff;}
+          .wl-btn.success{background:#2e8b57;color:#fff;}
           .wl-btn.danger{background:#d9534f;color:#fff;}
           .wl-btn.small{padding:6px 10px;font-size:13px;border-radius:10px;}
           .wl-calendar-grid{
@@ -364,13 +371,17 @@
           .wl-detail-title{font-size:18px;font-weight:700;margin-bottom:18px;}
           .wl-section{margin-bottom:22px;}
           .wl-section-head{
-            display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;
+            display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;
           }
           .wl-section-title{font-size:16px;font-weight:700;}
           .wl-empty-text{color:#666;padding:6px 0;}
           .wl-list{display:flex;flex-direction:column;gap:10px;}
           .wl-item{
             border:1px solid #d7dde6;border-radius:14px;padding:12px;background:#fafbfc;
+          }
+          .wl-item.done{
+            background:#f3f7f3;
+            border-color:#bcd7c4;
           }
           .wl-item-title{font-weight:700;margin-bottom:6px;}
           .wl-item-sub{color:#555;font-size:14px;white-space:pre-wrap;}
@@ -394,6 +405,18 @@
           .wl-form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
           .wl-help{font-size:13px;color:#666;margin-top:6px;}
           .wl-work-meta{font-size:13px;color:#555;margin-top:6px;line-height:1.5;}
+          .wl-status-badge{
+            display:inline-block;
+            margin-top:6px;
+            padding:4px 8px;
+            border-radius:999px;
+            font-size:12px;
+            font-weight:700;
+            background:#eef2f7;
+            color:#495057;
+          }
+          .wl-status-badge.done{background:#dff3e5;color:#1f6b3a;}
+          .wl-status-badge.cancelled{background:#f7e3e3;color:#8a2f2f;}
           @media (max-width: 900px){
             .wl-form-grid{grid-template-columns:1fr;}
           }
@@ -447,6 +470,7 @@
                   </select>
                 </div>
               </div>
+
               <div class="wl-form-grid single" style="margin-top:10px;">
                 <div>
                   <label>제목</label>
@@ -457,6 +481,7 @@
                   <textarea class="wl-textarea" id="planDetailsInput" placeholder="예: 천혜향 하우스 물관리 예정"></textarea>
                 </div>
               </div>
+
               <div class="wl-form-actions">
                 <button class="wl-btn primary" id="savePlanBtn">저장</button>
                 <button class="wl-btn" id="cancelPlanBtn">닫기</button>
@@ -467,11 +492,13 @@
               ${
                 selectedPlans.length
                   ? selectedPlans.map(plan => `
-                    <div class="wl-item">
+                    <div class="wl-item ${plan.status === "done" ? "done" : ""}">
                       <div class="wl-item-title">${escapeHtml(plan.title || "(제목 없음)")}</div>
                       <div class="wl-item-sub">${escapeHtml(plan.details || "")}</div>
-                      <div class="wl-work-meta">상태: ${escapeHtml(plan.status || "planned")}</div>
+                      <div class="wl-status-badge ${escapeHtml(plan.status || "planned")}">상태: ${escapeHtml(plan.status || "planned")}</div>
                       <div class="wl-item-actions">
+                        ${plan.status !== "done" ? `<button class="wl-btn success small" data-plan-done="${plan.id}">완료</button>` : ""}
+                        <button class="wl-btn small" data-plan-convert="${plan.id}">작업변환</button>
                         <button class="wl-btn small" data-plan-edit="${plan.id}">수정</button>
                         <button class="wl-btn danger small" data-plan-delete="${plan.id}">삭제</button>
                       </div>
@@ -588,7 +615,8 @@
         <button class="wl-btn primary" id="saveWorkBtn">저장</button>
         <button class="wl-btn" id="cancelWorkBtn">닫기</button>
       </div>
-      <div class="wl-help">작업달력에서도 날짜를 선택한 뒤 바로 작업입력이 가능하게 했습니다.</div>
+
+      <div class="wl-help">작업달력에서도 날짜를 선택한 뒤 바로 작업입력이 가능합니다.</div>
     `;
   }
 
@@ -597,7 +625,7 @@
       return `
         <select class="wl-select" id="${id}">
           <option value="">${placeholder}</option>
-          ${options.map(v => `<option value="${escapeHtml(v.name || v.value || v)}">${escapeHtml(v.name || v.value || v)}</option>`).join("")}
+          ${options.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
         </select>
       `;
     }
@@ -611,19 +639,19 @@
 
     return `
       <div class="wl-check-grid">
-        ${options.map(v => {
-          const value = escapeHtml(v.name || v.value || v);
-          return `
-            <label class="wl-check-item">
-              <input type="checkbox" name="${name}" value="${value}">
-              <span>${value}</span>
-            </label>
-          `;
-        }).join("")}
+        ${options.map(v => `
+          <label class="wl-check-item">
+            <input type="checkbox" name="${name}" value="${escapeHtml(v)}">
+            <span>${escapeHtml(v)}</span>
+          </label>
+        `).join("")}
       </div>
     `;
   }
 
+  /* =========================
+     이벤트 바인딩
+     ========================= */
   function bindCalendarEvents() {
     const prevBtn = $("#prevMonthBtn");
     const nextBtn = $("#nextMonthBtn");
@@ -662,7 +690,9 @@
     openPlanFormBtn?.addEventListener("click", () => {
       $("#planFormBox")?.classList.add("open");
       const dateInput = $("#planDateInput");
-      if (dateInput && state.selectedDate) dateInput.value = state.selectedDate;
+      if (dateInput && state.selectedDate) {
+        dateInput.value = state.selectedDate;
+      }
     });
 
     cancelPlanBtn?.addEventListener("click", () => {
@@ -689,6 +719,7 @@
       btn.addEventListener("click", async () => {
         const id = btn.dataset.planDelete;
         if (!confirm("이 계획을 삭제할까요?")) return;
+
         try {
           await api(`/api/plans/${id}`, { method: "DELETE" });
           await refreshDataAndRerender();
@@ -707,8 +738,10 @@
 
         const title = prompt("계획 제목", plan.title || "");
         if (title === null) return;
+
         const details = prompt("상세내용", plan.details || "");
         if (details === null) return;
+
         const status = prompt("상태(planned / done / cancelled)", plan.status || "planned");
         if (status === null) return;
 
@@ -730,10 +763,80 @@
       });
     });
 
+    $all("[data-plan-done]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.planDone;
+        const plan = state.plans.find(p => String(p.id) === String(id));
+        if (!plan) return;
+
+        try {
+          await api(`/api/plans/${id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              plan_date: plan.plan_date,
+              title: plan.title || "",
+              details: plan.details || "",
+              status: "done"
+            })
+          });
+          await refreshDataAndRerender();
+          infoMessage("계획 완료 처리됨");
+        } catch (err) {
+          showError(err);
+        }
+      });
+    });
+
+    $all("[data-plan-convert]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.planConvert;
+        const plan = state.plans.find(p => String(p.id) === String(id));
+        if (!plan) return;
+
+        if (!confirm("이 계획을 작업실적으로 변환할까요?")) return;
+
+        try {
+          await api("/api/works", {
+            method: "POST",
+            body: JSON.stringify({
+              start_date: plan.plan_date,
+              end_date: plan.plan_date,
+              weather: "",
+              crops: "",
+              task_name: plan.title || "",
+              pests: "",
+              materials: "",
+              machines: "",
+              labor_cost: 0,
+              work_hours: 0,
+              memo: plan.details || ""
+            })
+          });
+
+          await api(`/api/plans/${id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              plan_date: plan.plan_date,
+              title: plan.title || "",
+              details: plan.details || "",
+              status: "done"
+            })
+          });
+
+          state.selectedDate = plan.plan_date;
+          await refreshDataAndRerender();
+          infoMessage("계획이 작업실적으로 변환되었습니다.");
+        } catch (err) {
+          showError(err);
+        }
+      });
+    });
+
     $all("[data-work-delete]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.workDelete;
         if (!confirm("이 작업실적을 삭제할까요?")) return;
+
         try {
           await api(`/api/works/${id}`, { method: "DELETE" });
           await refreshDataAndRerender();
@@ -752,10 +855,13 @@
 
         const task_name = prompt("작업내용", work.task_name || "");
         if (task_name === null) return;
+
         const memo = prompt("비고", work.memo || "");
         if (memo === null) return;
+
         const labor_cost = prompt("인건비", work.labor_cost || "0");
         if (labor_cost === null) return;
+
         const work_hours = prompt("작업시간", work.work_hours || "0");
         if (work_hours === null) return;
 
@@ -785,6 +891,9 @@
     });
   }
 
+  /* =========================
+     폼 처리
+     ========================= */
   function clearPlanForm() {
     if ($("#planTitleInput")) $("#planTitleInput").value = "";
     if ($("#planDetailsInput")) $("#planDetailsInput").value = "";
@@ -800,6 +909,7 @@
     if ($("#workLaborCost")) $("#workLaborCost").value = "0";
     if ($("#workHours")) $("#workHours").value = "0";
     if ($("#workMemo")) $("#workMemo").value = "";
+
     $all('input[name="workCrops"]:checked').forEach(el => (el.checked = false));
     $all('input[name="workPests"]:checked').forEach(el => (el.checked = false));
     $all('input[name="workMaterials"]:checked').forEach(el => (el.checked = false));
@@ -816,6 +926,7 @@
       infoMessage("계획 날짜를 선택하세요.");
       return;
     }
+
     if (!title) {
       infoMessage("계획 제목을 입력하세요.");
       return;
@@ -835,6 +946,10 @@
     }
   }
 
+  function getCheckedValues(name) {
+    return $all(`input[name="${name}"]:checked`).map(el => el.value);
+  }
+
   async function handleCreateWorkFromCalendar() {
     const start_date = $("#workStartDate")?.value || "";
     const end_date = $("#workEndDate")?.value || start_date;
@@ -852,6 +967,7 @@
       infoMessage("시작일을 입력하세요.");
       return;
     }
+
     if (!task_name) {
       infoMessage("작업내용을 입력하세요.");
       return;
@@ -881,15 +997,6 @@
     } catch (err) {
       showError(err);
     }
-  }
-
-  function getCheckedValues(name) {
-    return $all(`input[name="${name}"]:checked`).map(el => el.value);
-  }
-
-  async function refreshDataAndRerender() {
-    await loadAllData();
-    render();
   }
 
   /* =========================
@@ -998,7 +1105,7 @@
     const box = (title, list) => `
       <div class="wl-simple-card" style="margin-bottom:12px;">
         <div style="font-weight:700;margin-bottom:10px;">${title}</div>
-        <div>${list && list.length ? list.map(v => `<span style="display:inline-block;padding:6px 10px;border:1px solid #d7dde6;border-radius:999px;margin:4px;background:#fafbfc;">${escapeHtml(v.name || v.value || v)}</span>`).join("") : "없음"}</div>
+        <div>${list && list.length ? list.map(v => `<span style="display:inline-block;padding:6px 10px;border:1px solid #d7dde6;border-radius:999px;margin:4px;background:#fafbfc;">${escapeHtml(v)}</span>`).join("") : "없음"}</div>
       </div>
     `;
 

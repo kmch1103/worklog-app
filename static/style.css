@@ -619,3 +619,173 @@ th, td{
     grid-template-columns: 1fr;
   }
 }
+/* ===== 작업계획 팝업 ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-overlay.hidden {
+  display: none !important;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 12px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-body {
+  padding: 18px 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 18px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ===== 달력 날짜칸 구분선 강화 ===== */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.calendar-day {
+  min-height: 110px;
+  border: 1px solid #d7dde8;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.calendar-day.empty {
+  background: #f8fafc;
+  border: 1px dashed #e1e7ef;
+  cursor: default;
+}
+
+.calendar-day:hover:not(.empty) {
+  border-color: #9fb4d9;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.calendar-day.selected {
+  background: #eef4ff;
+  border-color: #4a6fe3;
+}
+
+.calendar-day .day-num {
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.calendar-day .day-count {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #3559c7;
+}
+
+/* ===== 작업일지 체크항목 가로 배치 ===== */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ===== 작업일지 카드 1개/여러개 표시 ===== */
+.work-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.work-cards-row.single-card {
+  grid-template-columns: 1fr;
+}
+
+.work-card-large {
+  min-height: 220px;
+}
+
+.work-card-small {
+  min-height: 160px;
+}
+
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+#selected-materials-detailed .panel,
+#labor-rows-wrap .panel {
+  border: 1px solid #dde3ec;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+#works-search-wrap {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .calendar-day {
+    min-height: 90px;
+    padding: 8px;
+  }
+
+  .calendar-day .day-num {
+    font-size: 16px;
+  }
+
+  .work-cards-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-box {
+    max-width: 100%;
+  }
+}

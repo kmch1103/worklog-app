@@ -1035,3 +1035,121 @@ th, td{
   padding: 16px 18px;
   box-sizing: border-box;
 }
+
+
+/* ===== 자재관리 ===== */
+.page-header-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.modal-box-material{
+  width:100%;
+  max-width:760px;
+  background:#ffffff;
+  border-radius:18px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.18);
+  overflow:hidden;
+}
+
+.material-summary-panel{
+  margin-bottom:12px;
+}
+
+.materials-sections{
+  align-items:start;
+}
+
+.material-section-panel h3{
+  margin:0 0 12px;
+}
+
+.material-table-wrap{
+  overflow-x:auto;
+}
+
+.material-table{
+  width:100%;
+  min-width:680px;
+  border-collapse:collapse;
+  table-layout:fixed;
+}
+
+.material-table th,
+.material-table td{
+  vertical-align:middle;
+}
+
+.material-table .col-name{
+  width:auto;
+}
+
+.material-table .col-unit{
+  width:88px;
+}
+
+.material-table .col-stock{
+  width:96px;
+}
+
+.material-table .col-price{
+  width:130px;
+}
+
+.material-table .col-actions{
+  width:170px;
+}
+
+.material-name-cell{
+  width:auto;
+}
+
+.material-name-text{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  line-height:1.45;
+  word-break:keep-all;
+  overflow-wrap:anywhere;
+}
+
+.material-unit-cell,
+.material-stock-cell,
+.material-price-cell,
+.material-table th.col-unit,
+.material-table th.col-stock,
+.material-table th.col-price{
+  white-space:nowrap;
+}
+
+.numeric{
+  text-align:right;
+}
+
+.nowrap{
+  white-space:nowrap;
+}
+
+.material-actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+
+.empty-msg{
+  color:var(--muted);
+  padding:24px 10px;
+  text-align:center;
+}
+
+@media (max-width: 900px){
+  .modal-box-material{
+    max-width:100%;
+  }
+
+  .material-table{
+    min-width:620px;
+  }
+}

@@ -1,44 +1,91 @@
-@@ -10,7 +10,6 @@
+@@ -1,155 +1,260 @@
+<!doctype html>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>작업일지 v2</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
   <div class="app">
     <aside class="sidebar">
       <h1>작업일지 v2</h1>
-
       <button class="menu-btn active" data-page="calendar">작업달력</button>
       <button class="menu-btn" data-page="works">작업일지</button>
       <button class="menu-btn" data-page="materials">자재관리</button>
-@@ -21,7 +20,6 @@ <h1>작업일지 v2</h1>
+      <button class="menu-btn" data-page="money">금전관리</button>
+      <button class="menu-btn" data-page="options">옵션관리</button>
+      <button class="menu-btn" data-page="excel">엑셀다운</button>
+      <button class="menu-btn" data-page="backup">백업</button>
+      <div class="sidebar-title">작업일지 v2</div>
+
+      <nav class="sidebar-menu">
+        <button id="menuCalendar" class="menu-btn active" type="button">작업달력</button>
+        <button id="menuWorklog" class="menu-btn" type="button">작업일지</button>
+        <button id="menuMaterials" class="menu-btn" type="button">자재관리</button>
+        <button id="menuMoney" class="menu-btn" type="button">금전관리</button>
+        <button id="menuOptions" class="menu-btn" type="button">옵션관리</button>
+        <button id="menuExcel" class="menu-btn" type="button">엑셀다운</button>
+        <button id="menuBackup" class="menu-btn" type="button">백업</button>
+      </nav>
     </aside>
 
     <main class="content">
-      <!-- 작업달력 -->
       <section id="page-calendar" class="page active">
+      <!-- 작업달력 -->
+      <section id="pageCalendar" class="page-section">
         <div class="page-header">
           <h2>작업달력</h2>
-@@ -35,28 +33,57 @@ <h2>작업달력</h2>
+          <div class="calendar-toolbar">
+            <button id="btn-prev-month" class="btn">이전달</button>
+            <div id="calendar-title" class="calendar-title"></div>
+            <button id="btn-next-month" class="btn">다음달</button>
+          <h1 class="page-title">작업달력</h1>
+          <div class="page-header-actions">
+            <button id="calendarPrevBtn" type="button" class="soft-btn">이전달</button>
+            <div id="calendarMonthLabel" class="month-label"></div>
+            <button id="calendarNextBtn" type="button" class="soft-btn">다음달</button>
+          </div>
+        </div>
+
+        <div class="calendar-weekdays">
+          <div>일</div>
+          <div>월</div>
+          <div>화</div>
+          <div>수</div>
+          <div>목</div>
+          <div>금</div>
+          <div>토</div>
+        </div>
+
         <div class="calendar-layout">
           <div class="panel">
             <div class="calendar-week-header">
-              <div>일</div>
-              <div>월</div>
-              <div>화</div>
-              <div>수</div>
-              <div>목</div>
-              <div>금</div>
-              <div>토</div>
               <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
             </div>
             <div id="calendar-grid" class="calendar-grid"></div>
+          <div class="calendar-main-card">
+            <div id="calendarGrid" class="calendar-grid"></div>
           </div>
 
           <div class="panel">
             <div class="date-panel-header">
               <h3 id="selected-date-title">날짜를 선택하세요</h3>
-              <button id="btn-open-work-from-calendar" class="btn primary hidden">이 날짜로 작업입력</button>
               <div class="date-panel-actions">
                 <button id="btn-open-work-from-calendar" class="btn primary hidden">실적 입력</button>
                 <button id="btn-open-plan-form" class="btn hidden">작업계획 입력</button>
               </div>
             </div>
+          <div class="calendar-side-card">
+            <div id="calendarSidePanel"></div>
+          </div>
+        </div>
+      </section>
 
             <div id="plan-form-wrap" class="panel inner-panel hidden">
               <h4 id="plan-form-title">작업계획 입력</h4>
@@ -67,135 +114,116 @@
                 <button id="btn-cancel-plan" class="btn">취소</button>
               </div>
             </div>
+      <!-- 작업일지 -->
+      <section id="pageWorklog" class="page-section" style="display:none;">
+        <div class="page-header page-header-stack">
+          <div>
+            <h1 class="page-title">작업일지</h1>
+          </div>
+          <div class="worklog-topbar">
+            <input id="worklogSearchInput" type="text" class="text-input" placeholder="작업내용, 작물, 병충해, 자재, 비고 검색" />
+            <button id="worklogSearchBtn" type="button" class="soft-btn">검색</button>
+            <button id="worklogSearchResetBtn" type="button" class="soft-btn">초기화</button>
+            <button id="worklogAddBtn" type="button" class="primary-btn">작업입력</button>
+          </div>
+        </div>
 
             <div class="split-title">작업계획</div>
             <div id="selected-date-plan-list" class="calendar-day-list"></div>
+        <div id="worklogList" class="worklog-list"></div>
+      </section>
 
             <div class="split-title">작업실적</div>
             <div id="selected-date-list" class="calendar-day-list"></div>
+      <!-- 자재관리 -->
+      <section id="pageMaterials" class="page-section" style="display:none;">
+        <div class="page-header page-header-stack">
+          <div>
+            <h1 class="page-title">자재관리</h1>
           </div>
+          <div class="worklog-topbar">
+            <input id="materialPageSearchInput" type="text" class="text-input" placeholder="자재명 검색" />
+            <button id="materialPageSearchBtn" type="button" class="soft-btn">검색</button>
+            <button id="materialPageSearchResetBtn" type="button" class="soft-btn">초기화</button>
+            <button id="materialAddBtn" type="button" class="primary-btn">자재추가</button>
+          </div>
+        </div>
+
+        <div id="materialsSummary" class="summary-line"></div>
+
+        <div class="materials-sections">
+          <section class="materials-block">
+            <h2 class="section-title">재고 있음</h2>
+            <div id="materialsInStockWrap" class="materials-grid"></div>
+          </section>
+
+          <section class="materials-block">
+            <h2 class="section-title">재고 없음</h2>
+            <div id="materialsOutStockWrap" class="materials-grid"></div>
+          </section>
         </div>
       </section>
 
-      <!-- 작업일지 -->
       <section id="page-works" class="page">
+      <!-- 금전관리 -->
+      <section id="pageMoney" class="page-section" style="display:none;">
         <div class="page-header">
           <h2>작업일지</h2>
-@@ -65,65 +92,23 @@ <h2>작업일지</h2>
+          <button id="btn-new-work" class="btn primary">새 작업 입력</button>
+          <h1 class="page-title">금전관리</h1>
+        </div>
+        <div class="empty-page-card">금전관리 화면은 다음 단계에서 연결합니다.</div>
+      </section>
 
         <div id="work-form-wrap" class="panel hidden">
           <h3 id="work-form-title">작업 입력</h3>
-
           <div class="grid two">
-            <label class="field">
-              <span>시작일</span>
-              <input type="date" id="start_date">
-            </label>
-            <label class="field">
-              <span>종료일</span>
-              <input type="date" id="end_date">
-            </label>
             <label class="field"><span>시작일</span><input type="date" id="start_date"></label>
             <label class="field"><span>종료일</span><input type="date" id="end_date"></label>
           </div>
-
           <div class="grid two">
-            <label class="field">
-              <span>날씨</span>
-              <select id="weather"></select>
-            </label>
-            <label class="field">
-              <span>작업내용</span>
-              <select id="task_name"></select>
-            </label>
-          </div>
-
-          <div class="field">
-            <span>작물</span>
-            <div id="crops-box" class="checks"></div>
             <label class="field"><span>날씨</span><select id="weather"></select></label>
             <label class="field"><span>작업내용</span><select id="task_name"></select></label>
           </div>
-
-          <div class="field">
-            <span>병충해</span>
-            <div id="pests-box" class="checks"></div>
-          </div>
-
-          <div class="field">
-            <span>사용자재</span>
-            <div id="materials-box" class="checks"></div>
-          </div>
-
-          <div class="field">
-            <span>사용기계</span>
-            <div id="machines-box" class="checks"></div>
-          </div>
-
           <div class="field"><span>작물</span><div id="crops-box" class="checks"></div></div>
           <div class="field"><span>병충해</span><div id="pests-box" class="checks"></div></div>
           <div class="field"><span>사용자재</span><div id="materials-box" class="checks"></div></div>
           <div class="field"><span>사용기계</span><div id="machines-box" class="checks"></div></div>
           <div class="grid two">
-            <label class="field">
-              <span>인건비</span>
-              <input type="number" id="labor_cost" min="0" step="1000" value="0">
-            </label>
-            <label class="field">
-              <span>작업시간</span>
-              <input type="number" id="work_hours" min="0" step="0.5" value="0">
-            </label>
             <label class="field"><span>인건비</span><input type="number" id="labor_cost" min="0" step="1000" value="0"></label>
             <label class="field"><span>작업시간</span><input type="number" id="work_hours" min="0" step="0.5" value="0"></label>
           </div>
-
-          <label class="field">
-            <span>비고</span>
-            <textarea id="memo" rows="4"></textarea>
-          </label>
-
           <label class="field"><span>비고</span><textarea id="memo" rows="4"></textarea></label>
           <div class="form-actions">
             <button id="btn-save-work" class="btn primary">저장</button>
             <button id="btn-cancel-work" class="btn">취소</button>
-@@ -133,140 +118,35 @@ <h3 id="work-form-title">작업 입력</h3>
-        <div id="works-list" class="cards"></div>
-      </section>
-
-      <!-- 자재관리 -->
-      <section id="page-materials" class="page">
-        <div class="page-header">
-          <h2>자재관리</h2>
+      <!-- 옵션관리 -->
+      <section id="pageOptions" class="page-section" style="display:none;">
+        <div class="page-header page-header-stack">
+          <div>
+            <h1 class="page-title">옵션관리</h1>
+          </div>
+          <div class="option-toolbar">
+            <div id="optionTypeTabs" class="option-tabs">
+              <button type="button" class="soft-btn active" data-option-type="weather">날씨</button>
+              <button type="button" class="soft-btn" data-option-type="crops">작물</button>
+              <button type="button" class="soft-btn" data-option-type="tasks">작업내용</button>
+              <button type="button" class="soft-btn" data-option-type="pests">병충해</button>
+              <button type="button" class="soft-btn" data-option-type="materials">자재</button>
+              <button type="button" class="soft-btn" data-option-type="machines">기계</button>
+            </div>
+            <button id="optionAddBtn" type="button" class="primary-btn">옵션추가</button>
+          </div>
         </div>
 
+        <div id="works-list" class="cards"></div>
+        <div id="optionListWrap" class="option-list"></div>
+      </section>
+
+      <section id="page-materials" class="page">
         <div class="page-header"><h2>자재관리</h2></div>
         <div class="panel">
           <div class="grid four">
-            <label class="field">
-              <span>자재명</span>
-              <input type="text" id="material_name">
-            </label>
-            <label class="field">
-              <span>단위</span>
-              <input type="text" id="material_unit" placeholder="개, 병, 통">
-            </label>
-            <label class="field">
-              <span>재고수량</span>
-              <input type="number" id="material_stock" min="0" step="1" value="0">
-            </label>
-            <label class="field">
-              <span>단가</span>
-              <input type="number" id="material_price" min="0" step="100" value="0">
-            </label>
-          </div>
-
-          <label class="field">
-            <span>메모</span>
-            <input type="text" id="material_memo">
-          </label>
-
-          <div class="form-actions">
-            <button id="btn-save-material" class="btn primary">자재 저장</button>
             <label class="field"><span>자재명</span><input type="text" id="material_name"></label>
             <label class="field"><span>단위</span><input type="text" id="material_unit" placeholder="개, 병, 통"></label>
             <label class="field"><span>재고수량</span><input type="number" id="material_stock" min="0" step="1" value="0"></label>
@@ -203,115 +231,144 @@
           </div>
           <label class="field"><span>메모</span><input type="text" id="material_memo"></label>
           <div class="form-actions"><button id="btn-save-material" class="btn primary">자재 저장</button></div>
-        </div>
-
-        <div id="materials-list" class="table-wrap"></div>
-      </section>
-
-      <!-- 금전관리 -->
-      <section id="page-money" class="page">
+      <!-- 엑셀다운 -->
+      <section id="pageExcel" class="page-section" style="display:none;">
         <div class="page-header">
-          <h2>금전관리</h2>
+          <h1 class="page-title">엑셀다운</h1>
         </div>
-        <div class="panel">
-          <p class="placeholder-title">준비중</p>
-          <p class="placeholder-text">금전관리 화면은 수입/지출/월별정산 기능을 붙일 예정입니다.</p>
-        </div>
+        <div id="materials-list" class="table-wrap"></div>
+        <div class="empty-page-card">엑셀 다운로드 기능은 서버 연결 단계에서 마무리합니다.</div>
       </section>
 
-      <!-- 옵션관리 -->
       <section id="page-money" class="page"><div class="page-header"><h2>금전관리</h2></div><div class="panel"><p class="placeholder-title">준비중</p><p class="placeholder-text">금전관리 화면은 수입/지출/월별정산 기능을 붙일 예정입니다.</p></div></section>
       <section id="page-options" class="page">
-        <div class="page-header">
-          <h2>옵션관리</h2>
-        </div>
-
         <div class="page-header"><h2>옵션관리</h2></div>
         <div class="options-grid">
-          <div class="panel">
-            <h3>날씨</h3>
-            <div class="inline-form">
-              <input type="text" id="new-weather" placeholder="새 날씨">
-              <button class="btn primary" onclick="saveOption('weather', 'new-weather')">추가</button>
-            </div>
-            <div id="options-weather" class="option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3>작물</h3>
-            <div class="inline-form">
-              <input type="text" id="new-crops" placeholder="새 작물">
-              <button class="btn primary" onclick="saveOption('crops', 'new-crops')">추가</button>
-            </div>
-            <div id="options-crops" class="option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3>작업내용</h3>
-            <div class="inline-form">
-              <input type="text" id="new-tasks" placeholder="새 작업내용">
-              <button class="btn primary" onclick="saveOption('tasks', 'new-tasks')">추가</button>
-            </div>
-            <div id="options-tasks" class="option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3>병충해</h3>
-            <div class="inline-form">
-              <input type="text" id="new-pests" placeholder="새 병충해">
-              <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
-            </div>
-            <div id="options-pests" class="option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3>사용자재</h3>
-            <div class="inline-form">
-              <input type="text" id="new-materials" placeholder="새 사용자재 옵션">
-              <button class="btn primary" onclick="saveOption('materials', 'new-materials')">추가</button>
-            </div>
-            <div id="options-materials" class="option-list"></div>
-          </div>
-
-          <div class="panel">
-            <h3>사용기계</h3>
-            <div class="inline-form">
-              <input type="text" id="new-machines" placeholder="새 사용기계">
-              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
-            </div>
-            <div id="options-machines" class="option-list"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 엑셀다운 -->
-      <section id="page-excel" class="page">
-        <div class="page-header">
-          <h2>엑셀다운</h2>
-        </div>
-        <div class="panel">
-          <p class="placeholder-title">준비중</p>
-          <p class="placeholder-text">엑셀 다운로드 기능은 다음 단계에서 연결할 예정입니다.</p>
-        </div>
-      </section>
-
-      <!-- 백업 -->
-      <section id="page-backup" class="page">
-        <div class="page-header">
-          <h2>백업</h2>
-        </div>
-        <div class="panel">
-          <p class="placeholder-title">준비중</p>
-          <p class="placeholder-text">백업/복원 기능은 다음 단계에서 연결할 예정입니다.</p>
           <div class="panel"><h3>날씨</h3><div class="inline-form"><input type="text" id="new-weather" placeholder="새 날씨"><button class="btn primary" onclick="saveOption('weather', 'new-weather')">추가</button></div><div id="options-weather" class="option-list"></div></div>
           <div class="panel"><h3>작물</h3><div class="inline-form"><input type="text" id="new-crops" placeholder="새 작물"><button class="btn primary" onclick="saveOption('crops', 'new-crops')">추가</button></div><div id="options-crops" class="option-list"></div></div>
           <div class="panel"><h3>작업내용</h3><div class="inline-form"><input type="text" id="new-tasks" placeholder="새 작업내용"><button class="btn primary" onclick="saveOption('tasks', 'new-tasks')">추가</button></div><div id="options-tasks" class="option-list"></div></div>
           <div class="panel"><h3>병충해</h3><div class="inline-form"><input type="text" id="new-pests" placeholder="새 병충해"><button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button></div><div id="options-pests" class="option-list"></div></div>
           <div class="panel"><h3>사용자재</h3><div class="inline-form"><input type="text" id="new-materials" placeholder="새 사용자재 옵션"><button class="btn primary" onclick="saveOption('materials', 'new-materials')">추가</button></div><div id="options-materials" class="option-list"></div></div>
           <div class="panel"><h3>사용기계</h3><div class="inline-form"><input type="text" id="new-machines" placeholder="새 사용기계"><button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button></div><div id="options-machines" class="option-list"></div></div>
+      <!-- 백업 -->
+      <section id="pageBackup" class="page-section" style="display:none;">
+        <div class="page-header">
+          <h1 class="page-title">백업</h1>
         </div>
+        <div class="empty-page-card">백업 기능은 다음 단계에서 연결합니다.</div>
       </section>
       <section id="page-excel" class="page"><div class="page-header"><h2>엑셀다운</h2></div><div class="panel"><p class="placeholder-title">준비중</p><p class="placeholder-text">엑셀 다운로드 기능은 다음 단계에서 연결할 예정입니다.</p></div></section>
       <section id="page-backup" class="page"><div class="page-header"><h2>백업</h2></div><div class="panel"><p class="placeholder-title">준비중</p><p class="placeholder-text">백업/복원 기능은 다음 단계에서 연결할 예정입니다.</p></div></section>
     </main>
   </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <!-- 작업일지 입력/수정 모달 -->
+  <div id="workModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <h2 id="workModalTitle">작업일지 입력</h2>
+        <button id="workCloseBtn" type="button" class="icon-close">×</button>
+      </div>
+
+      <form id="workForm" class="work-form">
+        <input type="hidden" id="workId" />
+
+        <section class="form-block">
+          <h3 class="form-title">기본정보</h3>
+          <div class="form-grid two-col">
+            <div class="form-field">
+              <label for="workStartDate">시작일</label>
+              <input id="workStartDate" type="date" class="text-input" />
+            </div>
+            <div class="form-field">
+              <label for="workEndDate">종료일</label>
+              <input id="workEndDate" type="date" class="text-input" />
+            </div>
+            <div class="form-field">
+              <label for="workWeather">날씨</label>
+              <select id="workWeather" class="text-input"></select>
+            </div>
+            <div class="form-field">
+              <label for="workTaskName">작업내용</label>
+              <input id="workTaskName" type="text" class="text-input" placeholder="예: 방제 작업" />
+            </div>
+            <div class="form-field">
+              <label for="workHours">작업시간</label>
+              <input id="workHours" type="text" class="text-input" placeholder="예: 4시간" />
+            </div>
+          </div>
+        </section>
+
+        <section class="form-block">
+          <h3 class="form-title">다중선택</h3>
+
+          <div class="form-field">
+            <label>작물</label>
+            <div id="cropOptionsWrap" class="chip-check-wrap"></div>
+          </div>
+
+          <div class="form-field">
+            <label>병충해</label>
+            <div id="pestOptionsWrap" class="chip-check-wrap"></div>
+          </div>
+
+          <div class="form-field">
+            <label>사용기계</label>
+            <div id="machineOptionsWrap" class="chip-check-wrap"></div>
+          </div>
+        </section>
+
+        <section class="form-block">
+          <h3 class="form-title">사용자재</h3>
+
+          <div class="form-field">
+            <label for="materialSearchInput">자재 검색</label>
+            <input id="materialSearchInput" type="text" class="text-input" placeholder="자재명 입력 후 선택" />
+          </div>
+
+          <div id="materialSearchResults" class="material-search-results"></div>
+
+          <div class="selected-materials-block">
+            <div class="sub-title">선택된 자재</div>
+            <div id="selectedMaterialsWrap"></div>
+          </div>
+        </section>
+
+        <section class="form-block">
+          <h3 class="form-title">인건비 상세</h3>
+          <div id="laborRowsWrap" class="labor-rows-wrap"></div>
+          <div class="inline-actions">
+            <button id="addLaborRowBtn" type="button" class="soft-btn">행추가</button>
+          </div>
+        </section>
+
+        <section class="form-block">
+          <h3 class="form-title">비고</h3>
+          <div class="form-field">
+            <textarea id="workMemo" class="text-area" rows="4" placeholder="비고를 입력하세요"></textarea>
+          </div>
+        </section>
+
+        <div class="modal-footer">
+          <button id="workSaveBtn" type="submit" class="primary-btn">저장</button>
+          <button id="workCloseBtn2" type="button" class="soft-btn">닫기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var closeBtn2 = document.getElementById('workCloseBtn2');
+      var modal = document.getElementById('workModal');
+      if (closeBtn2 && modal) {
+        closeBtn2.addEventListener('click', function () {
+          modal.style.display = 'none';
+        });
+      }
+    });
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

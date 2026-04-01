@@ -1,11 +1,3 @@
-// static/app.js
-// 기존 업로드한 index.html 구조 기준 전체 교체본
-// 반영:
-// 1) 달력 날짜칸 구분선용 class 유지
-// 2) 작업계획 제목 선택형
-// 3) 작업일지 입력 작물/병충해/사용기계 가로 배치(css 연동)
-// 4) 같은 날짜 작업이 1개면 큰 카드, 여러 개면 작은 카드
-
 (function () {
   'use strict';
 
@@ -51,7 +43,8 @@
       'btn-prev-month', 'btn-next-month', 'calendar-title', 'calendar-grid',
       'selected-date-title', 'selected-date-plan-list', 'selected-date-list',
       'btn-open-work-from-calendar', 'btn-open-plan-form',
-      'plan-form-wrap', 'plan-form-title', 'plan_date', 'plan_title', 'plan_details', 'plan_status',
+      'plan-modal', 'plan-modal-title', 'btn-close-plan-modal',
+      'plan_date', 'plan_title', 'plan_details', 'plan_status',
       'btn-save-plan', 'btn-cancel-plan',
       'btn-new-work', 'work-form-wrap', 'work-form-title',
       'start_date', 'end_date', 'weather', 'task_name', 'crops-box', 'pests-box', 'materials-box', 'machines-box',
@@ -70,9 +63,7 @@
 
   function bindMenu() {
     el.menuButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        switchPage(btn.dataset.page);
-      });
+      btn.addEventListener('click', () => switchPage(btn.dataset.page));
     });
   }
 
@@ -87,9 +78,14 @@
       renderCalendar();
     });
 
-    on(el['btn-open-plan-form'], 'click', () => openPlanForm());
-    on(el['btn-cancel-plan'], 'click', () => closePlanForm());
+    on(el['btn-open-plan-form'], 'click', () => openPlanModal());
+    on(el['btn-close-plan-modal'], 'click', closePlanModal);
+    on(el['btn-cancel-plan'], 'click', closePlanModal);
     on(el['btn-save-plan'], 'click', savePlan);
+
+    on(el['plan-modal'], 'click', (e) => {
+      if (e.target === el['plan-modal']) closePlanModal();
+    });
 
     on(el['btn-open-work-from-calendar'], 'click', () => {
       openWorkForm();
@@ -263,7 +259,6 @@
       el['selected-date-list'].innerHTML = '';
       addHidden(el['btn-open-plan-form']);
       addHidden(el['btn-open-work-from-calendar']);
-      closePlanForm();
       return;
     }
 
@@ -342,19 +337,24 @@
     });
   }
 
-  function openPlanForm(plan = null) {
+  function openPlanModal(plan = null) {
     if (!state.selectedDate && !plan) return;
-    removeHidden(el['plan-form-wrap']);
-    el['plan-form-title'].textContent = plan ? '작업계획 수정' : '작업계획 입력';
+
     state.editingPlanId = plan ? plan.id : null;
+    if (el['plan-modal-title']) {
+      el['plan-modal-title'].textContent = plan ? '작업계획 수정' : '작업계획 입력';
+    }
+
     el.plan_date.value = plan ? normalizePlanDate(plan.plan_date) : state.selectedDate;
     el.plan_details.value = plan?.details || '';
     el.plan_status.value = plan?.status || 'planned';
     renderPlanTitleOptions(plan?.title || '');
+
+    removeHidden(el['plan-modal']);
   }
 
-  function closePlanForm() {
-    addHidden(el['plan-form-wrap']);
+  function closePlanModal() {
+    addHidden(el['plan-modal']);
     state.editingPlanId = null;
     if (el.plan_date) el.plan_date.value = '';
     if (el.plan_title) el.plan_title.value = '';
@@ -392,7 +392,7 @@
         await apiPost('/api/plans', payload);
       }
       await loadPlans();
-      closePlanForm();
+      closePlanModal();
       renderCalendar();
       renderCalendarSidePanel();
     } catch (e) {
@@ -404,7 +404,7 @@
   function editPlan(planId) {
     const plan = state.plans.find(p => String(p.id) === String(planId));
     if (!plan) return;
-    openPlanForm(plan);
+    openPlanModal(plan);
   }
 
   async function markPlanDone(planId) {

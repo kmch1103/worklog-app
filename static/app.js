@@ -1,10 +1,9 @@
 /* =========================================================
-   작업일지 v5 - app.js 전체 교체본
+   작업일지 v6 - app.js 전체 교체본
    기준:
-   1) 직전 정상 작동하던 작업달력 버전 유지
-   2) 작업달력 상태 한글 표시
-   3) 작업일지 메뉴를 날짜별 상세목록 형태로 강화
-   4) 같은 날짜 작업은 각각 따로 표시
+   1) 작업달력 기존 정상 구조 유지
+   2) 작업달력 상태 한글 표시 유지
+   3) 작업일지 = 날짜별 큰 박스 + 같은 날짜 작업 가로 카드 배치
    ========================================================= */
 
 (() => {
@@ -28,9 +27,6 @@
     materialsMaster: []
   };
 
-  /* =========================
-     공통 유틸
-     ========================= */
   function $(selector, root = document) {
     return root.querySelector(selector);
   }
@@ -74,6 +70,12 @@
     if (status === "done") return "완료";
     if (status === "cancelled") return "취소";
     return status || "";
+  }
+
+  function formatField(value) {
+    if (value === null || value === undefined) return "-";
+    if (String(value).trim() === "") return "-";
+    return escapeHtml(value);
   }
 
   async function api(url, options = {}) {
@@ -137,13 +139,6 @@
       .filter(Boolean);
   }
 
-  function formatField(value) {
-    return value && String(value).trim() ? escapeHtml(value) : "-";
-  }
-
-  /* =========================
-     레이아웃 탐색
-     ========================= */
   function getSidebarButtons() {
     const candidates = $all("button, .menu-item, .sidebar button, .sidebar .item");
     return candidates.filter(el => {
@@ -186,9 +181,6 @@
 
   const mainArea = detectMainArea();
 
-  /* =========================
-     메뉴 연결
-     ========================= */
   function bindSidebarMenu() {
     const buttons = getSidebarButtons();
 
@@ -235,9 +227,6 @@
     });
   }
 
-  /* =========================
-     데이터 로드
-     ========================= */
   async function loadAllData() {
     const [works, plans, options, materialsMaster] = await Promise.all([
       api("/api/works").catch(() => []),
@@ -265,9 +254,6 @@
     render();
   }
 
-  /* =========================
-     렌더 분기
-     ========================= */
   function render() {
     switch (state.currentView) {
       case "calendar":
@@ -297,9 +283,6 @@
     }
   }
 
-  /* =========================
-     작업달력 화면
-     ========================= */
   function renderCalendarView() {
     const firstDay = new Date(state.currentYear, state.currentMonth, 1).getDay();
     const lastDate = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
@@ -411,9 +394,6 @@
           .wl-status-badge.done{background:#dff3e5;color:#1f6b3a;}
           .wl-status-badge.cancelled{background:#f7e3e3;color:#8a2f2f;}
           .wl-status-badge.planned{background:#e8eefc;color:#2e4f99;}
-          @media (max-width: 900px){
-            .wl-form-grid{grid-template-columns:1fr;}
-          }
 
           .ww-wrap{padding:28px 20px 30px 20px;}
           .ww-title{font-size:22px;font-weight:700;margin-bottom:18px;}
@@ -425,27 +405,65 @@
             font-size:18px;font-weight:700;margin-bottom:14px;padding-bottom:10px;
             border-bottom:1px solid #e5e9f0;
           }
-          .ww-work-list{display:flex;flex-direction:column;gap:12px;}
-          .ww-work-item{
-            border:1px solid #d7dde6;border-radius:14px;padding:14px;background:#fafbfc;
+          .ww-card-row{
+            display:flex;
+            gap:12px;
+            flex-wrap:wrap;
+            align-items:stretch;
           }
-          .ww-work-name{font-size:16px;font-weight:700;margin-bottom:10px;}
-          .ww-grid{
-            display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;
-            font-size:14px;color:#444;
+          .ww-work-card{
+            width:280px;
+            min-height:220px;
+            border:1px solid #d7dde6;
+            border-radius:14px;
+            padding:14px;
+            background:#fafbfc;
+            display:flex;
+            flex-direction:column;
+            box-sizing:border-box;
           }
-          .ww-field b{display:inline-block;min-width:70px;color:#222;}
+          .ww-work-name{
+            font-size:16px;
+            font-weight:700;
+            margin-bottom:10px;
+            line-height:1.4;
+          }
+          .ww-mini-list{
+            font-size:14px;
+            color:#444;
+            line-height:1.6;
+            flex:1;
+          }
+          .ww-mini-line{
+            margin-bottom:4px;
+            word-break:break-word;
+          }
+          .ww-mini-line b{
+            color:#222;
+            display:inline-block;
+            min-width:64px;
+          }
           .ww-memo{
-            margin-top:10px;padding-top:10px;border-top:1px dashed #d7dde6;
-            white-space:pre-wrap;font-size:14px;color:#444;
+            margin-top:10px;
+            padding-top:10px;
+            border-top:1px dashed #d7dde6;
+            font-size:14px;
+            color:#444;
+            white-space:pre-wrap;
           }
-          .ww-actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;}
+          .ww-actions{
+            margin-top:12px;
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+          }
           .ww-empty{
             background:#fff;border:1px solid #d7dde6;border-radius:18px;
             padding:20px;color:#666;
           }
           @media (max-width: 900px){
-            .ww-grid{grid-template-columns:1fr;}
+            .wl-form-grid{grid-template-columns:1fr;}
+            .ww-work-card{width:100%;}
           }
         </style>
 
@@ -676,9 +694,6 @@
     `;
   }
 
-  /* =========================
-     작업달력 이벤트
-     ========================= */
   function bindCalendarEvents() {
     const prevBtn = $("#prevMonthBtn");
     const nextBtn = $("#nextMonthBtn");
@@ -918,9 +933,6 @@
     });
   }
 
-  /* =========================
-     폼 처리
-     ========================= */
   function clearPlanForm() {
     if ($("#planTitleInput")) $("#planTitleInput").value = "";
     if ($("#planDetailsInput")) $("#planDetailsInput").value = "";
@@ -1026,9 +1038,6 @@
     }
   }
 
-  /* =========================
-     작업일지 화면
-     ========================= */
   function renderWorksView() {
     const grouped = {};
 
@@ -1042,6 +1051,94 @@
 
     mainArea.innerHTML = `
       <div class="ww-wrap">
+        <style>
+          .wl-btn{
+            border:none;border-radius:12px;padding:10px 14px;cursor:pointer;
+            background:#e7ebf2;font-weight:600;
+          }
+          .wl-btn.danger{background:#d9534f;color:#fff;}
+          .wl-btn.small{padding:6px 10px;font-size:13px;border-radius:10px;}
+
+          .ww-wrap{padding:28px 20px 30px 20px;}
+          .ww-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .ww-date-group{
+            background:#fff;
+            border:1px solid #d7dde6;
+            border-radius:18px;
+            padding:16px;
+            margin-bottom:18px;
+          }
+          .ww-date-title{
+            font-size:18px;
+            font-weight:700;
+            margin-bottom:14px;
+            padding-bottom:10px;
+            border-bottom:1px solid #e5e9f0;
+          }
+          .ww-card-row{
+            display:flex;
+            flex-wrap:wrap;
+            gap:12px;
+            align-items:stretch;
+          }
+          .ww-work-card{
+            width:280px;
+            min-height:240px;
+            border:1px solid #d7dde6;
+            border-radius:14px;
+            padding:14px;
+            background:#fafbfc;
+            display:flex;
+            flex-direction:column;
+            box-sizing:border-box;
+          }
+          .ww-work-name{
+            font-size:16px;
+            font-weight:700;
+            margin-bottom:10px;
+            line-height:1.4;
+          }
+          .ww-mini-list{
+            font-size:14px;
+            color:#444;
+            line-height:1.6;
+            flex:1;
+          }
+          .ww-mini-line{
+            margin-bottom:4px;
+            word-break:break-word;
+          }
+          .ww-mini-line b{
+            color:#222;
+            display:inline-block;
+            min-width:64px;
+          }
+          .ww-memo{
+            margin-top:10px;
+            padding-top:10px;
+            border-top:1px dashed #d7dde6;
+            font-size:14px;
+            color:#444;
+            white-space:pre-wrap;
+          }
+          .ww-actions{
+            margin-top:12px;
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+          }
+          .ww-empty{
+            background:#fff;
+            border:1px solid #d7dde6;
+            border-radius:18px;
+            padding:20px;
+            color:#666;
+          }
+          @media (max-width: 900px){
+            .ww-work-card{width:100%;}
+          }
+        </style>
+
         <div class="ww-title">작업일지</div>
 
         ${
@@ -1049,34 +1146,31 @@
             ? sortedDates.map(date => `
               <div class="ww-date-group">
                 <div class="ww-date-title">${escapeHtml(date)}</div>
-                <div class="ww-work-list">
+                <div class="ww-card-row">
                   ${
-                    grouped[date]
-                      .map(work => `
-                        <div class="ww-work-item">
-                          <div class="ww-work-name">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
+                    grouped[date].map(work => `
+                      <div class="ww-work-card">
+                        <div class="ww-work-name">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
 
-                          <div class="ww-grid">
-                            <div class="ww-field"><b>시작일</b> ${formatField(work.start_date)}</div>
-                            <div class="ww-field"><b>종료일</b> ${formatField(work.end_date)}</div>
-                            <div class="ww-field"><b>날씨</b> ${formatField(work.weather)}</div>
-                            <div class="ww-field"><b>작물</b> ${formatField(work.crops)}</div>
-                            <div class="ww-field"><b>병충해</b> ${formatField(work.pests)}</div>
-                            <div class="ww-field"><b>사용자재</b> ${formatField(work.materials)}</div>
-                            <div class="ww-field"><b>사용기계</b> ${formatField(work.machines)}</div>
-                            <div class="ww-field"><b>인건비</b> ${formatField(work.labor_cost ?? 0)}</div>
-                            <div class="ww-field"><b>작업시간</b> ${formatField(work.work_hours ?? 0)}</div>
-                          </div>
-
-                          <div class="ww-memo"><b>비고</b><br>${formatField(work.memo)}</div>
-
-                          <div class="ww-actions">
-                            <button class="wl-btn small" data-work-edit="${work.id}">수정</button>
-                            <button class="wl-btn danger small" data-work-delete="${work.id}">삭제</button>
-                          </div>
+                        <div class="ww-mini-list">
+                          <div class="ww-mini-line"><b>작물</b> ${formatField(work.crops)}</div>
+                          <div class="ww-mini-line"><b>날씨</b> ${formatField(work.weather)}</div>
+                          <div class="ww-mini-line"><b>병충해</b> ${formatField(work.pests)}</div>
+                          <div class="ww-mini-line"><b>자재</b> ${formatField(work.materials)}</div>
+                          <div class="ww-mini-line"><b>기계</b> ${formatField(work.machines)}</div>
+                          <div class="ww-mini-line"><b>인건비</b> ${formatField(work.labor_cost ?? 0)}</div>
+                          <div class="ww-mini-line"><b>시간</b> ${formatField(work.work_hours ?? 0)}</div>
+                          <div class="ww-mini-line"><b>기간</b> ${formatField(work.start_date)} ~ ${formatField(work.end_date)}</div>
                         </div>
-                      `)
-                      .join("")
+
+                        <div class="ww-memo"><b>비고</b><br>${formatField(work.memo)}</div>
+
+                        <div class="ww-actions">
+                          <button class="wl-btn small" data-work-edit="${work.id}">수정</button>
+                          <button class="wl-btn danger small" data-work-delete="${work.id}">삭제</button>
+                        </div>
+                      </div>
+                    `).join("")
                   }
                 </div>
               </div>
@@ -1149,18 +1243,25 @@
     });
   }
 
-  /* =========================
-     자재관리 화면
-     ========================= */
   function renderMaterialsView() {
     mainArea.innerHTML = `
       <div class="wl-wrap">
+        <style>
+          .wl-wrap{padding:28px 20px 30px 20px;}
+          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
+          .wl-item{border:1px solid #d7dde6;border-radius:14px;padding:12px;background:#fafbfc;}
+          .wl-item + .wl-item{margin-top:10px;}
+          .wl-item-title{font-weight:700;margin-bottom:6px;}
+          .wl-item-sub{color:#555;font-size:14px;}
+          .wl-empty-text{color:#666;}
+        </style>
         <div class="wl-title">자재관리</div>
         <div class="wl-card">
           ${
             state.materialsMaster.length
               ? state.materialsMaster.map(m => `
-                <div class="wl-item" style="margin-bottom:10px;">
+                <div class="wl-item">
                   <div class="wl-item-title">${escapeHtml(m.name || "")}</div>
                   <div class="wl-item-sub">
                     재고: ${formatField(m.stock_qty ?? 0)} / 단가: ${formatField(m.unit_price ?? 0)}
@@ -1174,29 +1275,26 @@
     `;
   }
 
-  /* =========================
-     금전관리 화면
-     ========================= */
   function renderMoneyView() {
     const totalLabor = state.works.reduce((sum, w) => sum + Number(w.labor_cost || 0), 0);
 
     mainArea.innerHTML = `
       <div class="wl-wrap">
+        <style>
+          .wl-wrap{padding:28px 20px 30px 20px;}
+          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
+        </style>
         <div class="wl-title">금전관리</div>
         <div class="wl-card">
-          <div class="wl-item-sub" style="line-height:1.8;">
-            현재는 기본 집계만 표시합니다.<br>
-            총 인건비: <strong>${totalLabor.toLocaleString()}</strong><br>
-            다음 단계에서 자재비 / 월별수익 / 손익 계산을 붙이면 됩니다.
-          </div>
+          현재는 기본 집계만 표시합니다.<br>
+          총 인건비: <strong>${totalLabor.toLocaleString()}</strong><br>
+          다음 단계에서 자재비 / 월별수익 / 손익 계산을 붙이면 됩니다.
         </div>
       </div>
     `;
   }
 
-  /* =========================
-     옵션관리 화면
-     ========================= */
   function renderOptionsView() {
     const box = (title, list) => `
       <div class="wl-card" style="margin-bottom:12px;">
@@ -1217,6 +1315,11 @@
 
     mainArea.innerHTML = `
       <div class="wl-wrap">
+        <style>
+          .wl-wrap{padding:28px 20px 30px 20px;}
+          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
+        </style>
         <div class="wl-title">옵션관리</div>
         ${box("날씨", state.options.weather)}
         ${box("작물", state.options.crops)}
@@ -1228,12 +1331,14 @@
     `;
   }
 
-  /* =========================
-     엑셀다운 / 백업
-     ========================= */
   function renderExcelView() {
     mainArea.innerHTML = `
       <div class="wl-wrap">
+        <style>
+          .wl-wrap{padding:28px 20px 30px 20px;}
+          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
+        </style>
         <div class="wl-title">엑셀다운</div>
         <div class="wl-card">엑셀 다운로드 기능은 다음 단계에서 서버 다운로드 API와 연결하면 됩니다.</div>
       </div>
@@ -1243,15 +1348,17 @@
   function renderBackupView() {
     mainArea.innerHTML = `
       <div class="wl-wrap">
+        <style>
+          .wl-wrap{padding:28px 20px 30px 20px;}
+          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
+        </style>
         <div class="wl-title">백업</div>
         <div class="wl-card">백업 기능은 다음 단계에서 DB 파일 다운로드 또는 JSON 백업 방식으로 붙이면 됩니다.</div>
       </div>
     `;
   }
 
-  /* =========================
-     시작
-     ========================= */
   async function init() {
     try {
       bindSidebarMenu();

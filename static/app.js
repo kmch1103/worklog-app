@@ -1,31 +1,45 @@
-/* =========================================================
-   작업일지 v8 - app.js 전체 교체본
-   포함 기능:
-   1) 작업달력 기존 기능 유지
-   2) 작업달력 상태 한글 표시
-   3) 작업일지 날짜별 큰 박스 + 같은 날짜 가로 카드
-   4) 같은 날짜 작업 1개면 전체 폭 사용
-   5) 작업일지 검색창
-   6) 작업일지 상단 작업입력 버튼 + 팝업창
-   7) 인건비 행추가 방식
-   8) 사용자재 검색형 다중선택
-   9) 자재비 총액 저장
-   ---------------------------------------------------------
-   참고:
-   - 인건비 상세 / 자재비 총액은 memo 안에 메타데이터로 저장
-   - DB 구조를 깨지 않고 현재 구조에서 동작하도록 구성
-   ========================================================= */
+// static/app.js
+// 전체 교체본
+// 기준: 기존 Flask / DB 구조 유지, app.js에서 UI 동작 중심 처리
+// 포함 내용:
+// - 좌측 메뉴 전환
+// - 작업달력 렌더링
+// - 작업계획 CRUD
+// - 작업실적(작업일지) 조회/입력/수정/삭제
+// - 작업일지 카드형 표시
+// - 작업일지 검색(버튼 방식)
+// - 사용자재 검색형 다중선택 + 수량 입력형 + 단위 자동표시/수정 가능
+// - 자재관리 화면 (재고 있음 / 없음 분리)
+// - 옵션관리 기본 CRUD
+//
+// 주의:
+// 1) index.html 안에 아래 id들이 존재해야 정상 동작합니다.
+// 2) 서버 API는 다음을 사용한다고 가정합니다.
+//    /api/works, /api/plans, /api/materials, /api/options
+// 3) works의 확장 데이터는 memo JSON 문자열에 저장합니다.
+//
+// 필요한 주요 DOM id 예시:
+// menuCalendar, menuWorklog, menuMaterials, menuMoney, menuOptions, menuExcel, menuBackup
+// pageCalendar, pageWorklog, pageMaterials, pageMoney, pageOptions, pageExcel, pageBackup
+// calendarMonthLabel, calendarPrevBtn, calendarNextBtn, calendarGrid, calendarSidePanel
+// worklogSearchInput, worklogSearchBtn, worklogSearchResetBtn, worklogAddBtn, worklogList
+// workModal, workModalTitle, workForm, workId
+// workStartDate, workEndDate, workWeather, workTaskName, workHours, workMemo
+// cropOptionsWrap, pestOptionsWrap, machineOptionsWrap
+// materialSearchInput, materialSearchResults, selectedMaterialsWrap
+// laborRowsWrap, addLaborRowBtn
+// materialPageSearchInput, materialPageSearchBtn, materialPageSearchResetBtn, materialsSummary, materialsInStockWrap, materialsOutStockWrap, materialAddBtn
+// optionTypeTabs, optionListWrap, optionAddBtn
 
-(() => {
-  "use strict";
+(function () {
+  'use strict';
 
   const state = {
-    currentView: "calendar",
-    currentYear: new Date().getFullYear(),
-    currentMonth: new Date().getMonth(),
-    selectedDate: null,
+    currentPage: 'calendar',
+    currentMonth: new Date(),
     works: [],
     plans: [],
+    materials: [],
     options: {
       weather: [],
       crops: [],
@@ -34,2020 +48,1323 @@
       materials: [],
       machines: []
     },
-    materialsMaster: [],
-    workSearchKeyword: "",
-    selectedMaterialItems: []
+    worklogKeyword: '',
+    materialKeyword: '',
+    selectedWorkDate: null,
+    editingWorkId: null,
+    editingPlanId: null,
+    workMaterialSelections: [],
+    currentOptionType: 'weather'
   };
 
-  const META_START = "[[WORK_META]]";
-  const META_END = "[[/WORK_META]]";
+  const el = {};
 
-  function $(selector, root = document) {
-    return root.querySelector(selector);
+  document.addEventListener('DOMContentLoaded', init);
+
+  async function init() {
+    bindElements();
+    bindMenu();
+    bindCalendarControls();
+    bindWorklogControls();
+    bindMaterialControls();
+    bindOptionControls();
+    bindModalControls();
+
+    await loadInitialData();
+    switchPage('calendar');
   }
 
-  function $all(selector, root = document) {
-    return Array.from(root.querySelectorAll(selector));
-  }
-
-  function pad2(n) {
-    return String(n).padStart(2, "0");
-  }
-
-  function formatDate(year, monthIndex, day) {
-    return `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
-  }
-
-  function escapeHtml(value) {
-    if (value === null || value === undefined) return "";
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function joinMultiValue(arr) {
-    return (arr || []).filter(Boolean).join(", ");
-  }
-
-  function safeJsonParse(text, fallback = null) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return fallback;
-    }
-  }
-
-  function getStatusLabel(status) {
-    if (status === "planned") return "계획";
-    if (status === "done") return "완료";
-    if (status === "cancelled") return "취소";
-    return status || "";
-  }
-
-  function formatField(value) {
-    if (value === null || value === undefined) return "-";
-    if (String(value).trim() === "") return "-";
-    return escapeHtml(value);
-  }
-
-  function normalizeOptionList(list) {
-    if (!Array.isArray(list)) return [];
-    return list
-      .map(v => {
-        if (typeof v === "string") return v;
-        return v?.name || v?.value || "";
-      })
-      .filter(Boolean);
-  }
-
-  function getCheckedValues(name, root = document) {
-    return $all(`input[name="${name}"]:checked`, root).map(el => el.value);
-  }
-
-  function parseWorkExtra(memoText) {
-    const raw = String(memoText || "");
-    const start = raw.indexOf(META_START);
-    const end = raw.indexOf(META_END);
-
-    if (start === -1 || end === -1 || end < start) {
-      return {
-        plainMemo: raw,
-        meta: {
-          materialCost: 0,
-          laborRows: []
-        }
-      };
-    }
-
-    const jsonText = raw.slice(start + META_START.length, end).trim();
-    const plainMemo = (raw.slice(0, start) + raw.slice(end + META_END.length)).trim();
-
-    let meta = { materialCost: 0, laborRows: [], selectedMaterials: [] };
-
-    try {
-      const parsed = JSON.parse(jsonText);
-      meta = {
-        materialCost: Number(parsed?.materialCost || 0),
-        laborRows: Array.isArray(parsed?.laborRows) ? parsed.laborRows : [],
-        selectedMaterials: Array.isArray(parsed?.selectedMaterials) ? parsed.selectedMaterials : []
-      };
-    } catch (_) {
-      // ignore
-    }
-
-    return { plainMemo, meta };
-  }
-
-  function buildWorkMemo(plainMemo, meta) {
-    const cleanMemo = String(plainMemo || "").trim();
-    const safeMeta = {
-      materialCost: Number(meta?.materialCost || 0),
-      laborRows: Array.isArray(meta?.laborRows) ? meta.laborRows : [],
-      selectedMaterials: Array.isArray(meta?.selectedMaterials) ? meta.selectedMaterials : []
-    };
-    return `${cleanMemo}\n${META_START}${JSON.stringify(safeMeta)}${META_END}`.trim();
-  }
-
-  function sumLaborCost(laborRows) {
-    return (laborRows || []).reduce((sum, row) => sum + Number(row?.cost || 0), 0);
-  }
-
-  function getMaterialCostFromWork(work) {
-    const parsed = parseWorkExtra(work.memo || "");
-    return Number(parsed.meta.materialCost || 0);
-  }
-
-  function getSelectedMaterialsFromWork(work) {
-    const parsed = parseWorkExtra(work.memo || "");
-    return Array.isArray(parsed.meta.selectedMaterials) ? parsed.meta.selectedMaterials : [];
-  }
-
-  function getPlainMemoFromWork(work) {
-    const parsed = parseWorkExtra(work.memo || "");
-    return parsed.plainMemo || "";
-  }
-
-  function renderLaborSummaryHtml(work) {
-    const parsed = parseWorkExtra(work.memo || "");
-    const rows = parsed.meta.laborRows || [];
-    if (!rows.length) return `<div class="ww-mini-line"><b>인력상세</b> -</div>`;
-
-    const summary = rows
-      .map(row => {
-        const type = escapeHtml(row.type || "-");
-        const cost = Number(row.cost || 0).toLocaleString();
-        const role = escapeHtml(row.role || "-");
-        const note = escapeHtml(row.note || "");
-        return `${type} ${cost}원 (${role}${note ? ` / ${note}` : ""})`;
-      })
-      .join("<br>");
-
-    return `<div class="ww-mini-line"><b>인력상세</b><br>${summary}</div>`;
-  }
-
-  async function api(url, options = {}) {
-    const res = await fetch(url, {
-      headers: { "Content-Type": "application/json" },
-      ...options
-    });
-
-    const text = await res.text();
-    const data = safeJsonParse(text, text);
-
-    if (!res.ok) {
-      const msg =
-        (data && data.error) ||
-        (typeof data === "string" && data) ||
-        `요청 실패: ${res.status}`;
-      throw new Error(msg);
-    }
-
-    return data;
-  }
-
-  function showError(err) {
-    console.error(err);
-    alert(`오류: ${err.message || err}`);
-  }
-
-  function infoMessage(msg) {
-    alert(msg);
-  }
-
-  function getMonthLabel() {
-    return `${state.currentYear}년 ${state.currentMonth + 1}월`;
-  }
-
-  function getWorksByDate(dateStr) {
-    return state.works.filter(w => w.start_date === dateStr);
-  }
-
-  function getPlansByDate(dateStr) {
-    return state.plans.filter(p => p.plan_date === dateStr);
-  }
-
-  function getSelectedWorks() {
-    if (!state.selectedDate) return [];
-    return getWorksByDate(state.selectedDate);
-  }
-
-  function getSelectedPlans() {
-    if (!state.selectedDate) return [];
-    return getPlansByDate(state.selectedDate);
-  }
-
-  function getSidebarButtons() {
-    const candidates = $all("button, .menu-item, .sidebar button, .sidebar .item");
-    return candidates.filter(el => {
-      const txt = (el.textContent || "").trim();
-      return [
-        "작업달력",
-        "작업일지",
-        "자재관리",
-        "금전관리",
-        "옵션관리",
-        "엑셀다운",
-        "백업"
-      ].includes(txt);
-    });
-  }
-
-  function detectMainArea() {
-    const selectors = [
-      ".main-content",
-      ".content",
-      "main",
-      ".page-content",
-      ".right-panel",
-      ".workspace",
-      ".app-main"
+  function bindElements() {
+    const ids = [
+      'menuCalendar', 'menuWorklog', 'menuMaterials', 'menuMoney', 'menuOptions', 'menuExcel', 'menuBackup',
+      'pageCalendar', 'pageWorklog', 'pageMaterials', 'pageMoney', 'pageOptions', 'pageExcel', 'pageBackup',
+      'calendarMonthLabel', 'calendarPrevBtn', 'calendarNextBtn', 'calendarGrid', 'calendarSidePanel',
+      'worklogSearchInput', 'worklogSearchBtn', 'worklogSearchResetBtn', 'worklogAddBtn', 'worklogList',
+      'workModal', 'workModalTitle', 'workForm', 'workId', 'workStartDate', 'workEndDate', 'workWeather', 'workTaskName', 'workHours', 'workMemo',
+      'cropOptionsWrap', 'pestOptionsWrap', 'machineOptionsWrap',
+      'materialSearchInput', 'materialSearchResults', 'selectedMaterialsWrap',
+      'laborRowsWrap', 'addLaborRowBtn', 'workSaveBtn', 'workCloseBtn',
+      'materialPageSearchInput', 'materialPageSearchBtn', 'materialPageSearchResetBtn', 'materialsSummary', 'materialsInStockWrap', 'materialsOutStockWrap', 'materialAddBtn',
+      'optionTypeTabs', 'optionListWrap', 'optionAddBtn'
     ];
 
-    for (const sel of selectors) {
-      const found = $(sel);
-      if (found) return found;
-    }
-
-    const side = $(".sidebar");
-    if (side && side.parentElement && side.parentElement.children.length >= 2) {
-      return side.parentElement.children[1];
-    }
-
-    return document.body;
-  }
-
-  const mainArea = detectMainArea();
-
-  function bindSidebarMenu() {
-    const buttons = getSidebarButtons();
-
-    buttons.forEach(btn => {
-      btn.addEventListener("click", () => {
-        const label = btn.textContent.trim();
-
-        buttons.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-
-        switch (label) {
-          case "작업달력":
-            state.currentView = "calendar";
-            render();
-            break;
-          case "작업일지":
-            state.currentView = "works";
-            render();
-            break;
-          case "자재관리":
-            state.currentView = "materials";
-            render();
-            break;
-          case "금전관리":
-            state.currentView = "money";
-            render();
-            break;
-          case "옵션관리":
-            state.currentView = "options";
-            render();
-            break;
-          case "엑셀다운":
-            state.currentView = "excel";
-            render();
-            break;
-          case "백업":
-            state.currentView = "backup";
-            render();
-            break;
-          default:
-            break;
-        }
-      });
+    ids.forEach(id => {
+      el[id] = document.getElementById(id);
     });
   }
 
-  async function loadAllData() {
-    const [works, plans, options, materialsMaster] = await Promise.all([
-      api("/api/works").catch(() => []),
-      api("/api/plans").catch(() => []),
-      api("/api/options").catch(() => ({})),
-      api("/api/materials").catch(() => [])
+  function bindMenu() {
+    safeBind(el.menuCalendar, 'click', () => switchPage('calendar'));
+    safeBind(el.menuWorklog, 'click', () => switchPage('worklog'));
+    safeBind(el.menuMaterials, 'click', () => switchPage('materials'));
+    safeBind(el.menuMoney, 'click', () => switchPage('money'));
+    safeBind(el.menuOptions, 'click', () => switchPage('options'));
+    safeBind(el.menuExcel, 'click', () => switchPage('excel'));
+    safeBind(el.menuBackup, 'click', () => switchPage('backup'));
+  }
+
+  function bindCalendarControls() {
+    safeBind(el.calendarPrevBtn, 'click', () => {
+      state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
+      renderCalendar();
+    });
+
+    safeBind(el.calendarNextBtn, 'click', () => {
+      state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 1);
+      renderCalendar();
+    });
+  }
+
+  function bindWorklogControls() {
+    safeBind(el.worklogSearchBtn, 'click', () => {
+      state.worklogKeyword = (el.worklogSearchInput?.value || '').trim();
+      renderWorklog();
+    });
+
+    safeBind(el.worklogSearchResetBtn, 'click', () => {
+      if (el.worklogSearchInput) el.worklogSearchInput.value = '';
+      state.worklogKeyword = '';
+      renderWorklog();
+    });
+
+    safeBind(el.worklogAddBtn, 'click', () => openWorkModal());
+
+    safeBind(el.materialSearchInput, 'input', () => renderMaterialSearchResults(el.materialSearchInput.value || ''));
+
+    safeBind(el.addLaborRowBtn, 'click', () => addLaborRow());
+
+    safeBind(el.workForm, 'submit', async (e) => {
+      e.preventDefault();
+      await saveWork();
+    });
+  }
+
+  function bindMaterialControls() {
+    safeBind(el.materialPageSearchBtn, 'click', () => {
+      state.materialKeyword = (el.materialPageSearchInput?.value || '').trim();
+      renderMaterialsPage();
+    });
+
+    safeBind(el.materialPageSearchResetBtn, 'click', () => {
+      if (el.materialPageSearchInput) el.materialPageSearchInput.value = '';
+      state.materialKeyword = '';
+      renderMaterialsPage();
+    });
+
+    safeBind(el.materialAddBtn, 'click', async () => {
+      const name = prompt('자재명');
+      if (!name) return;
+      const stockQty = prompt('초기 재고', '0');
+      if (stockQty === null) return;
+      const unitPrice = prompt('단가', '0');
+      if (unitPrice === null) return;
+
+      try {
+        await api.post('/api/materials', {
+          name: name.trim(),
+          stock_qty: toNumber(stockQty),
+          unit_price: toNumber(unitPrice)
+        });
+        await reloadMaterials();
+        await reloadOptions();
+        renderMaterialsPage();
+      } catch (err) {
+        alert('자재 추가 중 오류가 발생했습니다.');
+        console.error(err);
+      }
+    });
+  }
+
+  function bindOptionControls() {
+    if (el.optionTypeTabs) {
+      el.optionTypeTabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-option-type]');
+        if (!btn) return;
+        state.currentOptionType = btn.dataset.optionType;
+        renderOptionTabsActive();
+        renderOptionsPage();
+      });
+    }
+
+    safeBind(el.optionAddBtn, 'click', async () => {
+      const label = optionTypeLabel(state.currentOptionType);
+      const value = prompt(`${label} 추가`);
+      if (!value || !value.trim()) return;
+
+      try {
+        await api.post(`/api/options/${state.currentOptionType}`, { name: value.trim() });
+        await reloadOptions();
+        renderAllOptionBasedUI();
+        renderOptionsPage();
+      } catch (err) {
+        alert('옵션 추가 중 오류가 발생했습니다.');
+        console.error(err);
+      }
+    });
+  }
+
+  function bindModalControls() {
+    safeBind(el.workCloseBtn, 'click', closeWorkModal);
+
+    safeBind(el.workModal, 'click', (e) => {
+      if (e.target === el.workModal) closeWorkModal();
+    });
+  }
+
+  async function loadInitialData() {
+    await Promise.all([
+      reloadWorks(),
+      reloadPlans(),
+      reloadMaterials(),
+      reloadOptions()
     ]);
 
-    state.works = Array.isArray(works) ? works : [];
-    state.plans = Array.isArray(plans) ? plans : [];
-    state.materialsMaster = Array.isArray(materialsMaster) ? materialsMaster : [];
+    renderAllOptionBasedUI();
+    renderCalendar();
+    renderWorklog();
+    renderMaterialsPage();
+    renderOptionsPage();
+  }
 
-    state.options = {
-      weather: normalizeOptionList(options.weather || options.options_weather || []),
-      crops: normalizeOptionList(options.crops || options.options_crops || []),
-      tasks: normalizeOptionList(options.tasks || options.options_tasks || []),
-      pests: normalizeOptionList(options.pests || options.options_pests || []),
-      materials: normalizeOptionList(options.materials || options.options_materials || []),
-      machines: normalizeOptionList(options.machines || options.options_machines || [])
+  async function reloadWorks() {
+    try {
+      state.works = await api.get('/api/works');
+    } catch (err) {
+      state.works = [];
+      console.error(err);
+    }
+  }
+
+  async function reloadPlans() {
+    try {
+      state.plans = await api.get('/api/plans');
+    } catch (err) {
+      state.plans = [];
+      console.error(err);
+    }
+  }
+
+  async function reloadMaterials() {
+    try {
+      state.materials = await api.get('/api/materials');
+    } catch (err) {
+      state.materials = [];
+      console.error(err);
+    }
+  }
+
+  async function reloadOptions() {
+    try {
+      const data = await api.get('/api/options');
+      state.options.weather = normalizeOptions(data.weather || data.options_weather || []);
+      state.options.crops = normalizeOptions(data.crops || data.options_crops || []);
+      state.options.tasks = normalizeOptions(data.tasks || data.options_tasks || []);
+      state.options.pests = normalizeOptions(data.pests || data.options_pests || []);
+      state.options.materials = normalizeOptions(data.materials || data.options_materials || []);
+      state.options.machines = normalizeOptions(data.machines || data.options_machines || []);
+    } catch (err) {
+      console.error(err);
+      state.options = { weather: [], crops: [], tasks: [], pests: [], materials: [], machines: [] };
+    }
+  }
+
+  function switchPage(page) {
+    state.currentPage = page;
+
+    const pageMap = {
+      calendar: el.pageCalendar,
+      worklog: el.pageWorklog,
+      materials: el.pageMaterials,
+      money: el.pageMoney,
+      options: el.pageOptions,
+      excel: el.pageExcel,
+      backup: el.pageBackup
     };
+
+    Object.entries(pageMap).forEach(([key, node]) => {
+      if (!node) return;
+      node.style.display = key === page ? '' : 'none';
+    });
+
+    const menuMap = {
+      calendar: el.menuCalendar,
+      worklog: el.menuWorklog,
+      materials: el.menuMaterials,
+      money: el.menuMoney,
+      options: el.menuOptions,
+      excel: el.menuExcel,
+      backup: el.menuBackup
+    };
+
+    Object.entries(menuMap).forEach(([key, node]) => {
+      if (!node) return;
+      node.classList.toggle('active', key === page);
+    });
+
+    if (page === 'calendar') renderCalendar();
+    if (page === 'worklog') renderWorklog();
+    if (page === 'materials') renderMaterialsPage();
+    if (page === 'options') renderOptionsPage();
   }
 
-  async function refreshDataAndRerender() {
-    await loadAllData();
-    render();
-  }
+  function renderCalendar() {
+    if (!el.calendarGrid) return;
 
-  function render() {
-    switch (state.currentView) {
-      case "calendar":
-        renderCalendarView();
-        break;
-      case "works":
-        renderWorksView();
-        break;
-      case "materials":
-        renderMaterialsView();
-        break;
-      case "money":
-        renderMoneyView();
-        break;
-      case "options":
-        renderOptionsView();
-        break;
-      case "excel":
-        renderExcelView();
-        break;
-      case "backup":
-        renderBackupView();
-        break;
-      default:
-        renderCalendarView();
-        break;
-    }
-  }
+    const year = state.currentMonth.getFullYear();
+    const month = state.currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
 
-  function renderCalendarView() {
-    const firstDay = new Date(state.currentYear, state.currentMonth, 1).getDay();
-    const lastDate = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
-
-    let dayCellsHtml = "";
-
-    for (let i = 0; i < firstDay; i++) {
-      dayCellsHtml += `<div class="wl-empty-cell"></div>`;
+    if (el.calendarMonthLabel) {
+      el.calendarMonthLabel.textContent = `${year}년 ${month + 1}월`;
     }
 
-    for (let day = 1; day <= lastDate; day++) {
-      const dateStr = formatDate(state.currentYear, state.currentMonth, day);
-      const plans = getPlansByDate(dateStr);
-      const works = getWorksByDate(dateStr);
-      const isSelected = state.selectedDate === dateStr;
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
 
-      dayCellsHtml += `
-        <button class="wl-day-cell ${isSelected ? "selected" : ""}" data-date="${dateStr}">
-          <div class="wl-day-num">${day}</div>
-          <div class="wl-day-summary">
-            <div class="wl-day-summary-line">계획 ${plans.length}</div>
-            <div class="wl-day-summary-line">실적 ${works.length}</div>
+    const cells = [];
+    for (let i = 0; i < startWeekday; i++) {
+      cells.push(`<div class="calendar-cell empty"></div>`);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = formatDate(new Date(year, month, day));
+      const dayPlans = state.plans.filter(p => normalizePlanDate(p.plan_date) === dateStr);
+      const dayWorks = state.works.filter(w => isDateInWorkRange(dateStr, w.start_date, w.end_date));
+
+      cells.push(`
+        <div class="calendar-cell ${state.selectedWorkDate === dateStr ? 'selected' : ''}" data-date="${escapeHtml(dateStr)}">
+          <div class="calendar-day-num">${day}</div>
+          <div class="calendar-day-counts">
+            <div class="plan-count">계획 ${dayPlans.length}</div>
+            <div class="work-count">실적 ${dayWorks.length}</div>
           </div>
-        </button>
+        </div>
+      `);
+    }
+
+    el.calendarGrid.innerHTML = cells.join('');
+
+    Array.from(el.calendarGrid.querySelectorAll('.calendar-cell[data-date]')).forEach(node => {
+      node.addEventListener('click', () => {
+        state.selectedWorkDate = node.dataset.date;
+        renderCalendar();
+        renderCalendarSidePanel();
+      });
+    });
+
+    renderCalendarSidePanel();
+  }
+
+  function renderCalendarSidePanel() {
+    if (!el.calendarSidePanel) return;
+
+    const date = state.selectedWorkDate;
+    if (!date) {
+      el.calendarSidePanel.innerHTML = `
+        <div class="empty-panel">날짜를 선택하면 계획과 실적을 볼 수 있습니다.</div>
       `;
-    }
-
-    const selectedPlans = getSelectedPlans();
-    const selectedWorks = getSelectedWorks();
-
-    mainArea.innerHTML = `
-      <div class="wl-wrap">
-        <style>
-          .wl-wrap{padding:28px 20px 30px 20px;}
-          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-          .wl-title-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
-          .wl-title{font-size:22px;font-weight:700;}
-          .wl-month-nav{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
-          .wl-btn{
-            border:none;border-radius:12px;padding:10px 14px;cursor:pointer;
-            background:#e7ebf2;font-weight:600;
-          }
-          .wl-btn.primary{background:#3d6af2;color:#fff;}
-          .wl-btn.success{background:#2e8b57;color:#fff;}
-          .wl-btn.danger{background:#d9534f;color:#fff;}
-          .wl-btn.small{padding:6px 10px;font-size:13px;border-radius:10px;}
-          .wl-calendar-grid{
-            display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-top:10px;
-          }
-          .wl-weekday{
-            text-align:center;font-weight:700;color:#555;padding:6px 0;
-          }
-          .wl-empty-cell{min-height:92px;}
-          .wl-day-cell{
-            min-height:92px;background:#fff;border:1px solid #d7dde6;border-radius:16px;
-            text-align:left;padding:8px;cursor:pointer;
-          }
-          .wl-day-cell.selected{outline:2px solid #3d6af2;}
-          .wl-day-num{font-size:18px;font-weight:700;margin-bottom:8px;}
-          .wl-day-summary{font-size:12px;color:#555;line-height:1.45;}
-          .wl-detail-card{margin-top:18px;}
-          .wl-detail-title{font-size:18px;font-weight:700;margin-bottom:18px;}
-          .wl-section{margin-bottom:22px;}
-          .wl-section-head{
-            display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;
-          }
-          .wl-section-title{font-size:16px;font-weight:700;}
-          .wl-empty-text{color:#666;padding:6px 0;}
-          .wl-list{display:flex;flex-direction:column;gap:10px;}
-          .wl-item{
-            border:1px solid #d7dde6;border-radius:14px;padding:12px;background:#fafbfc;
-          }
-          .wl-item.done{
-            background:#f3f7f3;
-            border-color:#bcd7c4;
-          }
-          .wl-item-title{font-weight:700;margin-bottom:6px;}
-          .wl-item-sub{color:#555;font-size:14px;white-space:pre-wrap;}
-          .wl-item-actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;}
-          .wl-form-box{
-            display:none;margin-top:12px;border:1px dashed #cfd6e2;border-radius:14px;padding:14px;background:#fbfcff;
-          }
-          .wl-form-box.open{display:block;}
-          .wl-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-          .wl-form-grid.single{grid-template-columns:1fr;}
-          .wl-input,.wl-select,.wl-textarea{
-            width:100%;padding:10px 12px;border:1px solid #cfd6e2;border-radius:10px;box-sizing:border-box;
-            font:inherit;background:#fff;
-          }
-          .wl-textarea{min-height:90px;resize:vertical;}
-          .wl-check-grid{
-            display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px 10px;
-            border:1px solid #cfd6e2;border-radius:10px;padding:10px;background:#fff;
-          }
-          .wl-check-item{display:flex;align-items:center;gap:6px;font-size:14px;}
-          .wl-form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
-          .wl-help{font-size:13px;color:#666;margin-top:6px;}
-          .wl-work-meta{font-size:13px;color:#555;margin-top:6px;line-height:1.5;}
-          .wl-status-badge{
-            display:inline-block;
-            margin-top:6px;
-            padding:4px 8px;
-            border-radius:999px;
-            font-size:12px;
-            font-weight:700;
-            background:#eef2f7;
-            color:#495057;
-          }
-          .wl-status-badge.done{background:#dff3e5;color:#1f6b3a;}
-          .wl-status-badge.cancelled{background:#f7e3e3;color:#8a2f2f;}
-          .wl-status-badge.planned{background:#e8eefc;color:#2e4f99;}
-
-          .ww-wrap{padding:28px 20px 30px 20px;}
-          .ww-title{font-size:22px;font-weight:700;margin-bottom:18px;}
-          .ww-date-group{
-            background:#fff;border:1px solid #d7dde6;border-radius:18px;
-            padding:16px;margin-bottom:18px;
-          }
-          .ww-date-title{
-            font-size:18px;font-weight:700;margin-bottom:14px;padding-bottom:10px;
-            border-bottom:1px solid #e5e9f0;
-          }
-          .ww-card-row{
-            display:flex;
-            gap:12px;
-            flex-wrap:wrap;
-            align-items:stretch;
-          }
-          .ww-work-card{
-            width:280px;
-            min-height:220px;
-            border:1px solid #d7dde6;
-            border-radius:14px;
-            padding:14px;
-            background:#fafbfc;
-            display:flex;
-            flex-direction:column;
-            box-sizing:border-box;
-          }
-          .ww-work-name{
-            font-size:16px;
-            font-weight:700;
-            margin-bottom:10px;
-            line-height:1.4;
-          }
-          .ww-mini-list{
-            font-size:14px;
-            color:#444;
-            line-height:1.6;
-            flex:1;
-          }
-          .ww-mini-line{
-            margin-bottom:4px;
-            word-break:break-word;
-          }
-          .ww-mini-line b{
-            color:#222;
-            display:inline-block;
-            min-width:64px;
-          }
-          .ww-memo{
-            margin-top:10px;
-            padding-top:10px;
-            border-top:1px dashed #d7dde6;
-            font-size:14px;
-            color:#444;
-            white-space:pre-wrap;
-          }
-          .ww-actions{
-            margin-top:12px;
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-          }
-          .ww-empty{
-            background:#fff;border:1px solid #d7dde6;border-radius:18px;
-            padding:20px;color:#666;
-          }
-
-          .wm-overlay{
-            position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;
-            align-items:center;justify-content:center;z-index:9999;padding:20px;
-          }
-          .wm-overlay.open{display:flex;}
-          .wm-modal{
-            width:min(960px, 100%);
-            max-height:90vh;
-            overflow:auto;
-            background:#fff;border-radius:20px;padding:20px;
-            box-shadow:0 10px 40px rgba(0,0,0,0.18);
-          }
-          .wm-title{
-            font-size:20px;font-weight:700;margin-bottom:16px;
-          }
-          .wm-section{
-            margin-bottom:18px;padding:14px;border:1px solid #d7dde6;border-radius:14px;background:#fafbfc;
-          }
-          .wm-section-title{
-            font-size:15px;font-weight:700;margin-bottom:12px;
-          }
-          .wm-grid{
-            display:grid;grid-template-columns:1fr 1fr;gap:10px;
-          }
-          .wm-grid.one{grid-template-columns:1fr;}
-          .wm-input,.wm-select,.wm-textarea{
-            width:100%;padding:10px 12px;border:1px solid #cfd6e2;border-radius:10px;box-sizing:border-box;
-            font:inherit;background:#fff;
-          }
-          .wm-textarea{min-height:90px;resize:vertical;}
-          .wm-check-grid{
-            display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px 10px;
-            border:1px solid #cfd6e2;border-radius:10px;padding:10px;background:#fff;
-          }
-          .wm-check-item{display:flex;align-items:center;gap:6px;font-size:14px;}
-          .wm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
-          .wm-labor-list{display:flex;flex-direction:column;gap:10px;}
-          .wm-labor-row{
-            border:1px dashed #cfd6e2;border-radius:12px;padding:10px;background:#fff;
-          }
-          .wm-labor-grid{
-            display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;
-          }
-          .wm-labor-grid-note{
-            display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px;
-          }
-
-          .wm-material-search-box{
-            display:grid;grid-template-columns:1fr;gap:10px;
-          }
-          .wm-material-results{
-            border:1px solid #cfd6e2;border-radius:10px;background:#fff;max-height:180px;overflow:auto;
-          }
-          .wm-material-result-item{
-            padding:10px 12px;border-bottom:1px solid #eef2f7;cursor:pointer;
-          }
-          .wm-material-result-item:last-child{border-bottom:none;}
-          .wm-material-result-item:hover{background:#f5f8ff;}
-          .wm-selected-materials{
-            display:flex;flex-wrap:wrap;gap:8px;
-            min-height:20px;
-          }
-          .wm-chip{
-            display:inline-flex;align-items:center;gap:6px;
-            padding:6px 10px;border:1px solid #cfd6e2;border-radius:999px;background:#fff;
-            font-size:13px;
-          }
-          .wm-chip-remove{
-            cursor:pointer;font-weight:700;color:#c0392b;
-          }
-
-          @media (max-width: 900px){
-            .wl-form-grid,.wm-grid,.wm-labor-grid{grid-template-columns:1fr;}
-            .wm-modal{padding:16px;}
-          }
-        </style>
-
-        <div class="wl-title-row">
-          <div class="wl-title">작업달력</div>
-          <div class="wl-month-nav">
-            <button class="wl-btn" id="prevMonthBtn">이전달</button>
-            <div class="wl-title">${getMonthLabel()}</div>
-            <button class="wl-btn" id="nextMonthBtn">다음달</button>
-          </div>
-        </div>
-
-        <div class="wl-card">
-          <div class="wl-calendar-grid">
-            <div class="wl-weekday">일</div>
-            <div class="wl-weekday">월</div>
-            <div class="wl-weekday">화</div>
-            <div class="wl-weekday">수</div>
-            <div class="wl-weekday">목</div>
-            <div class="wl-weekday">금</div>
-            <div class="wl-weekday">토</div>
-            ${dayCellsHtml}
-          </div>
-        </div>
-
-        <div class="wl-card wl-detail-card">
-          <div class="wl-detail-title">
-            ${state.selectedDate ? `${state.selectedDate}` : "날짜를 선택하세요"}
-          </div>
-
-          <div class="wl-section">
-            <div class="wl-section-head">
-              <div class="wl-section-title">작업계획</div>
-              <button class="wl-btn primary small" id="openPlanFormBtn" ${state.selectedDate ? "" : "disabled"}>계획추가</button>
-            </div>
-
-            <div class="wl-form-box" id="planFormBox">
-              <div class="wl-form-grid">
-                <div>
-                  <label>계획날짜</label>
-                  <input class="wl-input" id="planDateInput" type="date" value="${state.selectedDate || ""}">
-                </div>
-                <div>
-                  <label>상태</label>
-                  <select class="wl-select" id="planStatusInput">
-                    <option value="planned">planned</option>
-                    <option value="done">done</option>
-                    <option value="cancelled">cancelled</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="wl-form-grid single" style="margin-top:10px;">
-                <div>
-                  <label>제목</label>
-                  <input class="wl-input" id="planTitleInput" placeholder="예: 물관리 예정">
-                </div>
-                <div>
-                  <label>상세내용</label>
-                  <textarea class="wl-textarea" id="planDetailsInput" placeholder="예: 천혜향 하우스 물관리 예정"></textarea>
-                </div>
-              </div>
-
-              <div class="wl-form-actions">
-                <button class="wl-btn primary" id="savePlanBtn">저장</button>
-                <button class="wl-btn" id="cancelPlanBtn">닫기</button>
-              </div>
-            </div>
-
-            <div class="wl-list" id="planList">
-              ${
-                selectedPlans.length
-                  ? selectedPlans.map(plan => `
-                    <div class="wl-item ${plan.status === "done" ? "done" : ""}">
-                      <div class="wl-item-title">${escapeHtml(plan.title || "(제목 없음)")}</div>
-                      <div class="wl-item-sub">${escapeHtml(plan.details || "")}</div>
-                      <div class="wl-status-badge ${escapeHtml(plan.status || "planned")}">상태: ${getStatusLabel(plan.status || "planned")}</div>
-                      <div class="wl-item-actions">
-                        ${plan.status !== "done" ? `<button class="wl-btn success small" data-plan-done="${plan.id}">완료</button>` : ""}
-                        <button class="wl-btn small" data-plan-convert="${plan.id}">작업변환</button>
-                        <button class="wl-btn small" data-plan-edit="${plan.id}">수정</button>
-                        <button class="wl-btn danger small" data-plan-delete="${plan.id}">삭제</button>
-                      </div>
-                    </div>
-                  `).join("")
-                  : `<div class="wl-empty-text">계획 없음</div>`
-              }
-            </div>
-          </div>
-
-          <div class="wl-section">
-            <div class="wl-section-head">
-              <div class="wl-section-title">작업실적</div>
-              <button class="wl-btn primary small" id="openWorkFormBtn" ${state.selectedDate ? "" : "disabled"}>작업입력</button>
-            </div>
-
-            <div class="wl-form-box" id="workFormBox">
-              ${renderCalendarWorkFormHtml(state.selectedDate)}
-            </div>
-
-            <div class="wl-list" id="workList">
-              ${
-                selectedWorks.length
-                  ? selectedWorks.map(work => `
-                    <div class="wl-item">
-                      <div class="wl-item-title">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
-                      <div class="wl-item-sub">${escapeHtml(getPlainMemoFromWork(work) || "")}</div>
-                      <div class="wl-work-meta">
-                        작물: ${formatField(work.crops)}<br>
-                        병충해: ${formatField(work.pests)}<br>
-                        사용자재: ${formatField(work.materials)}<br>
-                        사용기계: ${formatField(work.machines)}<br>
-                        자재비: ${formatField(getMaterialCostFromWork(work).toLocaleString())}<br>
-                        인건비: ${formatField(Number(work.labor_cost ?? 0).toLocaleString())} / 작업시간: ${formatField(work.work_hours ?? 0)}
-                      </div>
-                      <div class="wl-item-actions">
-                        <button class="wl-btn small" data-work-edit="${work.id}">수정</button>
-                        <button class="wl-btn danger small" data-work-delete="${work.id}">삭제</button>
-                      </div>
-                    </div>
-                  `).join("")
-                  : `<div class="wl-empty-text">작업 없음</div>`
-              }
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    bindCalendarEvents();
-  }
-
-  function renderCalendarWorkFormHtml(defaultDate) {
-    return `
-      <div class="wl-form-grid">
-        <div>
-          <label>시작일</label>
-          <input class="wl-input" id="workStartDate" type="date" value="${defaultDate || ""}">
-        </div>
-        <div>
-          <label>종료일</label>
-          <input class="wl-input" id="workEndDate" type="date" value="${defaultDate || ""}">
-        </div>
-      </div>
-
-      <div class="wl-form-grid" style="margin-top:10px;">
-        <div>
-          <label>날씨</label>
-          ${renderSelectOrInput("workWeather", state.options.weather, "날씨 선택")}
-        </div>
-        <div>
-          <label>작업내용</label>
-          ${renderSelectOrInput("workTaskName", state.options.tasks, "작업 선택")}
-        </div>
-      </div>
-
-      <div class="wl-form-grid single" style="margin-top:10px;">
-        <div>
-          <label>작물(다중선택)</label>
-          ${renderCheckboxGroup("workCrops", state.options.crops)}
-        </div>
-        <div>
-          <label>병충해(다중선택)</label>
-          ${renderCheckboxGroup("workPests", state.options.pests)}
-        </div>
-        <div>
-          <label>사용자재(다중선택)</label>
-          ${renderCheckboxGroup("workMaterials", state.options.materials)}
-        </div>
-        <div>
-          <label>사용기계(다중선택)</label>
-          ${renderCheckboxGroup("workMachines", state.options.machines)}
-        </div>
-      </div>
-
-      <div class="wl-form-grid" style="margin-top:10px;">
-        <div>
-          <label>인건비 총액</label>
-          <input class="wl-input" id="workLaborCost" type="number" min="0" value="0">
-        </div>
-        <div>
-          <label>작업시간</label>
-          <input class="wl-input" id="workHours" type="number" min="0" step="0.5" value="0">
-        </div>
-      </div>
-
-      <div class="wl-form-grid single" style="margin-top:10px;">
-        <div>
-          <label>비고</label>
-          <textarea class="wl-textarea" id="workMemo" placeholder="메모 입력"></textarea>
-        </div>
-      </div>
-
-      <div class="wl-form-actions">
-        <button class="wl-btn primary" id="saveWorkBtn">저장</button>
-        <button class="wl-btn" id="cancelWorkBtn">닫기</button>
-      </div>
-
-      <div class="wl-help">작업달력에서는 간단 입력 방식, 작업일지에서는 상세 팝업 입력 방식을 사용합니다.</div>
-    `;
-  }
-
-  function renderSelectOrInput(id, options, placeholder) {
-    if (options && options.length) {
-      return `
-        <select class="wl-select" id="${id}">
-          <option value="">${placeholder}</option>
-          ${options.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
-        </select>
-      `;
-    }
-    return `<input class="wl-input" id="${id}" placeholder="${placeholder}">`;
-  }
-
-  function renderCheckboxGroup(name, options) {
-    if (!options || !options.length) {
-      return `<div class="wl-help">옵션관리에서 항목을 추가하면 여기에 표시됩니다.</div>`;
-    }
-
-    return `
-      <div class="wl-check-grid">
-        ${options.map(v => `
-          <label class="wl-check-item">
-            <input type="checkbox" name="${name}" value="${escapeHtml(v)}">
-            <span>${escapeHtml(v)}</span>
-          </label>
-        `).join("")}
-      </div>
-    `;
-  }
-
-  function bindCalendarEvents() {
-    const prevBtn = $("#prevMonthBtn");
-    const nextBtn = $("#nextMonthBtn");
-    const openPlanFormBtn = $("#openPlanFormBtn");
-    const cancelPlanBtn = $("#cancelPlanBtn");
-    const savePlanBtn = $("#savePlanBtn");
-    const openWorkFormBtn = $("#openWorkFormBtn");
-    const cancelWorkBtn = $("#cancelWorkBtn");
-    const saveWorkBtn = $("#saveWorkBtn");
-
-    prevBtn?.addEventListener("click", () => {
-      state.currentMonth -= 1;
-      if (state.currentMonth < 0) {
-        state.currentMonth = 11;
-        state.currentYear -= 1;
-      }
-      renderCalendarView();
-    });
-
-    nextBtn?.addEventListener("click", () => {
-      state.currentMonth += 1;
-      if (state.currentMonth > 11) {
-        state.currentMonth = 0;
-        state.currentYear += 1;
-      }
-      renderCalendarView();
-    });
-
-    $all(".wl-day-cell").forEach(cell => {
-      cell.addEventListener("click", () => {
-        state.selectedDate = cell.dataset.date;
-        renderCalendarView();
-      });
-    });
-
-    openPlanFormBtn?.addEventListener("click", () => {
-      $("#planFormBox")?.classList.add("open");
-      const dateInput = $("#planDateInput");
-      if (dateInput && state.selectedDate) dateInput.value = state.selectedDate;
-    });
-
-    cancelPlanBtn?.addEventListener("click", () => {
-      $("#planFormBox")?.classList.remove("open");
-      clearPlanForm();
-    });
-
-    savePlanBtn?.addEventListener("click", handleCreatePlan);
-
-    openWorkFormBtn?.addEventListener("click", () => {
-      $("#workFormBox")?.classList.add("open");
-      if ($("#workStartDate")) $("#workStartDate").value = state.selectedDate || "";
-      if ($("#workEndDate")) $("#workEndDate").value = state.selectedDate || "";
-    });
-
-    cancelWorkBtn?.addEventListener("click", () => {
-      $("#workFormBox")?.classList.remove("open");
-      clearCalendarWorkForm();
-    });
-
-    saveWorkBtn?.addEventListener("click", handleCreateWorkFromCalendar);
-
-    $all("[data-plan-delete]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.planDelete;
-        if (!confirm("이 계획을 삭제할까요?")) return;
-
-        try {
-          await api(`/api/plans/${id}`, { method: "DELETE" });
-          await refreshDataAndRerender();
-          infoMessage("계획 삭제 완료");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-
-    $all("[data-plan-edit]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.planEdit;
-        const plan = state.plans.find(p => String(p.id) === String(id));
-        if (!plan) return;
-
-        const title = prompt("계획 제목", plan.title || "");
-        if (title === null) return;
-
-        const details = prompt("상세내용", plan.details || "");
-        if (details === null) return;
-
-        const status = prompt("상태(planned / done / cancelled)", plan.status || "planned");
-        if (status === null) return;
-
-        try {
-          await api(`/api/plans/${id}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              plan_date: plan.plan_date,
-              title,
-              details,
-              status
-            })
-          });
-          await refreshDataAndRerender();
-          infoMessage("계획 수정 완료");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-
-    $all("[data-plan-done]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.planDone;
-        const plan = state.plans.find(p => String(p.id) === String(id));
-        if (!plan) return;
-
-        try {
-          await api(`/api/plans/${id}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              plan_date: plan.plan_date,
-              title: plan.title || "",
-              details: plan.details || "",
-              status: "done"
-            })
-          });
-          await refreshDataAndRerender();
-          infoMessage("계획 완료 처리됨");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-
-    $all("[data-plan-convert]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.planConvert;
-        const plan = state.plans.find(p => String(p.id) === String(id));
-        if (!plan) return;
-
-        if (!confirm("이 계획을 작업실적으로 변환할까요?")) return;
-
-        try {
-          await api("/api/works", {
-            method: "POST",
-            body: JSON.stringify({
-              start_date: plan.plan_date,
-              end_date: plan.plan_date,
-              weather: "",
-              crops: "",
-              task_name: plan.title || "",
-              pests: "",
-              materials: "",
-              machines: "",
-              labor_cost: 0,
-              work_hours: 0,
-              memo: buildWorkMemo(plan.details || "", {
-                materialCost: 0,
-                laborRows: [],
-                selectedMaterials: []
-              })
-            })
-          });
-
-          await api(`/api/plans/${id}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              plan_date: plan.plan_date,
-              title: plan.title || "",
-              details: plan.details || "",
-              status: "done"
-            })
-          });
-
-          state.selectedDate = plan.plan_date;
-          await refreshDataAndRerender();
-          infoMessage("계획이 작업실적으로 변환되었습니다.");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-
-    $all("[data-work-delete]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.workDelete;
-        if (!confirm("이 작업실적을 삭제할까요?")) return;
-
-        try {
-          await api(`/api/works/${id}`, { method: "DELETE" });
-          await refreshDataAndRerender();
-          infoMessage("작업 삭제 완료");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-
-    $all("[data-work-edit]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.workEdit;
-        const work = state.works.find(w => String(w.id) === String(id));
-        if (!work) return;
-
-        const parsed = parseWorkExtra(work.memo || "");
-        const task_name = prompt("작업내용", work.task_name || "");
-        if (task_name === null) return;
-
-        const memo = prompt("비고", parsed.plainMemo || "");
-        if (memo === null) return;
-
-        const labor_cost = prompt("인건비", work.labor_cost || "0");
-        if (labor_cost === null) return;
-
-        const work_hours = prompt("작업시간", work.work_hours || "0");
-        if (work_hours === null) return;
-
-        try {
-          await api(`/api/works/${id}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              start_date: work.start_date,
-              end_date: work.end_date,
-              weather: work.weather || "",
-              crops: work.crops || "",
-              task_name,
-              pests: work.pests || "",
-              materials: work.materials || "",
-              machines: work.machines || "",
-              labor_cost: Number(labor_cost || 0),
-              work_hours: Number(work_hours || 0),
-              memo: buildWorkMemo(memo, parsed.meta)
-            })
-          });
-          await refreshDataAndRerender();
-          infoMessage("작업 수정 완료");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-  }
-
-  function clearPlanForm() {
-    if ($("#planTitleInput")) $("#planTitleInput").value = "";
-    if ($("#planDetailsInput")) $("#planDetailsInput").value = "";
-    if ($("#planStatusInput")) $("#planStatusInput").value = "planned";
-    if ($("#planDateInput")) $("#planDateInput").value = state.selectedDate || "";
-  }
-
-  function clearCalendarWorkForm() {
-    if ($("#workStartDate")) $("#workStartDate").value = state.selectedDate || "";
-    if ($("#workEndDate")) $("#workEndDate").value = state.selectedDate || "";
-    if ($("#workWeather")) $("#workWeather").value = "";
-    if ($("#workTaskName")) $("#workTaskName").value = "";
-    if ($("#workLaborCost")) $("#workLaborCost").value = "0";
-    if ($("#workHours")) $("#workHours").value = "0";
-    if ($("#workMemo")) $("#workMemo").value = "";
-    $all('input[name="workCrops"]:checked').forEach(el => (el.checked = false));
-    $all('input[name="workPests"]:checked').forEach(el => (el.checked = false));
-    $all('input[name="workMaterials"]:checked').forEach(el => (el.checked = false));
-    $all('input[name="workMachines"]:checked').forEach(el => (el.checked = false));
-  }
-
-  async function handleCreatePlan() {
-    const plan_date = $("#planDateInput")?.value || state.selectedDate;
-    const title = $("#planTitleInput")?.value?.trim() || "";
-    const details = $("#planDetailsInput")?.value?.trim() || "";
-    const status = $("#planStatusInput")?.value || "planned";
-
-    if (!plan_date) {
-      infoMessage("계획 날짜를 선택하세요.");
       return;
     }
 
-    if (!title) {
-      infoMessage("계획 제목을 입력하세요.");
-      return;
-    }
+    const dayPlans = state.plans.filter(p => normalizePlanDate(p.plan_date) === date);
+    const dayWorks = state.works.filter(w => isDateInWorkRange(date, w.start_date, w.end_date));
+
+    el.calendarSidePanel.innerHTML = `
+      <div class="panel-header">
+        <h3>${escapeHtml(date)}</h3>
+        <div class="panel-actions">
+          <button type="button" id="addPlanBtn">계획추가</button>
+          <button type="button" id="addWorkFromDateBtn">실적입력</button>
+        </div>
+      </div>
+
+      <div class="calendar-panel-section">
+        <h4>작업계획</h4>
+        <div class="calendar-plan-list">
+          ${dayPlans.length ? dayPlans.map(renderPlanItem).join('') : '<div class="empty-line">등록된 계획 없음</div>'}
+        </div>
+      </div>
+
+      <div class="calendar-panel-section">
+        <h4>작업실적</h4>
+        <div class="calendar-work-list">
+          ${dayWorks.length ? dayWorks.map(renderMiniWorkItem).join('') : '<div class="empty-line">등록된 실적 없음</div>'}
+        </div>
+      </div>
+    `;
+
+    const addPlanBtn = document.getElementById('addPlanBtn');
+    const addWorkFromDateBtn = document.getElementById('addWorkFromDateBtn');
+    safeBind(addPlanBtn, 'click', () => createPlanPrompt(date));
+    safeBind(addWorkFromDateBtn, 'click', () => openWorkModal({ start_date: date, end_date: date }));
+
+    Array.from(el.calendarSidePanel.querySelectorAll('[data-plan-edit]')).forEach(btn => {
+      btn.addEventListener('click', () => editPlanPrompt(btn.dataset.planEdit));
+    });
+    Array.from(el.calendarSidePanel.querySelectorAll('[data-plan-delete]')).forEach(btn => {
+      btn.addEventListener('click', () => deletePlan(btn.dataset.planDelete));
+    });
+    Array.from(el.calendarSidePanel.querySelectorAll('[data-plan-done]')).forEach(btn => {
+      btn.addEventListener('click', () => markPlanDone(btn.dataset.planDone));
+    });
+    Array.from(el.calendarSidePanel.querySelectorAll('[data-plan-to-work]')).forEach(btn => {
+      btn.addEventListener('click', () => convertPlanToWork(btn.dataset.planToWork));
+    });
+    Array.from(el.calendarSidePanel.querySelectorAll('[data-mini-work-edit]')).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const work = state.works.find(w => String(w.id) === String(btn.dataset.miniWorkEdit));
+        if (work) openWorkModal(work);
+      });
+    });
+    Array.from(el.calendarSidePanel.querySelectorAll('[data-mini-work-delete]')).forEach(btn => {
+      btn.addEventListener('click', () => deleteWork(btn.dataset.miniWorkDelete));
+    });
+  }
+
+  function renderPlanItem(plan) {
+    const statusMap = { planned: '계획', done: '완료', cancelled: '취소' };
+    return `
+      <div class="plan-item">
+        <div class="plan-main">
+          <div class="plan-title">${escapeHtml(plan.title || '')}</div>
+          <div class="plan-meta">상태: ${statusMap[plan.status] || plan.status || '계획'}</div>
+          <div class="plan-details">${escapeHtml(plan.details || '')}</div>
+        </div>
+        <div class="plan-actions">
+          <button type="button" data-plan-done="${escapeHtml(String(plan.id))}">완료</button>
+          <button type="button" data-plan-to-work="${escapeHtml(String(plan.id))}">실적전환</button>
+          <button type="button" data-plan-edit="${escapeHtml(String(plan.id))}">수정</button>
+          <button type="button" data-plan-delete="${escapeHtml(String(plan.id))}">삭제</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMiniWorkItem(work) {
+    const meta = parseWorkMemo(work.memo);
+    return `
+      <div class="mini-work-item">
+        <div class="mini-work-title">${escapeHtml(work.task_name || '')}</div>
+        <div class="mini-work-sub">작물: ${escapeHtml(work.crops || '')}</div>
+        <div class="mini-work-sub">자재: ${escapeHtml(joinMaterialNames(meta.materials))}</div>
+        <div class="mini-work-actions">
+          <button type="button" data-mini-work-edit="${escapeHtml(String(work.id))}">수정</button>
+          <button type="button" data-mini-work-delete="${escapeHtml(String(work.id))}">삭제</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function createPlanPrompt(date) {
+    const title = prompt('작업계획 제목');
+    if (!title) return;
+    const details = prompt('상세 내용', '') || '';
 
     try {
-      await api("/api/plans", {
-        method: "POST",
-        body: JSON.stringify({ plan_date, title, details, status })
+      await api.post('/api/plans', {
+        plan_date: date,
+        title: title.trim(),
+        details,
+        status: 'planned'
       });
-
-      state.selectedDate = plan_date;
-      await refreshDataAndRerender();
-      infoMessage("계획 추가 완료");
+      await reloadPlans();
+      renderCalendar();
     } catch (err) {
-      showError(err);
+      alert('계획 저장 중 오류가 발생했습니다.');
+      console.error(err);
     }
   }
 
-  async function handleCreateWorkFromCalendar() {
-    const start_date = $("#workStartDate")?.value || "";
-    const end_date = $("#workEndDate")?.value || start_date;
-    const weather = $("#workWeather")?.value || "";
-    const task_name = $("#workTaskName")?.value || "";
-    const crops = getCheckedValues("workCrops");
-    const pests = getCheckedValues("workPests");
-    const materials = getCheckedValues("workMaterials");
-    const machines = getCheckedValues("workMachines");
-    const labor_cost = Number($("#workLaborCost")?.value || 0);
-    const work_hours = Number($("#workHours")?.value || 0);
-    const memo = $("#workMemo")?.value?.trim() || "";
+  async function editPlanPrompt(planId) {
+    const plan = state.plans.find(p => String(p.id) === String(planId));
+    if (!plan) return;
 
-    if (!start_date) {
-      infoMessage("시작일을 입력하세요.");
-      return;
-    }
-
-    if (!task_name) {
-      infoMessage("작업내용을 입력하세요.");
-      return;
-    }
+    const title = prompt('작업계획 제목', plan.title || '');
+    if (title === null) return;
+    const details = prompt('상세 내용', plan.details || '');
+    if (details === null) return;
+    const status = prompt('상태(planned / done / cancelled)', plan.status || 'planned');
+    if (status === null) return;
 
     try {
-      await api("/api/works", {
-        method: "POST",
-        body: JSON.stringify({
-          start_date,
-          end_date,
-          weather,
-          crops: joinMultiValue(crops),
-          task_name,
-          pests: joinMultiValue(pests),
-          materials: joinMultiValue(materials),
-          machines: joinMultiValue(machines),
-          labor_cost,
-          work_hours,
-          memo: buildWorkMemo(memo, {
-            materialCost: 0,
-            laborRows: [],
-            selectedMaterials: []
-          })
-        })
+      await api.put(`/api/plans/${plan.id}`, {
+        plan_date: normalizePlanDate(plan.plan_date),
+        title: title.trim(),
+        details,
+        status: status.trim()
       });
-
-      state.selectedDate = start_date;
-      await refreshDataAndRerender();
-      infoMessage("작업실적 추가 완료");
+      await reloadPlans();
+      renderCalendar();
     } catch (err) {
-      showError(err);
+      alert('계획 수정 중 오류가 발생했습니다.');
+      console.error(err);
     }
   }
 
-  function filterWorksByKeyword(works) {
-    const keyword = String(state.workSearchKeyword || "").trim().toLowerCase();
-    if (!keyword) return works;
+  async function deletePlan(planId) {
+    if (!confirm('이 계획을 삭제하시겠습니까?')) return;
+    try {
+      await api.delete(`/api/plans/${planId}`);
+      await reloadPlans();
+      renderCalendar();
+    } catch (err) {
+      alert('계획 삭제 중 오류가 발생했습니다.');
+      console.error(err);
+    }
+  }
 
-    return works.filter(work => {
-      const plainMemo = getPlainMemoFromWork(work);
-      const extra = parseWorkExtra(work.memo || "");
-      const selectedMaterials = Array.isArray(extra.meta.selectedMaterials) ? extra.meta.selectedMaterials.join(" ") : "";
+  async function markPlanDone(planId) {
+    const plan = state.plans.find(p => String(p.id) === String(planId));
+    if (!plan) return;
 
-      const target = [
-        work.task_name || "",
-        work.crops || "",
-        work.weather || "",
-        work.pests || "",
-        work.materials || "",
-        work.machines || "",
-        plainMemo || "",
-        selectedMaterials || ""
-      ].join(" ").toLowerCase();
+    try {
+      await api.put(`/api/plans/${plan.id}`, {
+        plan_date: normalizePlanDate(plan.plan_date),
+        title: plan.title,
+        details: plan.details || '',
+        status: 'done'
+      });
+      await reloadPlans();
+      renderCalendar();
+    } catch (err) {
+      alert('계획 상태 변경 중 오류가 발생했습니다.');
+      console.error(err);
+    }
+  }
 
-      return target.includes(keyword);
+  function convertPlanToWork(planId) {
+    const plan = state.plans.find(p => String(p.id) === String(planId));
+    if (!plan) return;
+
+    openWorkModal({
+      start_date: normalizePlanDate(plan.plan_date),
+      end_date: normalizePlanDate(plan.plan_date),
+      task_name: plan.title || '',
+      memo: safeJSONStringify({ from_plan_id: plan.id, plan_details: plan.details || '' })
     });
   }
 
-  function renderWorksView() {
-    const filteredWorks = filterWorksByKeyword(state.works);
-    const grouped = {};
+  function renderWorklog() {
+    if (!el.worklogList) return;
 
-    filteredWorks.forEach(work => {
-      const key = work.start_date || "날짜없음";
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(work);
-    });
+    const keyword = state.worklogKeyword.trim().toLowerCase();
+    const filtered = state.works.filter(work => workMatchesKeyword(work, keyword));
+    const grouped = groupWorksByDate(filtered);
+    const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
-    const sortedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
+    if (!dates.length) {
+      el.worklogList.innerHTML = `<div class="empty-panel">표시할 작업일지가 없습니다.</div>`;
+      return;
+    }
 
-    mainArea.innerHTML = `
-      <div class="ww-wrap">
-        <style>
-          .wl-btn{
-            border:none;border-radius:12px;padding:10px 14px;cursor:pointer;
-            background:#e7ebf2;font-weight:600;
-          }
-          .wl-btn.primary{background:#3d6af2;color:#fff;}
-          .wl-btn.danger{background:#d9534f;color:#fff;}
-          .wl-btn.small{padding:6px 10px;font-size:13px;border-radius:10px;}
-
-          .ww-wrap{padding:28px 20px 30px 20px;}
-          .ww-head{
-            display:flex;justify-content:space-between;align-items:center;gap:12px;
-            margin-bottom:18px;flex-wrap:wrap;
-          }
-          .ww-title{font-size:22px;font-weight:700;}
-          .ww-head-right{
-            display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-          }
-          .ww-search{
-            padding:10px 12px;border:1px solid #cfd6e2;border-radius:10px;min-width:240px;
-          }
-          .ww-date-group{
-            background:#fff;
-            border:1px solid #d7dde6;
-            border-radius:18px;
-            padding:16px;
-            margin-bottom:18px;
-          }
-          .ww-date-title{
-            font-size:18px;
-            font-weight:700;
-            margin-bottom:14px;
-            padding-bottom:10px;
-            border-bottom:1px solid #e5e9f0;
-          }
-          .ww-card-row{
-            display:flex;
-            flex-wrap:wrap;
-            gap:12px;
-            align-items:stretch;
-          }
-          .ww-work-card{
-            width:280px;
-            min-height:260px;
-            border:1px solid #d7dde6;
-            border-radius:14px;
-            padding:14px;
-            background:#fafbfc;
-            display:flex;
-            flex-direction:column;
-            box-sizing:border-box;
-          }
-          .ww-work-card.only-one{width:100%;}
-          .ww-work-name{
-            font-size:16px;
-            font-weight:700;
-            margin-bottom:10px;
-            line-height:1.4;
-          }
-          .ww-mini-list{
-            font-size:14px;
-            color:#444;
-            line-height:1.6;
-            flex:1;
-          }
-          .ww-mini-line{
-            margin-bottom:4px;
-            word-break:break-word;
-          }
-          .ww-mini-line b{
-            color:#222;
-            display:inline-block;
-            min-width:64px;
-          }
-          .ww-memo{
-            margin-top:10px;
-            padding-top:10px;
-            border-top:1px dashed #d7dde6;
-            font-size:14px;
-            color:#444;
-            white-space:pre-wrap;
-          }
-          .ww-actions{
-            margin-top:12px;
-            display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-          }
-          .ww-empty{
-            background:#fff;
-            border:1px solid #d7dde6;
-            border-radius:18px;
-            padding:20px;
-            color:#666;
-          }
-
-          .wm-overlay{
-            position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;
-            align-items:center;justify-content:center;z-index:9999;padding:20px;
-          }
-          .wm-overlay.open{display:flex;}
-          .wm-modal{
-            width:min(960px, 100%);
-            max-height:90vh;
-            overflow:auto;
-            background:#fff;border-radius:20px;padding:20px;
-            box-shadow:0 10px 40px rgba(0,0,0,0.18);
-          }
-          .wm-title{
-            font-size:20px;font-weight:700;margin-bottom:16px;
-          }
-          .wm-section{
-            margin-bottom:18px;padding:14px;border:1px solid #d7dde6;border-radius:14px;background:#fafbfc;
-          }
-          .wm-section-title{
-            font-size:15px;font-weight:700;margin-bottom:12px;
-          }
-          .wm-grid{
-            display:grid;grid-template-columns:1fr 1fr;gap:10px;
-          }
-          .wm-grid.one{grid-template-columns:1fr;}
-          .wm-input,.wm-select,.wm-textarea{
-            width:100%;padding:10px 12px;border:1px solid #cfd6e2;border-radius:10px;box-sizing:border-box;
-            font:inherit;background:#fff;
-          }
-          .wm-textarea{min-height:90px;resize:vertical;}
-          .wm-check-grid{
-            display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px 10px;
-            border:1px solid #cfd6e2;border-radius:10px;padding:10px;background:#fff;
-          }
-          .wm-check-item{display:flex;align-items:center;gap:6px;font-size:14px;}
-          .wm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
-          .wm-labor-list{display:flex;flex-direction:column;gap:10px;}
-          .wm-labor-row{
-            border:1px dashed #cfd6e2;border-radius:12px;padding:10px;background:#fff;
-          }
-          .wm-labor-grid{
-            display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;
-          }
-          .wm-labor-grid-note{
-            display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px;
-          }
-
-          .wm-material-search-box{
-            display:grid;grid-template-columns:1fr;gap:10px;
-          }
-          .wm-material-results{
-            border:1px solid #cfd6e2;border-radius:10px;background:#fff;max-height:180px;overflow:auto;
-          }
-          .wm-material-result-item{
-            padding:10px 12px;border-bottom:1px solid #eef2f7;cursor:pointer;
-          }
-          .wm-material-result-item:last-child{border-bottom:none;}
-          .wm-material-result-item:hover{background:#f5f8ff;}
-          .wm-selected-materials{
-            display:flex;flex-wrap:wrap;gap:8px;min-height:20px;
-          }
-          .wm-chip{
-            display:inline-flex;align-items:center;gap:6px;
-            padding:6px 10px;border:1px solid #cfd6e2;border-radius:999px;background:#fff;
-            font-size:13px;
-          }
-          .wm-chip-remove{
-            cursor:pointer;font-weight:700;color:#c0392b;
-          }
-
-          @media (max-width: 900px){
-            .ww-work-card{width:100%;}
-            .wm-grid,.wm-labor-grid{grid-template-columns:1fr;}
-            .ww-search{min-width:100%;}
-          }
-        </style>
-
-        <div class="ww-head">
-          <div class="ww-title">작업일지</div>
-          <div class="ww-head-right">
-            <input class="ww-search" id="workSearchInput" placeholder="검색 (예: 방제, 다이센, 응애)" value="${escapeHtml(state.workSearchKeyword)}">
-            <button class="wl-btn" id="resetWorkSearchBtn">초기화</button>
-            <button class="wl-btn primary" id="openWorkModalBtn">작업입력</button>
-          </div>
-        </div>
-
-        ${
-          sortedDates.length
-            ? sortedDates.map(date => {
-                const works = grouped[date];
-                const onlyOne = works.length === 1;
-
-                return `
-                  <div class="ww-date-group">
-                    <div class="ww-date-title">${escapeHtml(date)}</div>
-                    <div class="ww-card-row">
-                      ${
-                        works.map(work => `
-                          <div class="ww-work-card ${onlyOne ? "only-one" : ""}">
-                            <div class="ww-work-name">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
-
-                            <div class="ww-mini-list">
-                              <div class="ww-mini-line"><b>작물</b> ${formatField(work.crops)}</div>
-                              <div class="ww-mini-line"><b>날씨</b> ${formatField(work.weather)}</div>
-                              <div class="ww-mini-line"><b>병충해</b> ${formatField(work.pests)}</div>
-                              <div class="ww-mini-line"><b>자재</b> ${formatField(work.materials)}</div>
-                              <div class="ww-mini-line"><b>자재비</b> ${formatField(getMaterialCostFromWork(work).toLocaleString())}</div>
-                              <div class="ww-mini-line"><b>기계</b> ${formatField(work.machines)}</div>
-                              <div class="ww-mini-line"><b>인건비</b> ${formatField(Number(work.labor_cost || 0).toLocaleString())}</div>
-                              ${renderLaborSummaryHtml(work)}
-                              <div class="ww-mini-line"><b>시간</b> ${formatField(work.work_hours ?? 0)}</div>
-                              <div class="ww-mini-line"><b>기간</b> ${formatField(work.start_date)} ~ ${formatField(work.end_date)}</div>
-                            </div>
-
-                            <div class="ww-memo"><b>비고</b><br>${formatField(getPlainMemoFromWork(work))}</div>
-
-                            <div class="ww-actions">
-                              <button class="wl-btn small" data-work-edit="${work.id}">수정</button>
-                              <button class="wl-btn danger small" data-work-delete="${work.id}">삭제</button>
-                            </div>
-                          </div>
-                        `).join("")
-                      }
-                    </div>
-                  </div>
-                `;
-              }).join("")
-            : `<div class="ww-empty">검색 결과가 없거나 작업일지 데이터가 없습니다.</div>`
-        }
-
-        <div class="wm-overlay" id="workModalOverlay">
-          <div class="wm-modal">
-            <div class="wm-title">작업 입력</div>
-
-            <div class="wm-section">
-              <div class="wm-section-title">기본정보</div>
-              <div class="wm-grid">
-                <div>
-                  <label>시작일</label>
-                  <input class="wm-input" id="modalStartDate" type="date" value="${state.selectedDate || ""}">
-                </div>
-                <div>
-                  <label>종료일</label>
-                  <input class="wm-input" id="modalEndDate" type="date" value="${state.selectedDate || ""}">
-                </div>
-                <div>
-                  <label>날씨</label>
-                  ${renderModalSelectOrInput("modalWeather", state.options.weather, "날씨 선택")}
-                </div>
-                <div>
-                  <label>작업내용</label>
-                  ${renderModalSelectOrInput("modalTaskName", state.options.tasks, "작업 선택")}
-                </div>
-              </div>
-            </div>
-
-            <div class="wm-section">
-              <div class="wm-section-title">다중선택</div>
-              <div class="wm-grid one">
-                <div>
-                  <label>작물</label>
-                  ${renderModalCheckboxGroup("modalCrops", state.options.crops)}
-                </div>
-                <div>
-                  <label>병충해</label>
-                  ${renderModalCheckboxGroup("modalPests", state.options.pests)}
-                </div>
-                <div>
-                  <label>사용자재</label>
-                  ${renderMaterialSearchSelectorHtml()}
-                </div>
-                <div>
-                  <label>사용기계</label>
-                  ${renderModalCheckboxGroup("modalMachines", state.options.machines)}
-                </div>
-              </div>
-            </div>
-
-            <div class="wm-section">
-              <div class="wm-section-title">금액 / 시간</div>
-              <div class="wm-grid">
-                <div>
-                  <label>자재비 총액</label>
-                  <input class="wm-input" id="modalMaterialCost" type="number" min="0" value="0">
-                </div>
-                <div>
-                  <label>작업시간</label>
-                  <input class="wm-input" id="modalWorkHours" type="number" min="0" step="0.5" value="0">
-                </div>
-              </div>
-            </div>
-
-            <div class="wm-section">
-              <div class="wm-section-title">인건비 상세</div>
-              <div class="wm-labor-list" id="laborRowsContainer"></div>
-              <div class="wm-actions">
-                <button class="wl-btn" id="addLaborRowBtn">+ 인건비 추가</button>
-              </div>
-            </div>
-
-            <div class="wm-section">
-              <div class="wm-section-title">비고</div>
-              <div class="wm-grid one">
-                <div>
-                  <textarea class="wm-textarea" id="modalMemo" placeholder="비고 입력"></textarea>
-                </div>
-              </div>
-            </div>
-
-            <div class="wm-actions">
-              <button class="wl-btn primary" id="saveModalWorkBtn">저장</button>
-              <button class="wl-btn" id="closeWorkModalBtn">닫기</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    bindWorksViewEvents();
-  }
-
-  function renderModalSelectOrInput(id, options, placeholder) {
-    if (options && options.length) {
+    el.worklogList.innerHTML = dates.map(date => {
+      const items = grouped[date];
+      const singleClass = items.length === 1 ? 'single-card' : '';
       return `
-        <select class="wm-select" id="${id}">
-          <option value="">${placeholder}</option>
-          ${options.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
-        </select>
+        <section class="worklog-date-group">
+          <div class="worklog-date-title">${escapeHtml(date)}</div>
+          <div class="worklog-card-row ${singleClass}">
+            ${items.map(renderWorkCard).join('')}
+          </div>
+        </section>
       `;
-    }
-    return `<input class="wm-input" id="${id}" placeholder="${placeholder}">`;
+    }).join('');
+
+    Array.from(el.worklogList.querySelectorAll('[data-work-edit]')).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const work = state.works.find(w => String(w.id) === String(btn.dataset.workEdit));
+        if (work) openWorkModal(work);
+      });
+    });
+
+    Array.from(el.worklogList.querySelectorAll('[data-work-delete]')).forEach(btn => {
+      btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
+    });
   }
 
-  function renderModalCheckboxGroup(name, options) {
-    if (!options || !options.length) {
-      return `<div style="color:#666;">옵션관리에서 항목을 추가하면 여기에 표시됩니다.</div>`;
-    }
+  function renderWorkCard(work) {
+    const meta = parseWorkMemo(work.memo);
+    const laborTotal = calculateLaborTotal(meta.labor_rows);
 
     return `
-      <div class="wm-check-grid">
-        ${options.map(v => `
-          <label class="wm-check-item">
-            <input type="checkbox" name="${name}" value="${escapeHtml(v)}">
-            <span>${escapeHtml(v)}</span>
-          </label>
-        `).join("")}
-      </div>
-    `;
-  }
-
-  function renderMaterialSearchSelectorHtml() {
-    return `
-      <div class="wm-material-search-box">
-        <input class="wm-input" id="materialSearchInput" placeholder="자재 검색">
-        <div class="wm-material-results" id="materialSearchResults"></div>
-        <div class="wm-selected-materials" id="selectedMaterialsBox"></div>
-      </div>
-    `;
-  }
-
-  function createLaborRowHtml(index) {
-    return `
-      <div class="wm-labor-row" data-labor-row="${index}">
-        <div class="wm-labor-grid">
-          <div>
-            <label>유형</label>
-            <select class="wm-select labor-type">
-              <option value="남자">남자</option>
-              <option value="여자">여자</option>
-              <option value="기타">기타</option>
-            </select>
-          </div>
-          <div>
-            <label>금액</label>
-            <input class="wm-input labor-cost" type="number" min="0" value="0">
-          </div>
-          <div>
-            <label>구분</label>
-            <input class="wm-input labor-role" placeholder="예: 전정 인부">
-          </div>
-          <div>
-            <button type="button" class="wl-btn danger small remove-labor-row-btn">삭제</button>
+      <article class="worklog-card">
+        <div class="worklog-card-header">
+          <h3>${escapeHtml(work.task_name || '')}</h3>
+          <div class="card-actions">
+            <button type="button" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
+            <button type="button" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
           </div>
         </div>
-        <div class="wm-labor-grid-note">
-          <div>
-            <label>비고</label>
-            <input class="wm-input labor-note" placeholder="예: 추가작업">
-          </div>
+
+        <div class="worklog-card-body">
+          <div><strong>작물:</strong> ${escapeHtml(work.crops || '')}</div>
+          <div><strong>날씨:</strong> ${escapeHtml(work.weather || '')}</div>
+          <div><strong>병충해:</strong> ${escapeHtml(work.pests || '')}</div>
+          <div><strong>자재:</strong> ${escapeHtml(formatMaterialsForDisplay(meta.materials))}</div>
+          <div><strong>자재비:</strong> ${formatMoney(meta.material_cost_total || 0)}</div>
+          <div><strong>기계:</strong> ${escapeHtml(work.machines || '')}</div>
+          <div><strong>인건비:</strong> ${formatMoney(laborTotal)}</div>
+          <div><strong>인력상세:</strong> ${escapeHtml(formatLaborRows(meta.labor_rows))}</div>
+          <div><strong>작업시간:</strong> ${escapeHtml(work.work_hours || '')}</div>
+          <div><strong>기간:</strong> ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
+          <div><strong>비고:</strong> ${escapeHtml(extractDisplayMemo(work.memo))}</div>
         </div>
-      </div>
+      </article>
     `;
   }
 
-  function bindWorksViewEvents() {
-    const openModalBtn = $("#openWorkModalBtn");
-    const overlay = $("#workModalOverlay");
-    const closeModalBtn = $("#closeWorkModalBtn");
-    const addLaborRowBtn = $("#addLaborRowBtn");
-    const saveModalWorkBtn = $("#saveModalWorkBtn");
-    const searchInput = $("#workSearchInput");
-    const resetSearchBtn = $("#resetWorkSearchBtn");
+  function openWorkModal(work = null) {
+    if (!el.workModal) return;
 
-    searchInput?.addEventListener("input", (e) => {
-      state.workSearchKeyword = e.target.value || "";
-      renderWorksView();
-    });
+    state.editingWorkId = work && work.id ? work.id : null;
+    state.workMaterialSelections = [];
 
-    resetSearchBtn?.addEventListener("click", () => {
-      state.workSearchKeyword = "";
-      renderWorksView();
-    });
+    const meta = parseWorkMemo(work?.memo);
+    if (Array.isArray(meta.materials)) {
+      state.workMaterialSelections = meta.materials.map(item => ({
+        name: item.name || '',
+        qty: item.qty === 0 ? '0' : (item.qty ?? ''),
+        unit: item.unit || materialUnitByName(item.name) || ''
+      }));
+    }
 
-    openModalBtn?.addEventListener("click", () => {
-      overlay?.classList.add("open");
-      if ($("#modalStartDate") && state.selectedDate) $("#modalStartDate").value = state.selectedDate;
-      if ($("#modalEndDate") && state.selectedDate) $("#modalEndDate").value = state.selectedDate;
+    if (el.workModalTitle) {
+      el.workModalTitle.textContent = work ? '작업일지 수정' : '작업일지 입력';
+    }
+    if (el.workId) el.workId.value = work?.id || '';
+    if (el.workStartDate) el.workStartDate.value = work?.start_date || todayStr();
+    if (el.workEndDate) el.workEndDate.value = work?.end_date || work?.start_date || todayStr();
+    if (el.workWeather) el.workWeather.value = work?.weather || '';
+    if (el.workTaskName) el.workTaskName.value = work?.task_name || '';
+    if (el.workHours) el.workHours.value = work?.work_hours || '';
+    if (el.workMemo) el.workMemo.value = meta.memo_text || rawMemoFallback(work?.memo);
 
-      state.selectedMaterialItems = [];
-      renderMaterialSearchResults("");
-      renderSelectedMaterials();
+    renderWeatherOptionsSelect();
+    renderCheckboxOptions(el.cropOptionsWrap, state.options.crops, parseCsvList(work?.crops));
+    renderCheckboxOptions(el.pestOptionsWrap, state.options.pests, parseCsvList(work?.pests));
+    renderCheckboxOptions(el.machineOptionsWrap, state.options.machines, parseCsvList(work?.machines));
 
-      if ($("#laborRowsContainer") && $("#laborRowsContainer").children.length === 0) {
-        addLaborRow();
-      }
-    });
+    renderSelectedMaterials();
+    renderMaterialSearchResults('');
+    renderLaborRows(meta.labor_rows || []);
 
-    closeModalBtn?.addEventListener("click", () => {
-      closeWorkModal();
-    });
+    el.workModal.style.display = 'flex';
+  }
 
-    overlay?.addEventListener("click", (e) => {
-      if (e.target === overlay) closeWorkModal();
-    });
+  function closeWorkModal() {
+    if (!el.workModal) return;
+    el.workModal.style.display = 'none';
+    state.editingWorkId = null;
+    state.workMaterialSelections = [];
+    if (el.workForm) el.workForm.reset();
+    if (el.materialSearchResults) el.materialSearchResults.innerHTML = '';
+    if (el.selectedMaterialsWrap) el.selectedMaterialsWrap.innerHTML = '';
+    if (el.laborRowsWrap) el.laborRowsWrap.innerHTML = '';
+  }
 
-    addLaborRowBtn?.addEventListener("click", () => {
-      addLaborRow();
-    });
+  function renderWeatherOptionsSelect() {
+    if (!el.workWeather) return;
+    const currentValue = el.workWeather.value || '';
+    el.workWeather.innerHTML = `
+      <option value="">선택</option>
+      ${state.options.weather.map(item => {
+        const name = optionName(item);
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+      }).join('')}
+    `;
+    el.workWeather.value = currentValue;
+  }
 
-    saveModalWorkBtn?.addEventListener("click", handleCreateWorkFromModal);
+  function renderCheckboxOptions(container, items, selectedValues = []) {
+    if (!container) return;
+    const selectedSet = new Set(selectedValues || []);
 
-    $("#materialSearchInput")?.addEventListener("input", (e) => {
-      renderMaterialSearchResults(e.target.value || "");
-    });
-
-    $all(".remove-labor-row-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        btn.closest(".wm-labor-row")?.remove();
-      });
-    });
-
-    $all("[data-work-delete]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.workDelete;
-        if (!confirm("이 작업을 삭제할까요?")) return;
-
-        try {
-          await api(`/api/works/${id}`, { method: "DELETE" });
-          await refreshDataAndRerender();
-          infoMessage("작업 삭제 완료");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
-
-    $all("[data-work-edit]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.dataset.workEdit;
-        const work = state.works.find(w => String(w.id) === String(id));
-        if (!work) return;
-
-        const parsed = parseWorkExtra(work.memo || "");
-        const task_name = prompt("작업내용", work.task_name || "");
-        if (task_name === null) return;
-
-        const memo = prompt("비고", parsed.plainMemo || "");
-        if (memo === null) return;
-
-        const labor_cost = prompt("인건비", work.labor_cost || "0");
-        if (labor_cost === null) return;
-
-        const work_hours = prompt("작업시간", work.work_hours || "0");
-        if (work_hours === null) return;
-
-        try {
-          await api(`/api/works/${id}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              start_date: work.start_date,
-              end_date: work.end_date,
-              weather: work.weather || "",
-              crops: work.crops || "",
-              task_name,
-              pests: work.pests || "",
-              materials: work.materials || "",
-              machines: work.machines || "",
-              labor_cost: Number(labor_cost || 0),
-              work_hours: Number(work_hours || 0),
-              memo: buildWorkMemo(memo, parsed.meta)
-            })
-          });
-          await refreshDataAndRerender();
-          infoMessage("작업 수정 완료");
-        } catch (err) {
-          showError(err);
-        }
-      });
-    });
+    container.innerHTML = items.map(item => {
+      const name = optionName(item);
+      const id = `opt_${container.id}_${slugify(name)}`;
+      return `
+        <label class="check-chip" for="${escapeHtml(id)}">
+          <input type="checkbox" id="${escapeHtml(id)}" value="${escapeHtml(name)}" ${selectedSet.has(name) ? 'checked' : ''}>
+          <span>${escapeHtml(name)}</span>
+        </label>
+      `;
+    }).join('');
   }
 
   function renderMaterialSearchResults(keyword) {
-    const container = $("#materialSearchResults");
-    if (!container) return;
+    if (!el.materialSearchResults) return;
 
-    const q = String(keyword || "").trim().toLowerCase();
-    const materials = state.options.materials || [];
+    const q = (keyword || '').trim().toLowerCase();
+    const selectedNames = new Set(state.workMaterialSelections.map(x => x.name));
 
-    const filtered = materials.filter(item => {
-      if (!q) return true;
-      return item.toLowerCase().includes(q);
+    const matched = state.materials.filter(item => {
+      const name = materialName(item).toLowerCase();
+      return !selectedNames.has(materialName(item)) && (!q || name.includes(q));
     });
 
-    container.innerHTML = filtered.length
-      ? filtered.map(item => `
-          <div class="wm-material-result-item" data-material-item="${escapeHtml(item)}">${escapeHtml(item)}</div>
-        `).join("")
-      : `<div class="wm-material-result-item">검색 결과 없음</div>`;
+    if (!matched.length) {
+      el.materialSearchResults.innerHTML = `<div class="empty-line">검색 결과 없음</div>`;
+      return;
+    }
 
-    $all("[data-material-item]", container).forEach(el => {
-      el.addEventListener("click", () => {
-        const value = el.getAttribute("data-material-item");
-        addSelectedMaterial(value);
+    el.materialSearchResults.innerHTML = matched.map(item => {
+      const name = materialName(item);
+      const unit = materialUnit(item);
+      return `
+        <button type="button" class="material-search-item" data-material-add="${escapeHtml(name)}" data-material-unit="${escapeHtml(unit)}">
+          <span class="name">${escapeHtml(name)}</span>
+          <span class="unit">${escapeHtml(unit || '')}</span>
+        </button>
+      `;
+    }).join('');
+
+    Array.from(el.materialSearchResults.querySelectorAll('[data-material-add]')).forEach(btn => {
+      btn.addEventListener('click', () => {
+        addSelectedMaterial(btn.dataset.materialAdd, btn.dataset.materialUnit || '');
+        if (el.materialSearchInput) el.materialSearchInput.value = '';
+        renderMaterialSearchResults('');
       });
     });
   }
 
-  function addSelectedMaterial(value) {
-    if (!value) return;
-    if (!state.selectedMaterialItems.includes(value)) {
-      state.selectedMaterialItems.push(value);
-      renderSelectedMaterials();
-    }
-  }
-
-  function removeSelectedMaterial(value) {
-    state.selectedMaterialItems = state.selectedMaterialItems.filter(v => v !== value);
+  function addSelectedMaterial(name, unit) {
+    if (state.workMaterialSelections.some(x => x.name === name)) return;
+    state.workMaterialSelections.push({ name, qty: '', unit: unit || materialUnitByName(name) || '' });
     renderSelectedMaterials();
   }
 
   function renderSelectedMaterials() {
-    const box = $("#selectedMaterialsBox");
-    if (!box) return;
+    if (!el.selectedMaterialsWrap) return;
 
-    box.innerHTML = state.selectedMaterialItems.length
-      ? state.selectedMaterialItems.map(item => `
-          <span class="wm-chip">
-            <span>${escapeHtml(item)}</span>
-            <span class="wm-chip-remove" data-remove-material="${escapeHtml(item)}">✕</span>
-          </span>
-        `).join("")
-      : `<span style="color:#666;">선택된 자재 없음</span>`;
+    if (!state.workMaterialSelections.length) {
+      el.selectedMaterialsWrap.innerHTML = `<div class="empty-line">선택된 자재 없음</div>`;
+      return;
+    }
 
-    $all("[data-remove-material]", box).forEach(el => {
-      el.addEventListener("click", () => {
-        removeSelectedMaterial(el.getAttribute("data-remove-material"));
+    el.selectedMaterialsWrap.innerHTML = state.workMaterialSelections.map((item, idx) => `
+      <div class="selected-material-row">
+        <div class="mat-name">${escapeHtml(item.name)}</div>
+        <div class="mat-qty-wrap">
+          <label>수량</label>
+          <input type="number" step="0.01" min="0" inputmode="decimal" value="${escapeHtml(String(item.qty ?? ''))}" data-material-qty="${idx}">
+        </div>
+        <div class="mat-unit-wrap">
+          <label>단위</label>
+          <input type="text" value="${escapeHtml(item.unit || '')}" data-material-unit="${idx}">
+        </div>
+        <div class="mat-remove-wrap">
+          <button type="button" data-material-remove="${idx}">X</button>
+        </div>
+      </div>
+    `).join('');
+
+    Array.from(el.selectedMaterialsWrap.querySelectorAll('[data-material-qty]')).forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = Number(input.dataset.materialQty);
+        state.workMaterialSelections[idx].qty = input.value;
+      });
+    });
+
+    Array.from(el.selectedMaterialsWrap.querySelectorAll('[data-material-unit]')).forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = Number(input.dataset.materialUnit);
+        state.workMaterialSelections[idx].unit = input.value;
+      });
+    });
+
+    Array.from(el.selectedMaterialsWrap.querySelectorAll('[data-material-remove]')).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.materialRemove);
+        state.workMaterialSelections.splice(idx, 1);
+        renderSelectedMaterials();
+        renderMaterialSearchResults(el.materialSearchInput?.value || '');
       });
     });
   }
 
-  function addLaborRow() {
-    const container = $("#laborRowsContainer");
-    if (!container) return;
+  function renderLaborRows(rows = []) {
+    if (!el.laborRowsWrap) return;
+    el.laborRowsWrap.innerHTML = '';
 
-    const index = container.children.length + 1;
-    container.insertAdjacentHTML("beforeend", createLaborRowHtml(index));
+    if (!rows.length) {
+      addLaborRow();
+      return;
+    }
 
-    const newRow = container.lastElementChild;
-    const removeBtn = $(".remove-labor-row-btn", newRow);
-    removeBtn?.addEventListener("click", () => {
-      newRow.remove();
-    });
+    rows.forEach(row => addLaborRow(row));
   }
 
-  function closeWorkModal() {
-    $("#workModalOverlay")?.classList.remove("open");
-    clearWorkModal();
+  function addLaborRow(data = {}) {
+    if (!el.laborRowsWrap) return;
+
+    const row = document.createElement('div');
+    row.className = 'labor-row';
+    row.innerHTML = `
+      <select class="labor-type">
+        <option value="">유형</option>
+        <option value="남자" ${data.type === '남자' ? 'selected' : ''}>남자</option>
+        <option value="여자" ${data.type === '여자' ? 'selected' : ''}>여자</option>
+        <option value="기타" ${data.type === '기타' ? 'selected' : ''}>기타</option>
+      </select>
+      <input type="number" class="labor-amount" placeholder="금액" step="1" min="0" value="${escapeHtml(String(data.amount ?? ''))}">
+      <input type="text" class="labor-category" placeholder="구분" value="${escapeHtml(data.category || '')}">
+      <input type="text" class="labor-note" placeholder="비고" value="${escapeHtml(data.note || '')}">
+      <button type="button" class="labor-remove-btn">삭제</button>
+    `;
+
+    el.laborRowsWrap.appendChild(row);
+    row.querySelector('.labor-remove-btn').addEventListener('click', () => row.remove());
   }
 
-  function clearWorkModal() {
-    if ($("#modalStartDate")) $("#modalStartDate").value = state.selectedDate || "";
-    if ($("#modalEndDate")) $("#modalEndDate").value = state.selectedDate || "";
-    if ($("#modalWeather")) $("#modalWeather").value = "";
-    if ($("#modalTaskName")) $("#modalTaskName").value = "";
-    if ($("#modalMaterialCost")) $("#modalMaterialCost").value = "0";
-    if ($("#modalWorkHours")) $("#modalWorkHours").value = "0";
-    if ($("#modalMemo")) $("#modalMemo").value = "";
+  async function saveWork() {
+    try {
+      const payload = collectWorkPayload();
+      if (!payload) return;
 
-    $all('input[name="modalCrops"]:checked').forEach(el => (el.checked = false));
-    $all('input[name="modalPests"]:checked').forEach(el => (el.checked = false));
-    $all('input[name="modalMachines"]:checked').forEach(el => (el.checked = false));
+      if (state.editingWorkId) {
+        await api.put(`/api/works/${state.editingWorkId}`, payload);
+      } else {
+        await api.post('/api/works', payload);
+      }
 
-    const container = $("#laborRowsContainer");
-    if (container) container.innerHTML = "";
+      await reloadWorks();
+      renderWorklog();
+      renderCalendar();
+      closeWorkModal();
+    } catch (err) {
+      alert('작업 저장 중 오류가 발생했습니다.');
+      console.error(err);
+    }
+  }
 
-    state.selectedMaterialItems = [];
-    renderSelectedMaterials();
-    renderMaterialSearchResults("");
+  function collectWorkPayload() {
+    const startDate = el.workStartDate?.value || '';
+    const endDate = el.workEndDate?.value || '';
+    const weather = el.workWeather?.value || '';
+    const taskName = (el.workTaskName?.value || '').trim();
+    const workHours = el.workHours?.value || '';
+    const memoText = el.workMemo?.value || '';
+
+    const crops = collectCheckedValues(el.cropOptionsWrap).join(',');
+    const pests = collectCheckedValues(el.pestOptionsWrap).join(',');
+    const machines = collectCheckedValues(el.machineOptionsWrap).join(',');
+
+    if (!startDate) {
+      alert('시작일을 입력하세요.');
+      return null;
+    }
+    if (!endDate) {
+      alert('종료일을 입력하세요.');
+      return null;
+    }
+    if (!taskName) {
+      alert('작업내용을 입력하세요.');
+      return null;
+    }
+
+    const materials = state.workMaterialSelections.map(item => ({
+      name: (item.name || '').trim(),
+      qty: String(item.qty ?? '').trim(),
+      unit: String(item.unit ?? '').trim()
+    })).filter(item => item.name);
+
+    for (const item of materials) {
+      if (item.qty === '') {
+        alert(`사용자재 [${item.name}] 수량을 입력하세요.`);
+        return null;
+      }
+      const qty = Number(item.qty);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        alert(`사용자재 [${item.name}] 수량은 0보다 커야 합니다.`);
+        return null;
+      }
+      item.qty = qty;
+    }
+
+    const laborRows = collectLaborRows();
+    const materialCostTotal = 0;
+
+    const meta = {
+      memo_text: memoText,
+      material_cost_total: materialCostTotal,
+      labor_rows: laborRows,
+      materials
+    };
+
+    return {
+      start_date: startDate,
+      end_date: endDate,
+      weather,
+      crops,
+      task_name: taskName,
+      pests,
+      materials: materials.map(x => x.name).join(','),
+      machines,
+      labor_cost: calculateLaborTotal(laborRows),
+      work_hours: workHours,
+      memo: JSON.stringify(meta)
+    };
   }
 
   function collectLaborRows() {
-    return $all(".wm-labor-row").map(row => {
-      return {
-        type: $(".labor-type", row)?.value || "남자",
-        cost: Number($(".labor-cost", row)?.value || 0),
-        role: $(".labor-role", row)?.value?.trim() || "",
-        note: $(".labor-note", row)?.value?.trim() || ""
-      };
-    }).filter(row => row.type || row.cost || row.role || row.note);
+    if (!el.laborRowsWrap) return [];
+
+    return Array.from(el.laborRowsWrap.querySelectorAll('.labor-row')).map(row => ({
+      type: row.querySelector('.labor-type')?.value || '',
+      amount: toNumber(row.querySelector('.labor-amount')?.value || 0),
+      category: row.querySelector('.labor-category')?.value || '',
+      note: row.querySelector('.labor-note')?.value || ''
+    })).filter(item => item.type || item.amount || item.category || item.note);
   }
 
-  async function handleCreateWorkFromModal() {
-    const start_date = $("#modalStartDate")?.value || "";
-    const end_date = $("#modalEndDate")?.value || start_date;
-    const weather = $("#modalWeather")?.value || "";
-    const task_name = $("#modalTaskName")?.value || "";
-    const crops = getCheckedValues("modalCrops");
-    const pests = getCheckedValues("modalPests");
-    const machines = getCheckedValues("modalMachines");
-    const materialCost = Number($("#modalMaterialCost")?.value || 0);
-    const work_hours = Number($("#modalWorkHours")?.value || 0);
-    const plainMemo = $("#modalMemo")?.value?.trim() || "";
-    const laborRows = collectLaborRows();
-    const labor_cost = sumLaborCost(laborRows);
-
-    if (!start_date) {
-      infoMessage("시작일을 입력하세요.");
-      return;
-    }
-
-    if (!task_name) {
-      infoMessage("작업내용을 입력하세요.");
-      return;
-    }
+  async function deleteWork(workId) {
+    if (!confirm('이 작업일지를 삭제하시겠습니까?')) return;
 
     try {
-      await api("/api/works", {
-        method: "POST",
-        body: JSON.stringify({
-          start_date,
-          end_date,
-          weather,
-          crops: joinMultiValue(crops),
-          task_name,
-          pests: joinMultiValue(pests),
-          materials: joinMultiValue(state.selectedMaterialItems),
-          machines: joinMultiValue(machines),
-          labor_cost,
-          work_hours,
-          memo: buildWorkMemo(plainMemo, {
-            materialCost,
-            laborRows,
-            selectedMaterials: state.selectedMaterialItems
-          })
-        })
+      await api.delete(`/api/works/${workId}`);
+      await reloadWorks();
+      renderWorklog();
+      renderCalendar();
+    } catch (err) {
+      alert('작업 삭제 중 오류가 발생했습니다.');
+      console.error(err);
+    }
+  }
+
+  function renderMaterialsPage() {
+    if (!el.materialsInStockWrap || !el.materialsOutStockWrap) return;
+
+    const keyword = state.materialKeyword.trim().toLowerCase();
+    const filtered = state.materials.filter(item => {
+      const name = materialName(item).toLowerCase();
+      return !keyword || name.includes(keyword);
+    });
+
+    const inStock = filtered.filter(item => toNumber(item.stock_qty ?? item.재고 ?? 0) > 0);
+    const outStock = filtered.filter(item => toNumber(item.stock_qty ?? item.재고 ?? 0) <= 0);
+
+    if (el.materialsSummary) {
+      el.materialsSummary.innerHTML = `전체 ${filtered.length}개 | 재고있음 ${inStock.length} | 재고없음 ${outStock.length}`;
+    }
+
+    el.materialsInStockWrap.innerHTML = inStock.length ? inStock.map(renderMaterialCard).join('') : '<div class="empty-line">재고 있는 자재 없음</div>';
+    el.materialsOutStockWrap.innerHTML = outStock.length ? outStock.map(renderMaterialCard).join('') : '<div class="empty-line">재고 없는 자재 없음</div>';
+
+    bindMaterialCardActions(el.materialsInStockWrap);
+    bindMaterialCardActions(el.materialsOutStockWrap);
+  }
+
+  function renderMaterialCard(item) {
+    const name = materialName(item);
+    const qty = toNumber(item.stock_qty ?? item.재고 ?? 0);
+    const unitPrice = toNumber(item.unit_price ?? item.가격 ?? 0);
+    const unit = materialUnit(item);
+
+    return `
+      <article class="material-card ${qty <= 0 ? 'out' : 'in'}">
+        <div class="material-card-title">${escapeHtml(name)}</div>
+        <div class="material-card-line">재고: ${escapeHtml(String(qty))} ${escapeHtml(unit || '')}</div>
+        <div class="material-card-line">단가: ${formatMoney(unitPrice)}</div>
+        <div class="material-card-actions">
+          <button type="button" data-material-stock-adjust="${escapeHtml(name)}" data-mode="in">입고</button>
+          <button type="button" data-material-stock-adjust="${escapeHtml(name)}" data-mode="out">사용</button>
+          <button type="button" data-material-edit="${escapeHtml(name)}">수정</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function bindMaterialCardActions(container) {
+    Array.from(container.querySelectorAll('[data-material-stock-adjust]')).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.materialStockAdjust;
+        const mode = btn.dataset.mode;
+        const item = state.materials.find(m => materialName(m) === name);
+        if (!item) return;
+
+        const amountInput = prompt(mode === 'in' ? '입고 수량' : '사용 수량', '0');
+        if (amountInput === null) return;
+        const amount = Number(amountInput);
+        if (!Number.isFinite(amount) || amount < 0) {
+          alert('올바른 수량을 입력하세요.');
+          return;
+        }
+
+        const currentQty = toNumber(item.stock_qty ?? item.재고 ?? 0);
+        const newQty = mode === 'in' ? currentQty + amount : currentQty - amount;
+        if (newQty < 0) {
+          alert('재고가 부족합니다.');
+          return;
+        }
+
+        try {
+          await updateMaterialByName(item, {
+            stock_qty: newQty,
+            unit_price: toNumber(item.unit_price ?? item.가격 ?? 0)
+          });
+          await reloadMaterials();
+          renderMaterialsPage();
+        } catch (err) {
+          alert('재고 수정 중 오류가 발생했습니다.');
+          console.error(err);
+        }
       });
+    });
 
-      closeWorkModal();
-      await refreshDataAndRerender();
-      infoMessage("작업 입력 완료");
-    } catch (err) {
-      showError(err);
+    Array.from(container.querySelectorAll('[data-material-edit]')).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.materialEdit;
+        const item = state.materials.find(m => materialName(m) === name);
+        if (!item) return;
+
+        const currentQty = toNumber(item.stock_qty ?? item.재고 ?? 0);
+        const currentPrice = toNumber(item.unit_price ?? item.가격 ?? 0);
+
+        const newName = prompt('자재명', name);
+        if (newName === null) return;
+        const newQtyInput = prompt('재고', String(currentQty));
+        if (newQtyInput === null) return;
+        const newPriceInput = prompt('단가', String(currentPrice));
+        if (newPriceInput === null) return;
+
+        try {
+          await updateMaterialByName(item, {
+            name: newName.trim(),
+            stock_qty: toNumber(newQtyInput),
+            unit_price: toNumber(newPriceInput)
+          });
+          await reloadMaterials();
+          await reloadOptions();
+          renderMaterialsPage();
+          renderAllOptionBasedUI();
+        } catch (err) {
+          alert('자재 수정 중 오류가 발생했습니다.');
+          console.error(err);
+        }
+      });
+    });
+  }
+
+  async function updateMaterialByName(item, payload) {
+    const id = item.id ?? item.ID ?? item.material_id;
+    const name = materialName(item);
+
+    if (id !== undefined && id !== null && id !== '') {
+      return api.put(`/api/materials/${id}`, payload);
     }
+
+    return api.put(`/api/materials/${encodeURIComponent(name)}`, payload);
   }
 
-  function renderMaterialsView() {
-    mainArea.innerHTML = `
-      <div class="wl-wrap">
-        <style>
-          .wl-wrap{padding:28px 20px 30px 20px;}
-          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
-          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-          .wl-item{border:1px solid #d7dde6;border-radius:14px;padding:12px;background:#fafbfc;}
-          .wl-item + .wl-item{margin-top:10px;}
-          .wl-item-title{font-weight:700;margin-bottom:6px;}
-          .wl-item-sub{color:#555;font-size:14px;}
-          .wl-empty-text{color:#666;}
-        </style>
-        <div class="wl-title">자재관리</div>
-        <div class="wl-card">
-          ${
-            state.materialsMaster.length
-              ? state.materialsMaster.map(m => `
-                <div class="wl-item">
-                  <div class="wl-item-title">${escapeHtml(m.name || "")}</div>
-                  <div class="wl-item-sub">
-                    재고: ${formatField(m.stock_qty ?? 0)} / 단가: ${formatField(m.unit_price ?? 0)}
-                  </div>
-                </div>
-              `).join("")
-              : `<div class="wl-empty-text">자재 데이터가 없습니다.</div>`
-          }
+  function renderOptionsPage() {
+    renderOptionTabsActive();
+
+    if (!el.optionListWrap) return;
+    const items = state.options[state.currentOptionType] || [];
+
+    if (!items.length) {
+      el.optionListWrap.innerHTML = '<div class="empty-line">등록된 옵션이 없습니다.</div>';
+      return;
+    }
+
+    el.optionListWrap.innerHTML = items.map(item => {
+      const id = optionId(item);
+      const name = optionName(item);
+      return `
+        <div class="option-row">
+          <div class="option-name">${escapeHtml(name)}</div>
+          <div class="option-actions">
+            <button type="button" data-option-edit="${escapeHtml(String(id))}">수정</button>
+            <button type="button" data-option-delete="${escapeHtml(String(id))}">삭제</button>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }).join('');
+
+    Array.from(el.optionListWrap.querySelectorAll('[data-option-edit]')).forEach(btn => {
+      btn.addEventListener('click', () => editOption(btn.dataset.optionEdit));
+    });
+    Array.from(el.optionListWrap.querySelectorAll('[data-option-delete]')).forEach(btn => {
+      btn.addEventListener('click', () => deleteOption(btn.dataset.optionDelete));
+    });
   }
 
-  function renderMoneyView() {
-    const totalLabor = state.works.reduce((sum, w) => sum + Number(w.labor_cost || 0), 0);
-    const totalMaterial = state.works.reduce((sum, w) => sum + Number(getMaterialCostFromWork(w) || 0), 0);
-
-    mainArea.innerHTML = `
-      <div class="wl-wrap">
-        <style>
-          .wl-wrap{padding:28px 20px 30px 20px;}
-          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
-          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-        </style>
-        <div class="wl-title">금전관리</div>
-        <div class="wl-card">
-          총 인건비: <strong>${totalLabor.toLocaleString()}</strong><br>
-          총 자재비: <strong>${totalMaterial.toLocaleString()}</strong><br>
-          다음 단계에서 월별 집계 / 손익 계산을 붙이면 됩니다.
-        </div>
-      </div>
-    `;
+  function renderOptionTabsActive() {
+    if (!el.optionTypeTabs) return;
+    Array.from(el.optionTypeTabs.querySelectorAll('[data-option-type]')).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.optionType === state.currentOptionType);
+    });
   }
 
-  function renderOptionsView() {
-    const box = (title, list) => `
-      <div class="wl-card" style="margin-bottom:12px;">
-        <div style="font-weight:700;margin-bottom:10px;">${title}</div>
-        <div>
-          ${
-            list && list.length
-              ? list.map(v => `
-                  <span style="display:inline-block;padding:6px 10px;border:1px solid #d7dde6;border-radius:999px;margin:4px;background:#fafbfc;">
-                    ${escapeHtml(v)}
-                  </span>
-                `).join("")
-              : "없음"
-          }
-        </div>
-      </div>
-    `;
+  async function editOption(id) {
+    const items = state.options[state.currentOptionType] || [];
+    const item = items.find(x => String(optionId(x)) === String(id));
+    if (!item) return;
 
-    mainArea.innerHTML = `
-      <div class="wl-wrap">
-        <style>
-          .wl-wrap{padding:28px 20px 30px 20px;}
-          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
-          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-        </style>
-        <div class="wl-title">옵션관리</div>
-        ${box("날씨", state.options.weather)}
-        ${box("작물", state.options.crops)}
-        ${box("작업", state.options.tasks)}
-        ${box("병충해", state.options.pests)}
-        ${box("자재옵션", state.options.materials)}
-        ${box("기계", state.options.machines)}
-      </div>
-    `;
-  }
+    const newName = prompt(`${optionTypeLabel(state.currentOptionType)} 수정`, optionName(item));
+    if (newName === null || !newName.trim()) return;
 
-  function renderExcelView() {
-    mainArea.innerHTML = `
-      <div class="wl-wrap">
-        <style>
-          .wl-wrap{padding:28px 20px 30px 20px;}
-          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
-          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-        </style>
-        <div class="wl-title">엑셀다운</div>
-        <div class="wl-card">엑셀 다운로드 기능은 다음 단계에서 서버 다운로드 API와 연결하면 됩니다.</div>
-      </div>
-    `;
-  }
-
-  function renderBackupView() {
-    mainArea.innerHTML = `
-      <div class="wl-wrap">
-        <style>
-          .wl-wrap{padding:28px 20px 30px 20px;}
-          .wl-title{font-size:22px;font-weight:700;margin-bottom:18px;}
-          .wl-card{background:#fff;border:1px solid #d7dde6;border-radius:18px;padding:16px;}
-        </style>
-        <div class="wl-title">백업</div>
-        <div class="wl-card">백업 기능은 다음 단계에서 DB 파일 다운로드 또는 JSON 백업 방식으로 붙이면 됩니다.</div>
-      </div>
-    `;
-  }
-
-  async function init() {
     try {
-      bindSidebarMenu();
-      await loadAllData();
-      render();
+      await api.put(`/api/options/${state.currentOptionType}/${id}`, { name: newName.trim() });
+      await reloadOptions();
+      renderAllOptionBasedUI();
+      renderOptionsPage();
     } catch (err) {
-      showError(err);
+      alert('옵션 수정 중 오류가 발생했습니다.');
+      console.error(err);
     }
   }
 
-  window.addEventListener("load", init);
+  async function deleteOption(id) {
+    if (!confirm('이 옵션을 삭제하시겠습니까?')) return;
+
+    try {
+      await api.delete(`/api/options/${state.currentOptionType}/${id}`);
+      await reloadOptions();
+      renderAllOptionBasedUI();
+      renderOptionsPage();
+    } catch (err) {
+      alert('옵션 삭제 중 오류가 발생했습니다.');
+      console.error(err);
+    }
+  }
+
+  function renderAllOptionBasedUI() {
+    renderWeatherOptionsSelect();
+    if (el.cropOptionsWrap) renderCheckboxOptions(el.cropOptionsWrap, state.options.crops, collectCheckedValues(el.cropOptionsWrap));
+    if (el.pestOptionsWrap) renderCheckboxOptions(el.pestOptionsWrap, state.options.pests, collectCheckedValues(el.pestOptionsWrap));
+    if (el.machineOptionsWrap) renderCheckboxOptions(el.machineOptionsWrap, state.options.machines, collectCheckedValues(el.machineOptionsWrap));
+  }
+
+  function collectCheckedValues(container) {
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+  }
+
+  function groupWorksByDate(works) {
+    return works.reduce((acc, work) => {
+      const key = work.start_date || '날짜없음';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(work);
+      return acc;
+    }, {});
+  }
+
+  function workMatchesKeyword(work, keyword) {
+    if (!keyword) return true;
+    const meta = parseWorkMemo(work.memo);
+    const haystack = [
+      work.task_name,
+      work.crops,
+      work.weather,
+      work.pests,
+      work.materials,
+      work.machines,
+      meta.memo_text,
+      joinMaterialNames(meta.materials),
+      formatMaterialsForDisplay(meta.materials)
+    ].join(' ').toLowerCase();
+
+    return haystack.includes(keyword);
+  }
+
+  function parseWorkMemo(memo) {
+    if (!memo) return { memo_text: '', materials: [], labor_rows: [], material_cost_total: 0 };
+    try {
+      const obj = typeof memo === 'string' ? JSON.parse(memo) : memo;
+      return {
+        memo_text: obj.memo_text || obj.note || '',
+        materials: Array.isArray(obj.materials) ? obj.materials : [],
+        labor_rows: Array.isArray(obj.labor_rows) ? obj.labor_rows : [],
+        material_cost_total: toNumber(obj.material_cost_total || 0),
+        ...obj
+      };
+    } catch {
+      return { memo_text: String(memo), materials: [], labor_rows: [], material_cost_total: 0 };
+    }
+  }
+
+  function extractDisplayMemo(memo) {
+    const meta = parseWorkMemo(memo);
+    return meta.memo_text || '';
+  }
+
+  function rawMemoFallback(memo) {
+    const meta = parseWorkMemo(memo);
+    return meta.memo_text || '';
+  }
+
+  function formatMaterialsForDisplay(materials) {
+    if (!Array.isArray(materials) || !materials.length) return '';
+    return materials.map(item => {
+      const qty = item.qty !== undefined && item.qty !== null && item.qty !== '' ? ` ${item.qty}` : '';
+      const unit = item.unit ? item.unit : '';
+      return `${item.name || ''}${qty}${unit ? unit : ''}`.trim();
+    }).join(', ');
+  }
+
+  function joinMaterialNames(materials) {
+    if (!Array.isArray(materials) || !materials.length) return '';
+    return materials.map(x => x.name || '').filter(Boolean).join(', ');
+  }
+
+  function formatLaborRows(rows) {
+    if (!Array.isArray(rows) || !rows.length) return '';
+    return rows.map(r => [r.type, r.amount ? `${Number(r.amount).toLocaleString()}원` : '', r.category, r.note].filter(Boolean).join('/')).join(', ');
+  }
+
+  function calculateLaborTotal(rows) {
+    if (!Array.isArray(rows)) return 0;
+    return rows.reduce((sum, row) => sum + toNumber(row.amount || 0), 0);
+  }
+
+  function normalizeOptions(arr) {
+    return Array.isArray(arr) ? arr : [];
+  }
+
+  function optionId(item) {
+    return item.id ?? item.ID ?? item.value ?? item.name;
+  }
+
+  function optionName(item) {
+    if (typeof item === 'string') return item;
+    return item.name ?? item.value ?? item.label ?? '';
+  }
+
+  function materialName(item) {
+    return item.name ?? item.자재명 ?? '';
+  }
+
+  function materialUnit(item) {
+    return item.unit ?? item.단위 ?? findOptionUnit(materialName(item)) ?? '';
+  }
+
+  function materialUnitByName(name) {
+    const item = state.materials.find(m => materialName(m) === name);
+    return item ? materialUnit(item) : findOptionUnit(name);
+  }
+
+  function findOptionUnit(name) {
+    const item = (state.options.materials || []).find(x => optionName(x) === name);
+    return item?.unit ?? item?.단위 ?? '';
+  }
+
+  function optionTypeLabel(type) {
+    const map = {
+      weather: '날씨',
+      crops: '작물',
+      tasks: '작업내용',
+      pests: '병충해',
+      materials: '자재',
+      machines: '기계'
+    };
+    return map[type] || type;
+  }
+
+  function parseCsvList(value) {
+    if (!value) return [];
+    return String(value).split(',').map(v => v.trim()).filter(Boolean);
+  }
+
+  function formatMoney(value) {
+    return `${toNumber(value).toLocaleString()}원`;
+  }
+
+  function normalizePlanDate(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v.slice(0, 10);
+    return formatDate(new Date(v));
+  }
+
+  function isDateInWorkRange(target, start, end) {
+    if (!target || !start) return false;
+    const t = target.replaceAll('-', '');
+    const s = String(start).slice(0, 10).replaceAll('-', '');
+    const e = String(end || start).slice(0, 10).replaceAll('-', '');
+    return t >= s && t <= e;
+  }
+
+  function todayStr() {
+    return formatDate(new Date());
+  }
+
+  function formatDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function slugify(v) {
+    return String(v || '').replace(/[^a-zA-Z0-9가-힣]+/g, '_');
+  }
+
+  function toNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function safeJSONStringify(obj) {
+    try {
+      return JSON.stringify(obj);
+    } catch {
+      return '{}';
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function safeBind(node, event, handler) {
+    if (!node) return;
+    node.addEventListener(event, handler);
+  }
+
+  const api = {
+    async get(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`${url} ${res.status}`);
+      return res.json();
+    },
+    async post(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`${url} ${res.status}`);
+      return parseJsonSafe(res);
+    },
+    async put(url, body) {
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`${url} ${res.status}`);
+      return parseJsonSafe(res);
+    },
+    async delete(url) {
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`${url} ${res.status}`);
+      return parseJsonSafe(res);
+    }
+  };
+
+  async function parseJsonSafe(res) {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { ok: true, raw: text };
+    }
+  }
 })();

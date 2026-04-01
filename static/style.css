@@ -897,3 +897,96 @@ th, td{
   color: #2447b8;
   font-weight: 600;
 }
+/* ===== 작업일지 날짜 그룹 ===== */
+.work-group {
+  width: 100%;
+}
+
+/* ===== 작업일지 카드 행 ===== */
+.work-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+/* ===== 같은 날짜 작업이 1개일 때 ===== */
+.work-cards-row.single-card {
+  grid-template-columns: 1fr;
+}
+
+.work-cards-row.single-card > .panel,
+.work-cards-row.single-card > .work-card-large {
+  width: 100%;
+  max-width: none !important;
+  min-height: 260px;
+  padding: 20px 22px;
+  box-sizing: border-box;
+}
+
+/* ===== 같은 날짜 작업이 여러 개일 때 ===== */
+.work-cards-row > .work-card-small,
+.work-cards-row > .panel.work-card-small {
+  width: 100%;
+  max-width: none !important;
+  min-height: 180px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+}
+
+/* ===== 큰 카드일 때 글 간격 조금 넓게 ===== */
+.work-card-large div {
+  line-height: 1.7;
+}
+
+.work-card-large strong {
+  font-size: 22px;
+}
+
+/* ===== 작은 카드일 때는 조금 조밀하게 ===== */
+.work-card-small div {
+  line-height: 1.5;
+}
+
+.work-card-small strong {
+  font-size: 18px;
+}
+
+/* ===== 카드 상단 버튼 정렬 ===== */
+.work-card-large .item-actions,
+.work-card-small .item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ===== 혹시 panel 기본 스타일이 폭을 제한하면 해제 ===== */
+#works-list .panel {
+  max-width: none;
+}
+
+/* ===== 작업일지 전체 폭 충분히 사용 ===== */
+#works-list {
+  width: 100%;
+}
+
+/* ===== 모바일 대응 ===== */
+@media (max-width: 900px) {
+  .work-cards-row,
+  .work-cards-row.single-card {
+    grid-template-columns: 1fr;
+  }
+
+  .work-cards-row.single-card > .panel,
+  .work-cards-row.single-card > .work-card-large,
+  .work-cards-row > .work-card-small,
+  .work-cards-row > .panel.work-card-small {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .work-card-large strong,
+  .work-card-small strong {
+    font-size: 18px;
+  }
+}

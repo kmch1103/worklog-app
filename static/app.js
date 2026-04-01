@@ -1,9 +1,21 @@
 /* =========================================================
-   작업일지 v6 - app.js 전체 교체본
-   기준:
-   1) 작업달력 기존 정상 구조 유지
+   작업일지 v7 - app.js 전체 교체본
+   변경사항:
+   1) 작업달력 기존 기능 유지
    2) 작업달력 상태 한글 표시 유지
-   3) 작업일지 = 날짜별 큰 박스 + 같은 날짜 작업 가로 카드 배치
+   3) 작업일지 = 날짜별 큰 박스 + 같은 날짜 작업 가로 카드
+   4) 작업일지 상단에 "작업입력" 버튼 추가
+   5) 입력 팝업창(모달) 추가
+   6) 인건비 = 행추가 방식
+      - 유형(남자/여자/기타)
+      - 금액
+      - 구분
+      - 비고
+   7) 자재비 총액 입력 추가
+   ---------------------------------------------------------
+   참고:
+   - 현재 works 테이블에 인건비 상세/자재비 전용 컬럼이 없으므로
+     상세 데이터는 안전하게 memo 안에 숨김데이터로 저장해서 재표시합니다.
    ========================================================= */
 
 (() => {
@@ -27,6 +39,9 @@
     materialsMaster: []
   };
 
+  /* =========================
+     공통 유틸
+     ========================= */
   function $(selector, root = document) {
     return root.querySelector(selector);
   }
@@ -78,6 +93,99 @@
     return escapeHtml(value);
   }
 
+  function normalizeOptionList(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+      .map(v => {
+        if (typeof v === "string") return v;
+        return v?.name || v?.value || "";
+      })
+      .filter(Boolean);
+  }
+
+  function getCheckedValues(name, root = document) {
+    return $all(`input[name="${name}"]:checked`, root).map(el => el.value);
+  }
+
+  /* =========================
+     확장 데이터(memo 내부 저장)
+     ========================= */
+  const META_START = "[[WORK_META]]";
+  const META_END = "[[/WORK_META]]";
+
+  function parseWorkExtra(memoText) {
+    const raw = String(memoText || "");
+    const start = raw.indexOf(META_START);
+    const end = raw.indexOf(META_END);
+
+    if (start === -1 || end === -1 || end < start) {
+      return {
+        plainMemo: raw,
+        meta: {
+          materialCost: 0,
+          laborRows: []
+        }
+      };
+    }
+
+    const jsonText = raw.slice(start + META_START.length, end).trim();
+    const plainMemo = (raw.slice(0, start) + raw.slice(end + META_END.length)).trim();
+
+    let meta = { materialCost: 0, laborRows: [] };
+    try {
+      const parsed = JSON.parse(jsonText);
+      meta = {
+        materialCost: Number(parsed?.materialCost || 0),
+        laborRows: Array.isArray(parsed?.laborRows) ? parsed.laborRows : []
+      };
+    } catch (_) {
+      // 무시
+    }
+
+    return { plainMemo, meta };
+  }
+
+  function buildWorkMemo(plainMemo, meta) {
+    const cleanMemo = String(plainMemo || "").trim();
+    const safeMeta = {
+      materialCost: Number(meta?.materialCost || 0),
+      laborRows: Array.isArray(meta?.laborRows) ? meta.laborRows : []
+    };
+    return `${cleanMemo}\n${META_START}${JSON.stringify(safeMeta)}${META_END}`.trim();
+  }
+
+  function sumLaborCost(laborRows) {
+    return (laborRows || []).reduce((sum, row) => sum + Number(row?.cost || 0), 0);
+  }
+
+  function renderLaborSummaryHtml(work) {
+    const parsed = parseWorkExtra(work.memo || "");
+    const rows = parsed.meta.laborRows || [];
+    if (!rows.length) return `<div class="ww-mini-line"><b>인력상세</b> -</div>`;
+
+    const summary = rows.map(row => {
+      const type = escapeHtml(row.type || "-");
+      const cost = Number(row.cost || 0).toLocaleString();
+      const role = escapeHtml(row.role || "-");
+      return `${type} ${cost}원 (${role})`;
+    }).join("<br>");
+
+    return `<div class="ww-mini-line"><b>인력상세</b><br>${summary}</div>`;
+  }
+
+  function getMaterialCostFromWork(work) {
+    const parsed = parseWorkExtra(work.memo || "");
+    return Number(parsed.meta.materialCost || 0);
+  }
+
+  function getPlainMemoFromWork(work) {
+    const parsed = parseWorkExtra(work.memo || "");
+    return parsed.plainMemo || "";
+  }
+
+  /* =========================
+     API
+     ========================= */
   async function api(url, options = {}) {
     const res = await fetch(url, {
       headers: { "Content-Type": "application/json" },
@@ -129,16 +237,9 @@
     return getPlansByDate(state.selectedDate);
   }
 
-  function normalizeOptionList(list) {
-    if (!Array.isArray(list)) return [];
-    return list
-      .map(v => {
-        if (typeof v === "string") return v;
-        return v?.name || v?.value || "";
-      })
-      .filter(Boolean);
-  }
-
+  /* =========================
+     레이아웃 탐색
+     ========================= */
   function getSidebarButtons() {
     const candidates = $all("button, .menu-item, .sidebar button, .sidebar .item");
     return candidates.filter(el => {
@@ -181,6 +282,9 @@
 
   const mainArea = detectMainArea();
 
+  /* =========================
+     메뉴 연결
+     ========================= */
   function bindSidebarMenu() {
     const buttons = getSidebarButtons();
 
@@ -227,6 +331,9 @@
     });
   }
 
+  /* =========================
+     데이터 로드
+     ========================= */
   async function loadAllData() {
     const [works, plans, options, materialsMaster] = await Promise.all([
       api("/api/works").catch(() => []),
@@ -254,6 +361,9 @@
     render();
   }
 
+  /* =========================
+     렌더 분기
+     ========================= */
   function render() {
     switch (state.currentView) {
       case "calendar":
@@ -283,6 +393,9 @@
     }
   }
 
+  /* =========================
+     작업달력 화면
+     ========================= */
   function renderCalendarView() {
     const firstDay = new Date(state.currentYear, state.currentMonth, 1).getDay();
     const lastDate = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
@@ -461,9 +574,46 @@
             background:#fff;border:1px solid #d7dde6;border-radius:18px;
             padding:20px;color:#666;
           }
+
+          .wm-overlay{
+            position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;
+            align-items:center;justify-content:center;z-index:9999;padding:20px;
+          }
+          .wm-overlay.open{display:flex;}
+          .wm-modal{
+            width:min(960px, 100%);
+            max-height:90vh;
+            overflow:auto;
+            background:#fff;border-radius:20px;padding:20px;
+            box-shadow:0 10px 40px rgba(0,0,0,0.18);
+          }
+          .wm-title{
+            font-size:20px;font-weight:700;margin-bottom:16px;
+          }
+          .wm-section{
+            margin-bottom:18px;padding:14px;border:1px solid #d7dde6;border-radius:14px;background:#fafbfc;
+          }
+          .wm-section-title{
+            font-size:15px;font-weight:700;margin-bottom:12px;
+          }
+          .wm-grid{
+            display:grid;grid-template-columns:1fr 1fr;gap:10px;
+          }
+          .wm-grid.one{grid-template-columns:1fr;}
+          .wm-labor-list{display:flex;flex-direction:column;gap:10px;}
+          .wm-labor-row{
+            border:1px dashed #cfd6e2;border-radius:12px;padding:10px;background:#fff;
+          }
+          .wm-labor-grid{
+            display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;
+            align-items:end;
+          }
+          .wm-labor-grid-note{
+            display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px;
+          }
           @media (max-width: 900px){
-            .wl-form-grid{grid-template-columns:1fr;}
-            .ww-work-card{width:100%;}
+            .wl-form-grid,.wm-grid,.wm-labor-grid{grid-template-columns:1fr;}
+            .wm-modal{padding:16px;}
           }
         </style>
 
@@ -561,7 +711,7 @@
             </div>
 
             <div class="wl-form-box" id="workFormBox">
-              ${renderWorkFormHtml(state.selectedDate)}
+              ${renderCalendarWorkFormHtml(state.selectedDate)}
             </div>
 
             <div class="wl-list" id="workList">
@@ -570,12 +720,13 @@
                   ? selectedWorks.map(work => `
                     <div class="wl-item">
                       <div class="wl-item-title">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
-                      <div class="wl-item-sub">${escapeHtml(work.memo || "")}</div>
+                      <div class="wl-item-sub">${escapeHtml(getPlainMemoFromWork(work) || "")}</div>
                       <div class="wl-work-meta">
                         작물: ${formatField(work.crops)}<br>
                         병충해: ${formatField(work.pests)}<br>
                         사용자재: ${formatField(work.materials)}<br>
                         사용기계: ${formatField(work.machines)}<br>
+                        자재비: ${formatField(getMaterialCostFromWork(work).toLocaleString())}<br>
                         인건비: ${formatField(work.labor_cost ?? 0)} / 작업시간: ${formatField(work.work_hours ?? 0)}
                       </div>
                       <div class="wl-item-actions">
@@ -595,7 +746,7 @@
     bindCalendarEvents();
   }
 
-  function renderWorkFormHtml(defaultDate) {
+  function renderCalendarWorkFormHtml(defaultDate) {
     return `
       <div class="wl-form-grid">
         <div>
@@ -640,7 +791,7 @@
 
       <div class="wl-form-grid" style="margin-top:10px;">
         <div>
-          <label>인건비</label>
+          <label>인건비 총액</label>
           <input class="wl-input" id="workLaborCost" type="number" min="0" value="0">
         </div>
         <div>
@@ -661,7 +812,7 @@
         <button class="wl-btn" id="cancelWorkBtn">닫기</button>
       </div>
 
-      <div class="wl-help">작업달력에서도 날짜를 선택한 뒤 바로 작업입력이 가능합니다.</div>
+      <div class="wl-help">작업달력에서는 간단 입력 방식, 작업일지에서는 팝업 상세 입력 방식을 사용합니다.</div>
     `;
   }
 
@@ -694,6 +845,9 @@
     `;
   }
 
+  /* =========================
+     작업달력 이벤트
+     ========================= */
   function bindCalendarEvents() {
     const prevBtn = $("#prevMonthBtn");
     const nextBtn = $("#nextMonthBtn");
@@ -732,9 +886,7 @@
     openPlanFormBtn?.addEventListener("click", () => {
       $("#planFormBox")?.classList.add("open");
       const dateInput = $("#planDateInput");
-      if (dateInput && state.selectedDate) {
-        dateInput.value = state.selectedDate;
-      }
+      if (dateInput && state.selectedDate) dateInput.value = state.selectedDate;
     });
 
     cancelPlanBtn?.addEventListener("click", () => {
@@ -752,7 +904,7 @@
 
     cancelWorkBtn?.addEventListener("click", () => {
       $("#workFormBox")?.classList.remove("open");
-      clearWorkForm();
+      clearCalendarWorkForm();
     });
 
     saveWorkBtn?.addEventListener("click", handleCreateWorkFromCalendar);
@@ -851,7 +1003,7 @@
               machines: "",
               labor_cost: 0,
               work_hours: 0,
-              memo: plan.details || ""
+              memo: buildWorkMemo(plan.details || "", { materialCost: 0, laborRows: [] })
             })
           });
 
@@ -895,10 +1047,11 @@
         const work = state.works.find(w => String(w.id) === String(id));
         if (!work) return;
 
+        const parsed = parseWorkExtra(work.memo || "");
         const task_name = prompt("작업내용", work.task_name || "");
         if (task_name === null) return;
 
-        const memo = prompt("비고", work.memo || "");
+        const memo = prompt("비고", parsed.plainMemo || "");
         if (memo === null) return;
 
         const labor_cost = prompt("인건비", work.labor_cost || "0");
@@ -921,7 +1074,7 @@
               machines: work.machines || "",
               labor_cost: Number(labor_cost || 0),
               work_hours: Number(work_hours || 0),
-              memo
+              memo: buildWorkMemo(memo, parsed.meta)
             })
           });
           await refreshDataAndRerender();
@@ -940,7 +1093,7 @@
     if ($("#planDateInput")) $("#planDateInput").value = state.selectedDate || "";
   }
 
-  function clearWorkForm() {
+  function clearCalendarWorkForm() {
     if ($("#workStartDate")) $("#workStartDate").value = state.selectedDate || "";
     if ($("#workEndDate")) $("#workEndDate").value = state.selectedDate || "";
     if ($("#workWeather")) $("#workWeather").value = "";
@@ -948,7 +1101,6 @@
     if ($("#workLaborCost")) $("#workLaborCost").value = "0";
     if ($("#workHours")) $("#workHours").value = "0";
     if ($("#workMemo")) $("#workMemo").value = "";
-
     $all('input[name="workCrops"]:checked').forEach(el => (el.checked = false));
     $all('input[name="workPests"]:checked').forEach(el => (el.checked = false));
     $all('input[name="workMaterials"]:checked').forEach(el => (el.checked = false));
@@ -983,10 +1135,6 @@
     } catch (err) {
       showError(err);
     }
-  }
-
-  function getCheckedValues(name) {
-    return $all(`input[name="${name}"]:checked`).map(el => el.value);
   }
 
   async function handleCreateWorkFromCalendar() {
@@ -1026,7 +1174,7 @@
           machines: joinMultiValue(machines),
           labor_cost,
           work_hours,
-          memo
+          memo: buildWorkMemo(memo, { materialCost: 0, laborRows: [] })
         })
       });
 
@@ -1038,6 +1186,9 @@
     }
   }
 
+  /* =========================
+     작업일지 화면
+     ========================= */
   function renderWorksView() {
     const grouped = {};
 
@@ -1056,11 +1207,16 @@
             border:none;border-radius:12px;padding:10px 14px;cursor:pointer;
             background:#e7ebf2;font-weight:600;
           }
+          .wl-btn.primary{background:#3d6af2;color:#fff;}
           .wl-btn.danger{background:#d9534f;color:#fff;}
           .wl-btn.small{padding:6px 10px;font-size:13px;border-radius:10px;}
 
           .ww-wrap{padding:28px 20px 30px 20px;}
-          .ww-title{font-size:22px;font-weight:700;margin-bottom:18px;}
+          .ww-head{
+            display:flex;justify-content:space-between;align-items:center;gap:12px;
+            margin-bottom:18px;flex-wrap:wrap;
+          }
+          .ww-title{font-size:22px;font-weight:700;}
           .ww-date-group{
             background:#fff;
             border:1px solid #d7dde6;
@@ -1083,7 +1239,7 @@
           }
           .ww-work-card{
             width:280px;
-            min-height:240px;
+            min-height:260px;
             border:1px solid #d7dde6;
             border-radius:14px;
             padding:14px;
@@ -1091,6 +1247,9 @@
             display:flex;
             flex-direction:column;
             box-sizing:border-box;
+          }
+          .ww-work-card.only-one{
+            width:100%;
           }
           .ww-work-name{
             font-size:16px;
@@ -1134,56 +1293,300 @@
             padding:20px;
             color:#666;
           }
+
+          .wm-overlay{
+            position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;
+            align-items:center;justify-content:center;z-index:9999;padding:20px;
+          }
+          .wm-overlay.open{display:flex;}
+          .wm-modal{
+            width:min(960px, 100%);
+            max-height:90vh;
+            overflow:auto;
+            background:#fff;border-radius:20px;padding:20px;
+            box-shadow:0 10px 40px rgba(0,0,0,0.18);
+          }
+          .wm-title{
+            font-size:20px;font-weight:700;margin-bottom:16px;
+          }
+          .wm-section{
+            margin-bottom:18px;padding:14px;border:1px solid #d7dde6;border-radius:14px;background:#fafbfc;
+          }
+          .wm-section-title{
+            font-size:15px;font-weight:700;margin-bottom:12px;
+          }
+          .wm-grid{
+            display:grid;grid-template-columns:1fr 1fr;gap:10px;
+          }
+          .wm-grid.one{grid-template-columns:1fr;}
+          .wm-input,.wm-select,.wm-textarea{
+            width:100%;padding:10px 12px;border:1px solid #cfd6e2;border-radius:10px;box-sizing:border-box;
+            font:inherit;background:#fff;
+          }
+          .wm-textarea{min-height:90px;resize:vertical;}
+          .wm-check-grid{
+            display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px 10px;
+            border:1px solid #cfd6e2;border-radius:10px;padding:10px;background:#fff;
+          }
+          .wm-check-item{display:flex;align-items:center;gap:6px;font-size:14px;}
+          .wm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+          .wm-labor-list{display:flex;flex-direction:column;gap:10px;}
+          .wm-labor-row{
+            border:1px dashed #cfd6e2;border-radius:12px;padding:10px;background:#fff;
+          }
+          .wm-labor-grid{
+            display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;
+          }
+          .wm-labor-grid-note{
+            display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px;
+          }
+
           @media (max-width: 900px){
             .ww-work-card{width:100%;}
+            .wm-grid,.wm-labor-grid{grid-template-columns:1fr;}
           }
         </style>
 
-        <div class="ww-title">작업일지</div>
+        <div class="ww-head">
+          <div class="ww-title">작업일지</div>
+          <button class="wl-btn primary" id="openWorkModalBtn">작업입력</button>
+        </div>
 
         ${
           sortedDates.length
-            ? sortedDates.map(date => `
-              <div class="ww-date-group">
-                <div class="ww-date-title">${escapeHtml(date)}</div>
-                <div class="ww-card-row">
-                  ${
-                    grouped[date].map(work => `
-                      <div class="ww-work-card">
-                        <div class="ww-work-name">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
+            ? sortedDates.map(date => {
+              const works = grouped[date];
+              const onlyOne = works.length === 1;
 
-                        <div class="ww-mini-list">
-                          <div class="ww-mini-line"><b>작물</b> ${formatField(work.crops)}</div>
-                          <div class="ww-mini-line"><b>날씨</b> ${formatField(work.weather)}</div>
-                          <div class="ww-mini-line"><b>병충해</b> ${formatField(work.pests)}</div>
-                          <div class="ww-mini-line"><b>자재</b> ${formatField(work.materials)}</div>
-                          <div class="ww-mini-line"><b>기계</b> ${formatField(work.machines)}</div>
-                          <div class="ww-mini-line"><b>인건비</b> ${formatField(work.labor_cost ?? 0)}</div>
-                          <div class="ww-mini-line"><b>시간</b> ${formatField(work.work_hours ?? 0)}</div>
-                          <div class="ww-mini-line"><b>기간</b> ${formatField(work.start_date)} ~ ${formatField(work.end_date)}</div>
+              return `
+                <div class="ww-date-group">
+                  <div class="ww-date-title">${escapeHtml(date)}</div>
+                  <div class="ww-card-row">
+                    ${
+                      works.map(work => `
+                        <div class="ww-work-card ${onlyOne ? "only-one" : ""}">
+                          <div class="ww-work-name">${escapeHtml(work.task_name || "(작업명 없음)")}</div>
+
+                          <div class="ww-mini-list">
+                            <div class="ww-mini-line"><b>작물</b> ${formatField(work.crops)}</div>
+                            <div class="ww-mini-line"><b>날씨</b> ${formatField(work.weather)}</div>
+                            <div class="ww-mini-line"><b>병충해</b> ${formatField(work.pests)}</div>
+                            <div class="ww-mini-line"><b>자재</b> ${formatField(work.materials)}</div>
+                            <div class="ww-mini-line"><b>자재비</b> ${formatField(getMaterialCostFromWork(work).toLocaleString())}</div>
+                            <div class="ww-mini-line"><b>기계</b> ${formatField(work.machines)}</div>
+                            <div class="ww-mini-line"><b>인건비</b> ${formatField(Number(work.labor_cost || 0).toLocaleString())}</div>
+                            ${renderLaborSummaryHtml(work)}
+                            <div class="ww-mini-line"><b>시간</b> ${formatField(work.work_hours ?? 0)}</div>
+                            <div class="ww-mini-line"><b>기간</b> ${formatField(work.start_date)} ~ ${formatField(work.end_date)}</div>
+                          </div>
+
+                          <div class="ww-memo"><b>비고</b><br>${formatField(getPlainMemoFromWork(work))}</div>
+
+                          <div class="ww-actions">
+                            <button class="wl-btn small" data-work-edit="${work.id}">수정</button>
+                            <button class="wl-btn danger small" data-work-delete="${work.id}">삭제</button>
+                          </div>
                         </div>
-
-                        <div class="ww-memo"><b>비고</b><br>${formatField(work.memo)}</div>
-
-                        <div class="ww-actions">
-                          <button class="wl-btn small" data-work-edit="${work.id}">수정</button>
-                          <button class="wl-btn danger small" data-work-delete="${work.id}">삭제</button>
-                        </div>
-                      </div>
-                    `).join("")
-                  }
+                      `).join("")
+                    }
+                  </div>
                 </div>
-              </div>
-            `).join("")
+              `;
+            }).join("")
             : `<div class="ww-empty">작업일지 데이터가 없습니다.</div>`
         }
+
+        <div class="wm-overlay" id="workModalOverlay">
+          <div class="wm-modal">
+            <div class="wm-title">작업 입력</div>
+
+            <div class="wm-section">
+              <div class="wm-section-title">기본정보</div>
+              <div class="wm-grid">
+                <div>
+                  <label>시작일</label>
+                  <input class="wm-input" id="modalStartDate" type="date" value="${state.selectedDate || ""}">
+                </div>
+                <div>
+                  <label>종료일</label>
+                  <input class="wm-input" id="modalEndDate" type="date" value="${state.selectedDate || ""}">
+                </div>
+                <div>
+                  <label>날씨</label>
+                  ${renderModalSelectOrInput("modalWeather", state.options.weather, "날씨 선택")}
+                </div>
+                <div>
+                  <label>작업내용</label>
+                  ${renderModalSelectOrInput("modalTaskName", state.options.tasks, "작업 선택")}
+                </div>
+              </div>
+            </div>
+
+            <div class="wm-section">
+              <div class="wm-section-title">다중선택</div>
+              <div class="wm-grid one">
+                <div>
+                  <label>작물</label>
+                  ${renderModalCheckboxGroup("modalCrops", state.options.crops)}
+                </div>
+                <div>
+                  <label>병충해</label>
+                  ${renderModalCheckboxGroup("modalPests", state.options.pests)}
+                </div>
+                <div>
+                  <label>사용자재</label>
+                  ${renderModalCheckboxGroup("modalMaterials", state.options.materials)}
+                </div>
+                <div>
+                  <label>사용기계</label>
+                  ${renderModalCheckboxGroup("modalMachines", state.options.machines)}
+                </div>
+              </div>
+            </div>
+
+            <div class="wm-section">
+              <div class="wm-section-title">금액 / 시간</div>
+              <div class="wm-grid">
+                <div>
+                  <label>자재비 총액</label>
+                  <input class="wm-input" id="modalMaterialCost" type="number" min="0" value="0">
+                </div>
+                <div>
+                  <label>작업시간</label>
+                  <input class="wm-input" id="modalWorkHours" type="number" min="0" step="0.5" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="wm-section">
+              <div class="wm-section-title">인건비 상세</div>
+              <div class="wm-labor-list" id="laborRowsContainer"></div>
+              <div class="wm-actions">
+                <button class="wl-btn" id="addLaborRowBtn">+ 인건비 추가</button>
+              </div>
+            </div>
+
+            <div class="wm-section">
+              <div class="wm-section-title">비고</div>
+              <div class="wm-grid one">
+                <div>
+                  <textarea class="wm-textarea" id="modalMemo" placeholder="비고 입력"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="wm-actions">
+              <button class="wl-btn primary" id="saveModalWorkBtn">저장</button>
+              <button class="wl-btn" id="closeWorkModalBtn">닫기</button>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
     bindWorksViewEvents();
   }
 
+  function renderModalSelectOrInput(id, options, placeholder) {
+    if (options && options.length) {
+      return `
+        <select class="wm-select" id="${id}">
+          <option value="">${placeholder}</option>
+          ${options.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
+        </select>
+      `;
+    }
+    return `<input class="wm-input" id="${id}" placeholder="${placeholder}">`;
+  }
+
+  function renderModalCheckboxGroup(name, options) {
+    if (!options || !options.length) {
+      return `<div style="color:#666;">옵션관리에서 항목을 추가하면 여기에 표시됩니다.</div>`;
+    }
+
+    return `
+      <div class="wm-check-grid">
+        ${options.map(v => `
+          <label class="wm-check-item">
+            <input type="checkbox" name="${name}" value="${escapeHtml(v)}">
+            <span>${escapeHtml(v)}</span>
+          </label>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function createLaborRowHtml(index) {
+    return `
+      <div class="wm-labor-row" data-labor-row="${index}">
+        <div class="wm-labor-grid">
+          <div>
+            <label>유형</label>
+            <select class="wm-select labor-type">
+              <option value="남자">남자</option>
+              <option value="여자">여자</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+          <div>
+            <label>금액</label>
+            <input class="wm-input labor-cost" type="number" min="0" value="0">
+          </div>
+          <div>
+            <label>구분</label>
+            <input class="wm-input labor-role" placeholder="예: 전정 인부">
+          </div>
+          <div>
+            <button type="button" class="wl-btn danger small remove-labor-row-btn">삭제</button>
+          </div>
+        </div>
+        <div class="wm-labor-grid-note">
+          <div>
+            <label>비고</label>
+            <input class="wm-input labor-note" placeholder="예: 추가작업">
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function bindWorksViewEvents() {
+    const openModalBtn = $("#openWorkModalBtn");
+    const overlay = $("#workModalOverlay");
+    const closeModalBtn = $("#closeWorkModalBtn");
+    const addLaborRowBtn = $("#addLaborRowBtn");
+    const saveModalWorkBtn = $("#saveModalWorkBtn");
+
+    openModalBtn?.addEventListener("click", () => {
+      overlay?.classList.add("open");
+      if ($("#modalStartDate") && state.selectedDate) $("#modalStartDate").value = state.selectedDate;
+      if ($("#modalEndDate") && state.selectedDate) $("#modalEndDate").value = state.selectedDate;
+
+      if ($("#laborRowsContainer") && $("#laborRowsContainer").children.length === 0) {
+        addLaborRow();
+      }
+    });
+
+    closeModalBtn?.addEventListener("click", () => {
+      closeWorkModal();
+    });
+
+    overlay?.addEventListener("click", (e) => {
+      if (e.target === overlay) closeWorkModal();
+    });
+
+    addLaborRowBtn?.addEventListener("click", () => {
+      addLaborRow();
+    });
+
+    saveModalWorkBtn?.addEventListener("click", handleCreateWorkFromModal);
+
+    $all(".remove-labor-row-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        btn.closest(".wm-labor-row")?.remove();
+      });
+    });
+
     $all("[data-work-delete]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.workDelete;
@@ -1205,10 +1608,11 @@
         const work = state.works.find(w => String(w.id) === String(id));
         if (!work) return;
 
+        const parsed = parseWorkExtra(work.memo || "");
         const task_name = prompt("작업내용", work.task_name || "");
         if (task_name === null) return;
 
-        const memo = prompt("비고", work.memo || "");
+        const memo = prompt("비고", parsed.plainMemo || "");
         if (memo === null) return;
 
         const labor_cost = prompt("인건비", work.labor_cost || "0");
@@ -1231,7 +1635,7 @@
               machines: work.machines || "",
               labor_cost: Number(labor_cost || 0),
               work_hours: Number(work_hours || 0),
-              memo
+              memo: buildWorkMemo(memo, parsed.meta)
             })
           });
           await refreshDataAndRerender();
@@ -1243,6 +1647,113 @@
     });
   }
 
+  function addLaborRow() {
+    const container = $("#laborRowsContainer");
+    if (!container) return;
+
+    const index = container.children.length + 1;
+    container.insertAdjacentHTML("beforeend", createLaborRowHtml(index));
+
+    const newRow = container.lastElementChild;
+    const removeBtn = $(".remove-labor-row-btn", newRow);
+    removeBtn?.addEventListener("click", () => {
+      newRow.remove();
+    });
+  }
+
+  function closeWorkModal() {
+    $("#workModalOverlay")?.classList.remove("open");
+    clearWorkModal();
+  }
+
+  function clearWorkModal() {
+    if ($("#modalStartDate")) $("#modalStartDate").value = state.selectedDate || "";
+    if ($("#modalEndDate")) $("#modalEndDate").value = state.selectedDate || "";
+    if ($("#modalWeather")) $("#modalWeather").value = "";
+    if ($("#modalTaskName")) $("#modalTaskName").value = "";
+    if ($("#modalMaterialCost")) $("#modalMaterialCost").value = "0";
+    if ($("#modalWorkHours")) $("#modalWorkHours").value = "0";
+    if ($("#modalMemo")) $("#modalMemo").value = "";
+
+    $all('input[name="modalCrops"]:checked').forEach(el => (el.checked = false));
+    $all('input[name="modalPests"]:checked').forEach(el => (el.checked = false));
+    $all('input[name="modalMaterials"]:checked').forEach(el => (el.checked = false));
+    $all('input[name="modalMachines"]:checked').forEach(el => (el.checked = false));
+
+    const container = $("#laborRowsContainer");
+    if (container) {
+      container.innerHTML = "";
+    }
+  }
+
+  function collectLaborRows() {
+    return $all(".wm-labor-row").map(row => {
+      return {
+        type: $(".labor-type", row)?.value || "남자",
+        cost: Number($(".labor-cost", row)?.value || 0),
+        role: $(".labor-role", row)?.value?.trim() || "",
+        note: $(".labor-note", row)?.value?.trim() || ""
+      };
+    }).filter(row => row.type || row.cost || row.role || row.note);
+  }
+
+  async function handleCreateWorkFromModal() {
+    const start_date = $("#modalStartDate")?.value || "";
+    const end_date = $("#modalEndDate")?.value || start_date;
+    const weather = $("#modalWeather")?.value || "";
+    const task_name = $("#modalTaskName")?.value || "";
+    const crops = getCheckedValues("modalCrops");
+    const pests = getCheckedValues("modalPests");
+    const materials = getCheckedValues("modalMaterials");
+    const machines = getCheckedValues("modalMachines");
+    const materialCost = Number($("#modalMaterialCost")?.value || 0);
+    const work_hours = Number($("#modalWorkHours")?.value || 0);
+    const plainMemo = $("#modalMemo")?.value?.trim() || "";
+    const laborRows = collectLaborRows();
+    const labor_cost = sumLaborCost(laborRows);
+
+    if (!start_date) {
+      infoMessage("시작일을 입력하세요.");
+      return;
+    }
+
+    if (!task_name) {
+      infoMessage("작업내용을 입력하세요.");
+      return;
+    }
+
+    try {
+      await api("/api/works", {
+        method: "POST",
+        body: JSON.stringify({
+          start_date,
+          end_date,
+          weather,
+          crops: joinMultiValue(crops),
+          task_name,
+          pests: joinMultiValue(pests),
+          materials: joinMultiValue(materials),
+          machines: joinMultiValue(machines),
+          labor_cost,
+          work_hours,
+          memo: buildWorkMemo(plainMemo, {
+            materialCost,
+            laborRows
+          })
+        })
+      });
+
+      closeWorkModal();
+      await refreshDataAndRerender();
+      infoMessage("작업 입력 완료");
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  /* =========================
+     나머지 메뉴
+     ========================= */
   function renderMaterialsView() {
     mainArea.innerHTML = `
       <div class="wl-wrap">
@@ -1277,6 +1788,7 @@
 
   function renderMoneyView() {
     const totalLabor = state.works.reduce((sum, w) => sum + Number(w.labor_cost || 0), 0);
+    const totalMaterial = state.works.reduce((sum, w) => sum + Number(getMaterialCostFromWork(w) || 0), 0);
 
     mainArea.innerHTML = `
       <div class="wl-wrap">
@@ -1287,9 +1799,9 @@
         </style>
         <div class="wl-title">금전관리</div>
         <div class="wl-card">
-          현재는 기본 집계만 표시합니다.<br>
           총 인건비: <strong>${totalLabor.toLocaleString()}</strong><br>
-          다음 단계에서 자재비 / 월별수익 / 손익 계산을 붙이면 됩니다.
+          총 자재비: <strong>${totalMaterial.toLocaleString()}</strong><br>
+          다음 단계에서 월별 집계 / 손익 계산을 붙이면 됩니다.
         </div>
       </div>
     `;
@@ -1359,6 +1871,9 @@
     `;
   }
 
+  /* =========================
+     시작
+     ========================= */
   async function init() {
     try {
       bindSidebarMenu();

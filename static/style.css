@@ -492,3 +492,130 @@ th, td{
   .day-number{ font-size:15px; }
   .badge{ font-size:11px; }
 }
+/* ===== 달력 날짜칸 구분선 강화 ===== */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.calendar-day {
+  min-height: 110px;
+  border: 1px solid #d7dde8;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.calendar-day.empty {
+  background: #f8fafc;
+  border: 1px dashed #e1e7ef;
+  cursor: default;
+}
+
+.calendar-day:hover:not(.empty) {
+  border-color: #9fb4d9;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.calendar-day.selected {
+  background: #eef4ff;
+  border-color: #4a6fe3;
+}
+
+.calendar-day .day-num {
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.calendar-day .day-count {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #3559c7;
+}
+
+/* ===== 작업일지 체크항목 가로 배치 ===== */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ===== 작업일지 카드 1개/여러개 표시 ===== */
+.work-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.work-cards-row.single-card {
+  grid-template-columns: 1fr;
+}
+
+.work-card-large {
+  min-height: 220px;
+}
+
+.work-card-small {
+  min-height: 160px;
+}
+
+/* ===== 작업계획/작업실적 카드 버튼 정리 ===== */
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* ===== 사용자재 상세입력 영역 ===== */
+#selected-materials-detailed .panel {
+  border: 1px solid #dde3ec;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+/* ===== 인건비 상세행 ===== */
+#labor-rows-wrap .panel {
+  border: 1px solid #dde3ec;
+  border-radius: 10px;
+  background: #fafcff;
+}
+
+/* ===== 작업일지 검색 영역 ===== */
+#works-search-wrap {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ===== 반응형 ===== */
+@media (max-width: 900px) {
+  .calendar-day {
+    min-height: 90px;
+    padding: 8px;
+  }
+
+  .calendar-day .day-num {
+    font-size: 16px;
+  }
+
+  .work-cards-row {
+    grid-template-columns: 1fr;
+  }
+}

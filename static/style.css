@@ -799,3 +799,64 @@ th, td{
     max-width: 100%;
   }
 }
+/* ===== 모달 높이 제한 + 본문 스크롤 + 하단 버튼 고정 ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.modal-box,
+.modal-box-large {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 520px;
+}
+
+.modal-box-large {
+  width: 100%;
+  max-width: 900px;
+}
+
+.modal-header {
+  flex: 0 0 auto;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.modal-footer {
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+/* 모바일에서 더 안전하게 */
+@media (max-width: 900px) {
+  .modal-box,
+  .modal-box-large {
+    max-width: 100%;
+    max-height: calc(100vh - 20px);
+  }
+
+  .modal-body {
+    padding-bottom: 20px;
+  }
+}

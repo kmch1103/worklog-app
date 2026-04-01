@@ -990,3 +990,48 @@ th, td{
     font-size: 18px;
   }
 }
+/* ===== 작업일지 목록 컨테이너의 기존 cards 그리드 해제 ===== */
+#works-list.cards {
+  display: block !important;
+  grid-template-columns: none !important;
+  gap: 0 !important;
+}
+
+/* ===== 날짜 그룹은 전체 폭 사용 ===== */
+#works-list .work-group {
+  width: 100%;
+}
+
+/* ===== 같은 날짜 작업이 1개일 때 정말 크게 ===== */
+#works-list .work-cards-row.single-card {
+  display: block;
+  width: 100%;
+}
+
+#works-list .work-cards-row.single-card > .panel,
+#works-list .work-cards-row.single-card > .work-card-large {
+  display: block;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 280px;
+  padding: 24px 26px;
+  box-sizing: border-box;
+}
+
+/* ===== 같은 날짜 작업이 여러 개일 때만 그리드 ===== */
+#works-list .work-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+/* ===== 여러 개 카드 공통 ===== */
+#works-list .work-cards-row > .work-card-small,
+#works-list .work-cards-row > .panel.work-card-small {
+  width: 100%;
+  max-width: none !important;
+  min-height: 180px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+}

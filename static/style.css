@@ -789,3 +789,13 @@ th, td{
     max-width: 100%;
   }
 }
+/* ===== 새작업 팝업 ===== */
+.modal-box-large {
+  max-width: 900px;
+}
+
+@media (max-width: 900px) {
+  .modal-box-large {
+    max-width: 100%;
+  }
+}

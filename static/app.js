@@ -28,7 +28,6 @@
 
   async function init() {
     cacheElements();
-    upgradeWorkFormForMaterialQty();
     bindMenu();
     bindCalendarButtons();
     bindWorkButtons();
@@ -46,12 +45,15 @@
       'plan-modal', 'plan-modal-title', 'btn-close-plan-modal',
       'plan_date', 'plan_title', 'plan_details', 'plan_status',
       'btn-save-plan', 'btn-cancel-plan',
-      'btn-new-work', 'work-form-wrap', 'work-form-title',
-      'start_date', 'end_date', 'weather', 'task_name', 'crops-box', 'pests-box', 'materials-box', 'machines-box',
+      'work-modal', 'work-modal-title', 'btn-close-work-modal',
+      'btn-new-work',
+      'start_date', 'end_date', 'weather', 'task_name', 'crops-box', 'pests-box', 'machines-box',
       'labor_cost', 'work_hours', 'memo', 'btn-save-work', 'btn-cancel-work', 'works-list',
       'material_name', 'material_unit', 'material_stock', 'material_price', 'material_memo', 'btn-save-material', 'materials-list',
       'new-weather', 'new-crops', 'new-tasks', 'new-pests', 'new-materials', 'new-machines',
-      'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-materials', 'options-machines'
+      'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-materials', 'options-machines',
+      'material-search-input', 'material-search-results', 'selected-materials-detailed',
+      'labor-rows-wrap', 'btn-add-labor-row'
     ];
 
     ids.forEach(id => {
@@ -88,19 +90,29 @@
     });
 
     on(el['btn-open-work-from-calendar'], 'click', () => {
-      openWorkForm();
+      openWorkModal();
       if (state.selectedDate) {
         el.start_date.value = state.selectedDate;
         el.end_date.value = state.selectedDate;
       }
-      switchPage('works');
     });
   }
 
   function bindWorkButtons() {
-    on(el['btn-new-work'], 'click', () => openWorkForm());
-    on(el['btn-cancel-work'], 'click', () => closeWorkForm());
+    on(el['btn-new-work'], 'click', () => openWorkModal());
+    on(el['btn-close-work-modal'], 'click', closeWorkModal);
+    on(el['btn-cancel-work'], 'click', closeWorkModal);
     on(el['btn-save-work'], 'click', saveWork);
+
+    on(el['work-modal'], 'click', (e) => {
+      if (e.target === el['work-modal']) closeWorkModal();
+    });
+
+    on(el['material-search-input'], 'input', (e) => {
+      renderMaterialSearchResults(e.target.value || '');
+    });
+
+    on(el['btn-add-labor-row'], 'click', () => addLaborRow());
   }
 
   function bindMaterialButtons() {
@@ -166,6 +178,7 @@
     renderWorks();
     renderMaterials();
     renderOptions();
+    ensureWorksSearchBar();
   }
 
   function switchPage(page) {
@@ -193,6 +206,7 @@
       renderCalendarSidePanel();
     } else if (page === 'works') {
       renderWorks();
+      ensureWorksSearchBar();
     } else if (page === 'materials') {
       renderMaterials();
     } else if (page === 'options') {
@@ -330,7 +344,7 @@
 
   function bindWorkMiniActions() {
     document.querySelectorAll('[data-work-edit]').forEach(btn => {
-      btn.addEventListener('click', () => openWorkFormById(btn.dataset.workEdit));
+      btn.addEventListener('click', () => openWorkModalById(btn.dataset.workEdit));
     });
     document.querySelectorAll('[data-work-delete]').forEach(btn => {
       btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
@@ -429,8 +443,7 @@
   function convertPlanToWork(planId) {
     const plan = state.plans.find(p => String(p.id) === String(planId));
     if (!plan) return;
-    switchPage('works');
-    openWorkForm();
+    openWorkModal();
     el.start_date.value = normalizePlanDate(plan.plan_date);
     el.end_date.value = normalizePlanDate(plan.plan_date);
     setSelectValue(el.task_name, plan.title || '');
@@ -450,49 +463,89 @@
     }
   }
 
-  function upgradeWorkFormForMaterialQty() {
-    if (!el['work-form-wrap']) return;
+  function openWorkModal() {
+    state.editingWorkId = null;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '새 작업 입력';
 
+    el.start_date.value = state.selectedDate || today();
+    el.end_date.value = state.selectedDate || today();
+    el.weather.value = '';
+    el.task_name.value = '';
+    uncheckAll(el['crops-box']);
+    uncheckAll(el['pests-box']);
+    uncheckAll(el['machines-box']);
+    el.work_hours.value = '0';
+    el.memo.value = '';
+
+    state.selectedMaterialsDetailed = [];
+    renderSelectedMaterialsDetailed();
+    renderMaterialSearchResults('');
+    resetLaborRows();
+
+    removeHidden(el['work-modal']);
+  }
+
+  function closeWorkModal() {
+    addHidden(el['work-modal']);
+    state.editingWorkId = null;
+  }
+
+  function openWorkModalById(workId) {
+    const work = state.works.find(w => String(w.id) === String(workId));
+    if (!work) return;
+
+    state.editingWorkId = work.id;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
+
+    el.start_date.value = work.start_date || '';
+    el.end_date.value = work.end_date || '';
+    setSelectValue(el.weather, work.weather || '');
+    setSelectValue(el.task_name, work.task_name || '');
+    checkValues(el['crops-box'], csvToArray(work.crops));
+    checkValues(el['pests-box'], csvToArray(work.pests));
+    checkValues(el['machines-box'], csvToArray(work.machines));
+    el.work_hours.value = work.work_hours || 0;
+
+    const meta = parseMemo(work.memo);
+    el.memo.value = meta.memo_text || '';
+    state.selectedMaterialsDetailed = Array.isArray(meta.materials)
+      ? meta.materials.map(item => ({
+          name: item.name || '',
+          qty: item.qty === 0 ? '0' : String(item.qty ?? ''),
+          unit: item.unit || getMaterialUnit(item.name)
+        }))
+      : [];
+
+    renderSelectedMaterialsDetailed();
+    renderMaterialSearchResults(document.getElementById('material-search-input')?.value || '');
+    resetLaborRows(meta.labor_rows || []);
+    removeHidden(el['work-modal']);
+  }
+
+  function renderWorkFormOptions() {
+    renderSelect(el.weather, state.options.weather, '선택');
+    renderSelect(el.task_name, state.options.tasks, '선택');
+    renderPlanTitleOptions();
+    renderChecks(el['crops-box'], state.options.crops);
+    renderChecks(el['pests-box'], state.options.pests);
+    renderChecks(el['machines-box'], state.options.machines);
+    renderMaterialSearchResults('');
+    renderSelectedMaterialsDetailed();
+    if (!el['labor-rows-wrap']?.children.length) addLaborRow();
+  }
+
+  function ensureWorksSearchBar() {
     const pageHeader = el['page-works']?.querySelector('.page-header');
-    if (pageHeader && !document.getElementById('works-search-wrap')) {
-      const wrap = document.createElement('div');
-      wrap.id = 'works-search-wrap';
-      wrap.innerHTML = `
-        <input type="text" id="works-search-input" placeholder="작업내용, 작물, 병충해, 자재, 비고 검색" style="padding:8px 10px; border-radius:8px; border:1px solid #ccc; min-width:260px;">
-        <button type="button" class="btn" id="btn-works-search">검색</button>
-        <button type="button" class="btn" id="btn-works-search-reset">초기화</button>
-      `;
-      pageHeader.appendChild(wrap);
-    }
+    if (!pageHeader || document.getElementById('works-search-wrap')) return;
 
-    const materialsField = el['materials-box']?.closest('.field');
-    if (materialsField && !document.getElementById('material-picker-wrap')) {
-      materialsField.innerHTML = `
-        <span>사용자재</span>
-        <div id="material-picker-wrap">
-          <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-            <input type="text" id="material-search-input" placeholder="자재명 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:220px;">
-          </div>
-          <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
-          <div id="selected-materials-detailed"></div>
-        </div>
-      `;
-    }
-
-    const oldLaborField = el['labor_cost']?.closest('.field');
-    if (oldLaborField && !document.getElementById('labor-rows-wrap')) {
-      const laborGrid = oldLaborField.parentElement;
-      if (laborGrid) {
-        laborGrid.insertAdjacentHTML('beforebegin', `
-          <div class="field">
-            <span>인건비 상세</span>
-            <div id="labor-rows-wrap"></div>
-            <div style="margin-top:8px;"><button type="button" class="btn" id="btn-add-labor-row">행추가</button></div>
-          </div>
-        `);
-      }
-      oldLaborField.style.display = 'none';
-    }
+    const wrap = document.createElement('div');
+    wrap.id = 'works-search-wrap';
+    wrap.innerHTML = `
+      <input type="text" id="works-search-input" placeholder="작업내용, 작물, 병충해, 자재, 비고 검색" style="padding:8px 10px; border-radius:8px; border:1px solid #ccc; min-width:260px;">
+      <button type="button" class="btn" id="btn-works-search">검색</button>
+      <button type="button" class="btn" id="btn-works-search-reset">초기화</button>
+    `;
+    pageHeader.appendChild(wrap);
 
     on(document.getElementById('works-search-input'), 'keydown', (e) => {
       if (e.key === 'Enter') {
@@ -513,24 +566,6 @@
       state.workSearchKeyword = '';
       renderWorks();
     });
-
-    on(document.getElementById('material-search-input'), 'input', (e) => {
-      renderMaterialSearchResults(e.target.value || '');
-    });
-
-    on(document.getElementById('btn-add-labor-row'), 'click', () => addLaborRow());
-  }
-
-  function renderWorkFormOptions() {
-    renderSelect(el.weather, state.options.weather, '선택');
-    renderSelect(el.task_name, state.options.tasks, '선택');
-    renderPlanTitleOptions();
-    renderChecks(el['crops-box'], state.options.crops);
-    renderChecks(el['pests-box'], state.options.pests);
-    renderChecks(el['machines-box'], state.options.machines);
-    renderMaterialSearchResults('');
-    renderSelectedMaterialsDetailed();
-    if (!document.getElementById('labor-rows-wrap')?.children.length) addLaborRow();
   }
 
   function renderWorks() {
@@ -575,7 +610,7 @@
     }).join('');
 
     el['works-list'].querySelectorAll('[data-edit-work-id]').forEach(btn => {
-      btn.addEventListener('click', () => openWorkFormById(btn.dataset.editWorkId));
+      btn.addEventListener('click', () => openWorkModalById(btn.dataset.editWorkId));
     });
 
     el['works-list'].querySelectorAll('[data-delete-work-id]').forEach(btn => {
@@ -609,62 +644,6 @@
         <div>비고: ${escapeHtml(meta.memo_text || '')}</div>
       </div>
     `;
-  }
-
-  function openWorkForm() {
-    state.editingWorkId = null;
-    if (el['work-form-title']) el['work-form-title'].textContent = '작업 입력';
-    if (el['work-form-wrap']) removeHidden(el['work-form-wrap']);
-
-    if (el.start_date) el.start_date.value = state.selectedDate || today();
-    if (el.end_date) el.end_date.value = state.selectedDate || today();
-    if (el.weather) el.weather.value = '';
-    if (el.task_name) el.task_name.value = '';
-    uncheckAll(el['crops-box']);
-    uncheckAll(el['pests-box']);
-    uncheckAll(el['machines-box']);
-    if (el.work_hours) el.work_hours.value = '0';
-    if (el.memo) el.memo.value = '';
-    state.selectedMaterialsDetailed = [];
-    renderSelectedMaterialsDetailed();
-    renderMaterialSearchResults('');
-    resetLaborRows();
-  }
-
-  function closeWorkForm() {
-    addHidden(el['work-form-wrap']);
-    state.editingWorkId = null;
-  }
-
-  function openWorkFormById(workId) {
-    const work = state.works.find(w => String(w.id) === String(workId));
-    if (!work) return;
-
-    state.editingWorkId = work.id;
-    if (el['work-form-title']) el['work-form-title'].textContent = '작업 수정';
-    if (el['work-form-wrap']) removeHidden(el['work-form-wrap']);
-
-    el.start_date.value = work.start_date || '';
-    el.end_date.value = work.end_date || '';
-    setSelectValue(el.weather, work.weather || '');
-    setSelectValue(el.task_name, work.task_name || '');
-    checkValues(el['crops-box'], csvToArray(work.crops));
-    checkValues(el['pests-box'], csvToArray(work.pests));
-    checkValues(el['machines-box'], csvToArray(work.machines));
-    el.work_hours.value = work.work_hours || 0;
-
-    const meta = parseMemo(work.memo);
-    el.memo.value = meta.memo_text || '';
-    state.selectedMaterialsDetailed = Array.isArray(meta.materials)
-      ? meta.materials.map(item => ({
-          name: item.name || '',
-          qty: item.qty === 0 ? '0' : String(item.qty ?? ''),
-          unit: item.unit || getMaterialUnit(item.name)
-        }))
-      : [];
-    renderSelectedMaterialsDetailed();
-    renderMaterialSearchResults(document.getElementById('material-search-input')?.value || '');
-    resetLaborRows(meta.labor_rows || []);
   }
 
   async function saveWork() {
@@ -721,7 +700,7 @@
       renderWorks();
       renderCalendar();
       renderCalendarSidePanel();
-      closeWorkForm();
+      closeWorkModal();
     } catch (e) {
       console.error(e);
       alert('작업 저장 중 오류가 발생했습니다.');
@@ -743,8 +722,7 @@
   }
 
   function renderMaterialSearchResults(keyword) {
-    const box = document.getElementById('material-search-results');
-    if (!box) return;
+    if (!el['material-search-results']) return;
 
     const q = String(keyword || '').trim().toLowerCase();
     const selected = new Set(state.selectedMaterialsDetailed.map(item => item.name));
@@ -753,7 +731,7 @@
       return !selected.has(name) && (!q || name.toLowerCase().includes(q));
     });
 
-    box.innerHTML = items.length
+    el['material-search-results'].innerHTML = items.length
       ? items.map(item => `
           <button type="button" class="btn" data-add-material="${escapeHtml(materialName(item))}" data-unit="${escapeHtml(materialUnit(item))}">
             ${escapeHtml(materialName(item))}${materialUnit(item) ? ` (${escapeHtml(materialUnit(item))})` : ''}
@@ -761,15 +739,14 @@
         `).join('')
       : '<div class="empty-msg">검색 결과 없음</div>';
 
-    box.querySelectorAll('[data-add-material]').forEach(btn => {
+    el['material-search-results'].querySelectorAll('[data-add-material]').forEach(btn => {
       btn.addEventListener('click', () => {
         state.selectedMaterialsDetailed.push({
           name: btn.dataset.addMaterial,
           qty: '',
           unit: btn.dataset.unit || getMaterialUnit(btn.dataset.addMaterial) || ''
         });
-        const input = document.getElementById('material-search-input');
-        if (input) input.value = '';
+        if (el['material-search-input']) el['material-search-input'].value = '';
         renderSelectedMaterialsDetailed();
         renderMaterialSearchResults('');
       });
@@ -777,15 +754,14 @@
   }
 
   function renderSelectedMaterialsDetailed() {
-    const wrap = document.getElementById('selected-materials-detailed');
-    if (!wrap) return;
+    if (!el['selected-materials-detailed']) return;
 
     if (!state.selectedMaterialsDetailed.length) {
-      wrap.innerHTML = '<div class="empty-msg">선택된 자재 없음</div>';
+      el['selected-materials-detailed'].innerHTML = '<div class="empty-msg">선택된 자재 없음</div>';
       return;
     }
 
-    wrap.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
+    el['selected-materials-detailed'].innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
       <div class="panel" style="margin-bottom:8px; padding:10px;">
         <div style="display:grid; grid-template-columns:1.2fr 0.7fr 0.7fr auto; gap:8px; align-items:end;">
           <div>
@@ -805,33 +781,32 @@
       </div>
     `).join('');
 
-    wrap.querySelectorAll('[data-material-qty]').forEach(input => {
+    el['selected-materials-detailed'].querySelectorAll('[data-material-qty]').forEach(input => {
       input.addEventListener('input', () => {
         const idx = Number(input.dataset.materialQty);
         state.selectedMaterialsDetailed[idx].qty = input.value;
       });
     });
 
-    wrap.querySelectorAll('[data-material-unit]').forEach(input => {
+    el['selected-materials-detailed'].querySelectorAll('[data-material-unit]').forEach(input => {
       input.addEventListener('input', () => {
         const idx = Number(input.dataset.materialUnit);
         state.selectedMaterialsDetailed[idx].unit = input.value;
       });
     });
 
-    wrap.querySelectorAll('[data-remove-material]').forEach(btn => {
+    el['selected-materials-detailed'].querySelectorAll('[data-remove-material]').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = Number(btn.dataset.removeMaterial);
         state.selectedMaterialsDetailed.splice(idx, 1);
         renderSelectedMaterialsDetailed();
-        renderMaterialSearchResults(document.getElementById('material-search-input')?.value || '');
+        renderMaterialSearchResults(el['material-search-input']?.value || '');
       });
     });
   }
 
   function addLaborRow(data = {}) {
-    const wrap = document.getElementById('labor-rows-wrap');
-    if (!wrap) return;
+    if (!el['labor-rows-wrap']) return;
 
     const row = document.createElement('div');
     row.className = 'panel';
@@ -864,14 +839,13 @@
       </div>
     `;
 
-    wrap.appendChild(row);
+    el['labor-rows-wrap'].appendChild(row);
     row.querySelector('.labor-remove').addEventListener('click', () => row.remove());
   }
 
   function resetLaborRows(rows = []) {
-    const wrap = document.getElementById('labor-rows-wrap');
-    if (!wrap) return;
-    wrap.innerHTML = '';
+    if (!el['labor-rows-wrap']) return;
+    el['labor-rows-wrap'].innerHTML = '';
     if (!rows.length) {
       addLaborRow();
       return;
@@ -880,10 +854,9 @@
   }
 
   function collectLaborRows() {
-    const wrap = document.getElementById('labor-rows-wrap');
-    if (!wrap) return [];
+    if (!el['labor-rows-wrap']) return [];
 
-    return Array.from(wrap.children).map(row => ({
+    return Array.from(el['labor-rows-wrap'].children).map(row => ({
       type: row.querySelector('.labor-type')?.value || '',
       amount: toNumber(row.querySelector('.labor-amount')?.value || 0),
       category: row.querySelector('.labor-category')?.value || '',

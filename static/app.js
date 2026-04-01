@@ -1,12 +1,10 @@
 // static/app.js
-// 업로드한 기존 index.html 구조 기준 전체 교체본
-// 원칙:
-// - 기존 HTML 구조 유지
-// - 기존 page id / button id / class 최대한 유지
-// - 작업달력 / 작업일지 / 자재관리 / 옵션관리 동작
-// - 작업일지 사용자재는 수량입력형으로 확장
-// - 검색형 자재선택 + 선택 자재별 수량/단위 입력
-// - 작업일지 검색은 버튼 방식
+// 기존 업로드한 index.html 구조 기준 전체 교체본
+// 반영:
+// 1) 달력 날짜칸 구분선용 class 유지
+// 2) 작업계획 제목 선택형
+// 3) 작업일지 입력 작물/병충해/사용기계 가로 배치(css 연동)
+// 4) 같은 날짜 작업이 1개면 큰 카드, 여러 개면 작은 카드
 
 (function () {
   'use strict';
@@ -73,8 +71,7 @@
   function bindMenu() {
     el.menuButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        const page = btn.dataset.page;
-        switchPage(page);
+        switchPage(btn.dataset.page);
       });
     });
   }
@@ -93,6 +90,7 @@
     on(el['btn-open-plan-form'], 'click', () => openPlanForm());
     on(el['btn-cancel-plan'], 'click', () => closePlanForm());
     on(el['btn-save-plan'], 'click', savePlan);
+
     on(el['btn-open-work-from-calendar'], 'click', () => {
       openWorkForm();
       if (state.selectedDate) {
@@ -104,10 +102,7 @@
   }
 
   function bindWorkButtons() {
-    on(el['btn-new-work'], 'click', () => {
-      openWorkForm();
-    });
-
+    on(el['btn-new-work'], 'click', () => openWorkForm());
     on(el['btn-cancel-work'], 'click', () => closeWorkForm());
     on(el['btn-save-work'], 'click', saveWork);
   }
@@ -353,9 +348,9 @@
     el['plan-form-title'].textContent = plan ? '작업계획 수정' : '작업계획 입력';
     state.editingPlanId = plan ? plan.id : null;
     el.plan_date.value = plan ? normalizePlanDate(plan.plan_date) : state.selectedDate;
-    el.plan_title.value = plan?.title || '';
     el.plan_details.value = plan?.details || '';
     el.plan_status.value = plan?.status || 'planned';
+    renderPlanTitleOptions(plan?.title || '');
   }
 
   function closePlanForm() {
@@ -367,6 +362,18 @@
     if (el.plan_status) el.plan_status.value = 'planned';
   }
 
+  function renderPlanTitleOptions(selectedValue = '') {
+    if (!el.plan_title) return;
+    const current = selectedValue || el.plan_title.value || '';
+    el.plan_title.innerHTML =
+      `<option value="">선택</option>` +
+      state.options.tasks.map(item => {
+        const name = optionName(item);
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+      }).join('');
+    setSelectValue(el.plan_title, current);
+  }
+
   async function savePlan() {
     const payload = {
       plan_date: el.plan_date.value,
@@ -376,7 +383,7 @@
     };
 
     if (!payload.plan_date) return alert('계획일을 입력하세요.');
-    if (!payload.title) return alert('계획 제목을 입력하세요.');
+    if (!payload.title) return alert('계획 제목을 선택하세요.');
 
     try {
       if (state.editingPlanId) {
@@ -450,9 +457,6 @@
     if (pageHeader && !document.getElementById('works-search-wrap')) {
       const wrap = document.createElement('div');
       wrap.id = 'works-search-wrap';
-      wrap.style.display = 'flex';
-      wrap.style.gap = '8px';
-      wrap.style.marginLeft = 'auto';
       wrap.innerHTML = `
         <input type="text" id="works-search-input" placeholder="작업내용, 작물, 병충해, 자재, 비고 검색" style="padding:8px 10px; border-radius:8px; border:1px solid #ccc; min-width:260px;">
         <button type="button" class="btn" id="btn-works-search">검색</button>
@@ -497,25 +501,30 @@
         renderWorks();
       }
     });
+
     on(document.getElementById('btn-works-search'), 'click', () => {
       state.workSearchKeyword = (document.getElementById('works-search-input')?.value || '').trim();
       renderWorks();
     });
+
     on(document.getElementById('btn-works-search-reset'), 'click', () => {
       const input = document.getElementById('works-search-input');
       if (input) input.value = '';
       state.workSearchKeyword = '';
       renderWorks();
     });
+
     on(document.getElementById('material-search-input'), 'input', (e) => {
       renderMaterialSearchResults(e.target.value || '');
     });
+
     on(document.getElementById('btn-add-labor-row'), 'click', () => addLaborRow());
   }
 
   function renderWorkFormOptions() {
     renderSelect(el.weather, state.options.weather, '선택');
     renderSelect(el.task_name, state.options.tasks, '선택');
+    renderPlanTitleOptions();
     renderChecks(el['crops-box'], state.options.crops);
     renderChecks(el['pests-box'], state.options.pests);
     renderChecks(el['machines-box'], state.options.machines);
@@ -554,11 +563,12 @@
 
     el['works-list'].innerHTML = dates.map(date => {
       const items = groups[date];
+      const rowClass = items.length === 1 ? 'work-cards-row single-card' : 'work-cards-row';
       return `
         <div class="work-group" style="margin-bottom:18px;">
           <h3 style="margin:0 0 10px 0;">${escapeHtml(date)}</h3>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px;">
-            ${items.map(renderWorkCard).join('')}
+          <div class="${rowClass}">
+            ${items.map(item => renderWorkCard(item, items.length === 1)).join('')}
           </div>
         </div>
       `;
@@ -573,13 +583,14 @@
     });
   }
 
-  function renderWorkCard(work) {
+  function renderWorkCard(work, isSingle) {
     const meta = parseMemo(work.memo);
     const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
     const laborTotal = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
+    const cardClass = isSingle ? 'panel work-card-large' : 'panel work-card-small';
 
     return `
-      <div class="panel">
+      <div class="${cardClass}">
         <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:8px;">
           <strong>${escapeHtml(work.task_name || '')}</strong>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -1096,7 +1107,7 @@
       const name = optionName(item);
       const id = `${container.id}-${slug(name)}`;
       return `
-        <label style="display:inline-flex; align-items:center; gap:6px; margin:4px 10px 4px 0;">
+        <label>
           <input type="checkbox" id="${escapeHtml(id)}" value="${escapeHtml(name)}" ${selected.includes(name) ? 'checked' : ''}>
           <span>${escapeHtml(name)}</span>
         </label>

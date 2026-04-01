@@ -860,3 +860,40 @@ th, td{
     padding-bottom: 20px;
   }
 }
+/* ===== 작물 / 병충해 / 사용기계 선택칩 ===== */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #d6dbe4;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.checks label:hover {
+  border-color: #9fb4d9;
+  background: #f8fbff;
+}
+
+.checks input[type="checkbox"] {
+  margin: 0;
+}
+
+.checks label:has(input[type="checkbox"]:checked) {
+  border-color: #4a6fe3;
+  background: #eef4ff;
+  color: #2447b8;
+  font-weight: 600;
+}

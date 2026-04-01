@@ -47,41 +47,6 @@
               </div>
             </div>
 
-            <div id="plan-form-wrap" class="panel inner-panel hidden">
-              <h4 id="plan-form-title">작업계획 입력</h4>
-
-              <label class="field">
-                <span>계획일</span>
-                <input type="date" id="plan_date">
-              </label>
-
-              <label class="field">
-                <span>계획 제목</span>
-                <select id="plan_title">
-                  <option value="">선택</option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>세부내용</span>
-                <textarea id="plan_details" rows="3" placeholder="예: 상단동 2시간 관수"></textarea>
-              </label>
-
-              <label class="field">
-                <span>상태</span>
-                <select id="plan_status">
-                  <option value="planned">계획</option>
-                  <option value="done">완료</option>
-                  <option value="cancelled">취소</option>
-                </select>
-              </label>
-
-              <div class="form-actions">
-                <button id="btn-save-plan" class="btn primary">계획 저장</button>
-                <button id="btn-cancel-plan" class="btn">취소</button>
-              </div>
-            </div>
-
             <div class="split-title">작업계획</div>
             <div id="selected-date-plan-list" class="calendar-day-list"></div>
 
@@ -206,9 +171,7 @@
       </section>
 
       <section id="page-money" class="page">
-        <div class="page-header">
-          <h2>금전관리</h2>
-        </div>
+        <div class="page-header"><h2>금전관리</h2></div>
         <div class="panel">
           <p class="placeholder-title">준비중</p>
           <p class="placeholder-text">금전관리 화면은 수입/지출/월별정산 기능을 붙일 예정입니다.</p>
@@ -216,9 +179,7 @@
       </section>
 
       <section id="page-options" class="page">
-        <div class="page-header">
-          <h2>옵션관리</h2>
-        </div>
+        <div class="page-header"><h2>옵션관리</h2></div>
 
         <div class="options-grid">
           <div class="panel">
@@ -278,9 +239,7 @@
       </section>
 
       <section id="page-excel" class="page">
-        <div class="page-header">
-          <h2>엑셀다운</h2>
-        </div>
+        <div class="page-header"><h2>엑셀다운</h2></div>
         <div class="panel">
           <p class="placeholder-title">준비중</p>
           <p class="placeholder-text">엑셀 다운로드 기능은 다음 단계에서 연결할 예정입니다.</p>
@@ -288,15 +247,56 @@
       </section>
 
       <section id="page-backup" class="page">
-        <div class="page-header">
-          <h2>백업</h2>
-        </div>
+        <div class="page-header"><h2>백업</h2></div>
         <div class="panel">
           <p class="placeholder-title">준비중</p>
           <p class="placeholder-text">백업/복원 기능은 다음 단계에서 연결할 예정입니다.</p>
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- 작업계획 팝업 -->
+  <div id="plan-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="plan-modal-title">작업계획 입력</h3>
+        <button id="btn-close-plan-modal" class="btn">닫기</button>
+      </div>
+
+      <div class="modal-body">
+        <label class="field">
+          <span>계획일</span>
+          <input type="date" id="plan_date">
+        </label>
+
+        <label class="field">
+          <span>계획 제목</span>
+          <select id="plan_title">
+            <option value="">선택</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>세부내용</span>
+          <textarea id="plan_details" rows="4" placeholder="예: 상단동 2시간 관수"></textarea>
+        </label>
+
+        <label class="field">
+          <span>상태</span>
+          <select id="plan_status">
+            <option value="planned">계획</option>
+            <option value="done">완료</option>
+            <option value="cancelled">취소</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-save-plan" class="btn primary">계획 저장</button>
+        <button id="btn-cancel-plan" class="btn">취소</button>
+      </div>
+    </div>
   </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>

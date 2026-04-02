@@ -667,33 +667,45 @@ function resetMoneyFields() {
   }
 
    function renderWorkCard(work, isSingle) {
-    const meta = parseMemo(work.memo);
-    const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
-    const laborTotal = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
-    const cardClass = isSingle ? 'panel work-card-large' : 'panel work-card-small';
+  const meta = parseMemo(work.memo);
+  const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
+  const laborTotal = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
+  const cardClass = isSingle ? 'panel work-card-large' : 'panel work-card-small';
 
-    return `
-      <div class="${cardClass}">
-        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:8px;">
-          <strong>${escapeHtml(work.task_name || '')}</strong>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="btn" data-edit-work-id="${escapeHtml(String(work.id))}">수정</button>
-            <button class="btn" data-delete-work-id="${escapeHtml(String(work.id))}">삭제</button>
-          </div>
+  return `
+    <div class="${cardClass}">
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:8px;">
+        <strong>${escapeHtml(work.task_name || '')}</strong>
+        <div style="display:flex; gap:6px;">
+          <button class="btn" data-edit-work-id="${work.id}">수정</button>
+          <button class="btn" data-delete-work-id="${work.id}">삭제</button>
         </div>
-        <div>작물: ${escapeHtml(work.crops || '')}</div>
-        <div>날씨: ${escapeHtml(work.weather || '')}</div>
-        <div>병충해: ${escapeHtml(work.pests || '')}</div>
-        <div>자재: ${escapeHtml(formatMaterials(meta.materials))}</div>
-        <div>기계: ${escapeHtml(work.machines || '')}</div>
-        <div>작업시간: ${escapeHtml(String(work.work_hours || ''))}</div>
-        <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
-        <div>인건비: ${laborTotal ? numberWithComma(laborTotal) + '원' : numberWithComma(work.labor_cost || 0) + '원'}</div>
-        ${meta.money ? `<div>금전: ${escapeHtml(meta.money.type || '')} / ${numberWithComma(meta.money.amount || 0)}원 / ${escapeHtml(meta.money.method || '')}${meta.money.note ? ` / ${escapeHtml(meta.money.note)}` : ''}</div>` : ''}
-        <div>비고: ${escapeHtml(meta.memo_text || '')}</div>
       </div>
-    `;
-  }
+
+      <div>작물: ${escapeHtml(work.crops || '')}</div>
+      <div>날씨: ${escapeHtml(work.weather || '')}</div>
+      <div>병충해: ${escapeHtml(work.pests || '')}</div>
+      <div>자재: ${escapeHtml(formatMaterials(meta.materials))}</div>
+      <div>작업시간: ${escapeHtml(work.work_hours || '')}</div>
+      <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
+
+      <div>인건비: ${
+        laborTotal
+          ? numberWithComma(laborTotal) + '원'
+          : numberWithComma(work.labor_cost || 0) + '원'
+      }</div>
+
+      ${meta.money ? `
+        <div style="color:#2563eb; font-weight:600;">
+          💰 ${meta.money.type} / ${numberWithComma(meta.money.amount)}원 / ${meta.money.method}
+          ${meta.money.note ? ` / ${meta.money.note}` : ''}
+        </div>
+      ` : ''}
+
+      <div>비고: ${escapeHtml(meta.memo_text || '')}</div>
+    </div>
+  `;
+}
 
       async function saveWork() {
     const materials = state.selectedMaterialsDetailed.map(item => ({

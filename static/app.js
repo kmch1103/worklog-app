@@ -666,7 +666,7 @@ function resetMoneyFields() {
     });
   }
 
-  function renderWorkCard(work, isSingle) {
+   function renderWorkCard(work, isSingle) {
     const meta = parseMemo(work.memo);
     const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
     const laborTotal = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
@@ -689,96 +689,96 @@ function resetMoneyFields() {
         <div>작업시간: ${escapeHtml(String(work.work_hours || ''))}</div>
         <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
         <div>인건비: ${laborTotal ? numberWithComma(laborTotal) + '원' : numberWithComma(work.labor_cost || 0) + '원'}</div>
-${meta.money ? `<div>금전: ${escapeHtml(meta.money.type || '')} / ${numberWithComma(meta.money.amount || 0)}원 / ${escapeHtml(meta.money.method || '')}${meta.money.note ? ` / ${escapeHtml(meta.money.note)}` : ''}</div>` : ''}
-<div>비고: ${escapeHtml(meta.memo_text || '')}</div>
+        ${meta.money ? `<div>금전: ${escapeHtml(meta.money.type || '')} / ${numberWithComma(meta.money.amount || 0)}원 / ${escapeHtml(meta.money.method || '')}${meta.money.note ? ` / ${escapeHtml(meta.money.note)}` : ''}</div>` : ''}
+        <div>비고: ${escapeHtml(meta.memo_text || '')}</div>
       </div>
     `;
   }
 
-  async function saveWork() {
-  const materials = state.selectedMaterialsDetailed.map(item => ({
-    name: String(item.name || '').trim(),
-    qty: String(item.qty ?? '').trim(),
-    unit: String(item.unit || '').trim()
-  })).filter(item => item.name);
+      async function saveWork() {
+    const materials = state.selectedMaterialsDetailed.map(item => ({
+      name: String(item.name || '').trim(),
+      qty: String(item.qty ?? '').trim(),
+      unit: String(item.unit || '').trim()
+    })).filter(item => item.name);
 
-  for (const item of materials) {
-    if (item.qty === '') {
-      return alert(`사용자재 [${item.name}] 수량을 입력하세요.`);
+    for (const item of materials) {
+      if (item.qty === '') {
+        return alert(`사용자재 [${item.name}] 수량을 입력하세요.`);
+      }
+      const qty = Number(item.qty);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return alert(`사용자재 [${item.name}] 수량은 0보다 커야 합니다.`);
+      }
+      item.qty = qty;
     }
-    const qty = Number(item.qty);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      return alert(`사용자재 [${item.name}] 수량은 0보다 커야 합니다.`);
+
+    const laborRows = collectLaborRows();
+    const laborCost = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
+
+    let money = null;
+    const hasMoney = !!el['has_money']?.checked;
+
+    if (hasMoney) {
+      const moneyType = String(el['money_type']?.value || '').trim();
+      const moneyAmount = Number(el['money_amount']?.value || 0);
+      const moneyMethod = String(el['money_method']?.value || '').trim();
+      const moneyNote = String(el['money_note']?.value || '').trim();
+
+      if (!moneyType) return alert('비용구분을 선택하세요.');
+      if (!Number.isFinite(moneyAmount) || moneyAmount <= 0) {
+        return alert('금액은 0보다 크게 입력하세요.');
+      }
+      if (!moneyMethod) return alert('결제방식을 선택하세요.');
+
+      money = {
+        type: moneyType,
+        amount: moneyAmount,
+        method: moneyMethod,
+        note: moneyNote
+      };
     }
-    item.qty = qty;
-  }
 
-  const laborRows = collectLaborRows();
-  const laborCost = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
-
-  let money = null;
-  const hasMoney = !!el['has_money']?.checked;
-
-  if (hasMoney) {
-    const moneyType = String(el['money_type']?.value || '').trim();
-    const moneyAmount = Number(el['money_amount']?.value || 0);
-    const moneyMethod = String(el['money_method']?.value || '').trim();
-    const moneyNote = String(el['money_note']?.value || '').trim();
-
-    if (!moneyType) return alert('비용구분을 선택하세요.');
-    if (!Number.isFinite(moneyAmount) || moneyAmount <= 0) {
-      return alert('금액은 0보다 크게 입력하세요.');
-    }
-    if (!moneyMethod) return alert('결제방식을 선택하세요.');
-
-    money = {
-      type: moneyType,
-      amount: moneyAmount,
-      method: moneyMethod,
-      note: moneyNote
+    const payload = {
+      start_date: el.start_date.value,
+      end_date: el.end_date.value,
+      weather: el.weather.value,
+      crops: collectChecked(el['crops-box']).join(','),
+      task_name: el.task_name.value,
+      pests: collectChecked(el['pests-box']).join(','),
+      materials: materials.map(m => m.name).join(','),
+      machines: collectChecked(el['machines-box']).join(','),
+      labor_cost: laborCost,
+      work_hours: el.work_hours.value,
+      memo: JSON.stringify({
+        memo_text: el.memo.value || '',
+        materials,
+        labor_rows: laborRows,
+        material_cost_total: 0,
+        money
+      })
     };
-  }
 
-  const payload = {
-    start_date: el.start_date.value,
-    end_date: el.end_date.value,
-    weather: el.weather.value,
-    crops: collectChecked(el['crops-box']).join(','),
-    task_name: el.task_name.value,
-    pests: collectChecked(el['pests-box']).join(','),
-    materials: materials.map(m => m.name).join(','),
-    machines: collectChecked(el['machines-box']).join(','),
-    labor_cost: laborCost,
-    work_hours: el.work_hours.value,
-    memo: JSON.stringify({
-      memo_text: el.memo.value || '',
-      materials,
-      labor_rows: laborRows,
-      material_cost_total: 0,
-      money
-    })
-  };
+    if (!payload.start_date) return alert('시작일을 입력하세요.');
+    if (!payload.end_date) return alert('종료일을 입력하세요.');
+    if (!payload.task_name) return alert('작업내용을 선택하세요.');
 
-  if (!payload.start_date) return alert('시작일을 입력하세요.');
-  if (!payload.end_date) return alert('종료일을 입력하세요.');
-  if (!payload.task_name) return alert('작업내용을 선택하세요.');
-
-  try {
-    if (state.editingWorkId) {
-      await apiPut(`/api/works/${state.editingWorkId}`, payload);
-    } else {
-      await apiPost('/api/works', payload);
+    try {
+      if (state.editingWorkId) {
+        await apiPut(`/api/works/${state.editingWorkId}`, payload);
+      } else {
+        await apiPost('/api/works', payload);
+      }
+      await loadWorks();
+      renderWorks();
+      renderCalendar();
+      renderCalendarSidePanel();
+      closeWorkModal();
+    } catch (e) {
+      console.error(e);
+      alert('작업 저장 중 오류가 발생했습니다.');
     }
-    await loadWorks();
-    renderWorks();
-    renderCalendar();
-    renderCalendarSidePanel();
-    closeWorkModal();
-  } catch (e) {
-    console.error(e);
-    alert('작업 저장 중 오류가 발생했습니다.');
   }
-}
 
     const laborRows = collectLaborRows();
     const laborCost = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);

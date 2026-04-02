@@ -19,7 +19,8 @@
       machines: []
     },
     workSearchKeyword: '',
-    selectedMaterialsDetailed: []
+    selectedMaterialsDetailed: [],
+    materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말']
   };
 
   const el = {};
@@ -49,7 +50,9 @@
       'btn-new-work',
       'start_date', 'end_date', 'weather', 'task_name', 'crops-box', 'pests-box', 'machines-box',
       'labor_cost', 'work_hours', 'memo', 'btn-save-work', 'btn-cancel-work', 'works-list',
-      'material_name', 'material_unit', 'material_stock', 'material_price', 'material_memo', 'btn-save-material', 'materials-list',
+      'material_name', 'material_unit', 'material_stock', 'material_price', 'material_memo',
+      'btn-save-material', 'btn-open-material-modal', 'btn-close-material-modal', 'btn-cancel-material',
+      'material-modal', 'material-modal-title', 'materials-list',
       'new-weather', 'new-crops', 'new-tasks', 'new-pests', 'new-materials', 'new-machines',
       'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-materials', 'options-machines',
       'material-search-input', 'material-search-results', 'selected-materials-detailed',
@@ -116,7 +119,16 @@
   }
 
   function bindMaterialButtons() {
+    ensureMaterialModal();
+
+    on(el['btn-open-material-modal'], 'click', openMaterialModal);
+    on(el['btn-close-material-modal'], 'click', closeMaterialModal);
+    on(el['btn-cancel-material'], 'click', closeMaterialModal);
     on(el['btn-save-material'], 'click', saveMaterial);
+
+    on(el['material-modal'], 'click', (e) => {
+      if (e.target === el['material-modal']) closeMaterialModal();
+    });
   }
 
   async function loadAll() {
@@ -866,22 +878,21 @@
 
   async function saveMaterial() {
     const payload = {
-      name: (el.material_name.value || '').trim(),
-      unit: (el.material_unit.value || '').trim(),
-      stock_qty: toNumber(el.material_stock.value || 0),
-      unit_price: toNumber(el.material_price.value || 0),
-      memo: (el.material_memo.value || '').trim()
+      name: (el.material_name?.value || '').trim(),
+      unit: (el.material_unit?.value || '').trim(),
+      stock_qty: toNumber(el.material_stock?.value || 0),
+      unit_price: toNumber(el.material_price?.value || 0),
+      memo: (el.material_memo?.value || '').trim()
     };
 
     if (!payload.name) return alert('자재명을 입력하세요.');
+    if (!payload.unit) return alert('단위를 선택하세요.');
+
+    const keepUnit = payload.unit;
 
     try {
       await apiPost('/api/materials', payload);
-      el.material_name.value = '';
-      el.material_unit.value = '';
-      el.material_stock.value = '0';
-      el.material_price.value = '0';
-      el.material_memo.value = '';
+      resetMaterialForm(keepUnit);
       await loadMaterials();
       await loadOptions();
       renderMaterials();
@@ -901,53 +912,172 @@
 
     el['materials-list'].innerHTML = `
       <div class="panel" style="margin-bottom:12px;">
-        <strong>전체 ${state.materials.length}개 | 재고 있음 ${inStock.length}개 | 재고 없음 ${outStock.length}개</strong>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <strong>전체 ${state.materials.length}개 | 재고 있음 ${inStock.length}개 | 재고 없음 ${outStock.length}개</strong>
+          <button type="button" class="btn" id="btn-open-material-modal">+ 자재 추가</button>
+        </div>
       </div>
       <div class="grid two">
         <div class="panel">
-          <h3>재고 있음</h3>
-          ${inStock.length ? renderMaterialTable(inStock) : '<div class="empty-msg">재고 있는 자재 없음</div>'}
+          <h3 style="margin-top:0;">재고 있음</h3>
+          ${inStock.length ? renderMaterialList(inStock) : '<div class="empty-msg">재고 있는 자재 없음</div>'}
         </div>
         <div class="panel">
-          <h3>재고 없음</h3>
-          ${outStock.length ? renderMaterialTable(outStock) : '<div class="empty-msg">재고 없는 자재 없음</div>'}
+          <h3 style="margin-top:0;">재고 없음</h3>
+          ${outStock.length ? renderMaterialList(outStock) : '<div class="empty-msg">재고 없는 자재 없음</div>'}
         </div>
       </div>
     `;
+
+    el['btn-open-material-modal'] = document.getElementById('btn-open-material-modal');
+    on(el['btn-open-material-modal'], 'click', openMaterialModal);
 
     el['materials-list'].querySelectorAll('[data-material-adjust]').forEach(btn => {
       btn.addEventListener('click', () => adjustMaterialStock(btn.dataset.materialAdjust, btn.dataset.mode));
     });
   }
 
-  function renderMaterialTable(items) {
+  function renderMaterialList(items) {
     return `
-      <table style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th style="text-align:left; padding:6px;">자재명</th>
-            <th style="text-align:left; padding:6px;">단위</th>
-            <th style="text-align:right; padding:6px;">재고</th>
-            <th style="text-align:right; padding:6px;">단가</th>
-            <th style="text-align:left; padding:6px;">처리</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map(item => `
-            <tr>
-              <td style="padding:6px;">${escapeHtml(materialName(item))}</td>
-              <td style="padding:6px;">${escapeHtml(materialUnit(item))}</td>
-              <td style="padding:6px; text-align:right;">${numberWithComma(toNumber(item.stock_qty ?? item.재고 ?? 0))}</td>
-              <td style="padding:6px; text-align:right;">${numberWithComma(toNumber(item.unit_price ?? item.가격 ?? 0))}</td>
-              <td style="padding:6px;">
-                <button class="btn" data-material-adjust="${escapeHtml(materialName(item))}" data-mode="in">입고</button>
-                <button class="btn" data-material-adjust="${escapeHtml(materialName(item))}" data-mode="out">사용</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        ${items.map(item => {
+          const name = materialName(item);
+          const unit = materialUnit(item);
+          const stock = toNumber(item.stock_qty ?? item.재고 ?? 0);
+          const price = toNumber(item.unit_price ?? item.가격 ?? 0);
+
+          return `
+            <div class="panel" style="padding:12px;">
+              <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                <div style="flex:1 1 260px; min-width:0;">
+                  <div style="
+                    font-weight:700;
+                    line-height:1.35;
+                    display:-webkit-box;
+                    -webkit-line-clamp:2;
+                    -webkit-box-orient:vertical;
+                    overflow:hidden;
+                    word-break:break-word;
+                    margin-bottom:6px;
+                  ">
+                    ${escapeHtml(name)}
+                  </div>
+                  <div style="
+                    display:flex;
+                    gap:14px;
+                    flex-wrap:wrap;
+                    color:#555;
+                    font-size:14px;
+                    line-height:1.4;
+                  ">
+                    <span>단위: ${escapeHtml(unit || '-')}</span>
+                    <span>재고: ${numberWithComma(stock)}</span>
+                    <span>단가: ${numberWithComma(price)}</span>
+                  </div>
+                </div>
+
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button class="btn" data-material-adjust="${escapeHtml(name)}" data-mode="in">입고</button>
+                  <button class="btn" data-material-adjust="${escapeHtml(name)}" data-mode="out">사용</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
     `;
+  }
+
+  function ensureMaterialModal() {
+    let modal = document.getElementById('material-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'material-modal';
+      modal.className = 'modal hidden';
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width:520px; width:min(92vw, 520px);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px;">
+            <h3 id="material-modal-title" style="margin:0;">자재 등록</h3>
+            <button type="button" class="btn" id="btn-close-material-modal">닫기</button>
+          </div>
+
+          <div style="display:grid; gap:12px;">
+            <label class="field">
+              <span>자재명</span>
+              <input type="text" id="material_name" placeholder="자재명 입력">
+            </label>
+
+            <label class="field">
+              <span>단위</span>
+              <select id="material_unit"></select>
+            </label>
+
+            <label class="field">
+              <span>재고수량</span>
+              <input type="number" id="material_stock" min="0" step="0.01" value="0">
+            </label>
+
+            <label class="field">
+              <span>단가</span>
+              <input type="number" id="material_price" min="0" step="1" value="0">
+            </label>
+
+            <label class="field">
+              <span>메모</span>
+              <input type="text" id="material_memo" placeholder="메모 입력">
+            </label>
+
+            <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:4px;">
+              <button type="button" class="btn" id="btn-save-material">저장</button>
+              <button type="button" class="btn" id="btn-cancel-material">닫기</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    el['material-modal'] = document.getElementById('material-modal');
+    el['material-modal-title'] = document.getElementById('material-modal-title');
+    el['btn-close-material-modal'] = document.getElementById('btn-close-material-modal');
+    el['btn-cancel-material'] = document.getElementById('btn-cancel-material');
+    el['btn-save-material'] = document.getElementById('btn-save-material');
+    el.material_name = document.getElementById('material_name');
+    el.material_unit = document.getElementById('material_unit');
+    el.material_stock = document.getElementById('material_stock');
+    el.material_price = document.getElementById('material_price');
+    el.material_memo = document.getElementById('material_memo');
+
+    renderMaterialUnitOptions(el.material_unit?.value || state.materialUnits[0]);
+  }
+
+  function openMaterialModal() {
+    ensureMaterialModal();
+    renderMaterialUnitOptions(el.material_unit?.value || state.materialUnits[0]);
+    removeHidden(el['material-modal']);
+    if (el.material_name) el.material_name.focus();
+  }
+
+  function closeMaterialModal() {
+    addHidden(el['material-modal']);
+  }
+
+  function resetMaterialForm(keepUnit = '') {
+    if (el.material_name) el.material_name.value = '';
+    if (el.material_stock) el.material_stock.value = '0';
+    if (el.material_price) el.material_price.value = '0';
+    if (el.material_memo) el.material_memo.value = '';
+    renderMaterialUnitOptions(keepUnit || el.material_unit?.value || state.materialUnits[0]);
+    if (el.material_name) el.material_name.focus();
+  }
+
+  function renderMaterialUnitOptions(selectedValue = '') {
+    if (!el.material_unit) return;
+    const current = selectedValue || state.materialUnits[0];
+    el.material_unit.innerHTML = state.materialUnits.map(unit => `
+      <option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>
+    `).join('');
+    setSelectValue(el.material_unit, current);
   }
 
   async function adjustMaterialStock(name, mode) {

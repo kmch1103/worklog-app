@@ -57,7 +57,8 @@
       'new-weather', 'new-crops', 'new-tasks', 'new-pests', 'new-materials', 'new-machines',
       'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-materials', 'options-machines',
       'material-search-input', 'material-search-results', 'selected-materials-detailed',
-      'labor-rows-wrap', 'btn-add-labor-row'
+      'labor-rows-wrap', 'btn-add-labor-row',
+'has_money', 'money-box', 'money_type', 'money_amount', 'money_method', 'money_note'
     ];
 
     ids.forEach(id => {

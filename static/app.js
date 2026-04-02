@@ -936,7 +936,7 @@
       <div class="panel" style="margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
           <strong>전체 ${state.materials.length}개 | 재고 있음 ${inStock.length}개 | 재고 없음 ${outStock.length}개</strong>
-          <button type="button" class="btn" id="btn-open-material-modal">+ 자재 추가</button>
+          <button type="button" class="btn" id="btn-open-material-modal" onclick="window.openMaterialModalFromApp()">+ 자재 추가</button>
         </div>
       </div>
 

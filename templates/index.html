@@ -294,17 +294,22 @@
     </div>
   </div>
 
-
-
   <!-- 자재등록 팝업 -->
   <div id="material-modal" class="modal-overlay hidden">
     <div class="modal-box modal-box-material">
       <div class="modal-header">
-        <h3 id="material-modal-title">자재 추가</h3>
+        <h3 id="material-modal-title">자재 등록</h3>
         <button id="btn-close-material-modal" class="btn">닫기</button>
       </div>
 
       <div class="modal-body">
+        <label class="field">
+          <span>자재 검색</span>
+          <input type="text" id="material-search-keyword" placeholder="자재명 검색">
+        </label>
+
+        <div id="material-search-box" class="panel" style="max-height:160px; overflow:auto; padding:6px; margin-bottom:12px;"></div>
+
         <div class="grid two">
           <label class="field">
             <span>자재명</span>
@@ -323,7 +328,6 @@
               <option value="L">L</option>
               <option value="ml">ml</option>
               <option value="말">말</option>
-              <option value="M">M</option>
             </select>
           </label>
         </div>

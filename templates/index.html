@@ -285,6 +285,59 @@
           <span>비고</span>
           <textarea id="memo" rows="4"></textarea>
         </label>
+
+        <label class="field">
+  <span>비고</span>
+  <textarea id="memo" rows="4"></textarea>
+</label>
+
+<div class="field money-field-wrap">
+  <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+    <input type="checkbox" id="has_money">
+    <span>비용 발생</span>
+  </label>
+</div>
+
+<div id="money-box" class="panel hidden" style="margin-top:10px; padding:14px;">
+  <div class="grid two">
+    <label class="field">
+      <span>비용구분</span>
+      <select id="money_type">
+        <option value="">선택</option>
+        <option value="자재">자재</option>
+        <option value="인건비">인건비</option>
+        <option value="기타">기타</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>금액</span>
+      <input type="number" id="money_amount" min="0" step="100" value="0">
+    </label>
+  </div>
+
+  <div class="grid two">
+    <label class="field">
+      <span>결제방식</span>
+      <select id="money_method">
+        <option value="">선택</option>
+        <option value="현금">현금</option>
+        <option value="계좌이체">계좌이체</option>
+        <option value="카드일시불">카드일시불</option>
+        <option value="카드할부">카드할부</option>
+        <option value="외상">외상</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>금전비고</span>
+      <input type="text" id="money_note" placeholder="예: 농약값, 일당, 수리비">
+    </label>
+  </div>
+</div>
+
+
+        
       </div>
 
       <div class="modal-footer">

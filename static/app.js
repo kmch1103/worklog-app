@@ -36,7 +36,7 @@
     bindMaterialButtons();
 
     window.openMaterialModalFromApp = openMaterialModal;
-    
+
     await loadAll();
     renderAll();
   }
@@ -134,14 +134,17 @@
       if (e.target === el['material-modal']) closeMaterialModal();
     });
 
-    on(el['material_name'], 'input', () => {
-      renderMaterialNameSuggestions(el['material_name']?.value || '');
-      clearEditingMaterialIfNameChanged();
-    });
+    if (el.material_name) {
+      el.material_name.addEventListener('input', handleMaterialNameSearch);
+      el.material_name.addEventListener('keyup', handleMaterialNameSearch);
+      el.material_name.addEventListener('focus', handleMaterialNameSearch);
+    }
+  }
 
-    on(el['material_name'], 'focus', () => {
-      renderMaterialNameSuggestions(el['material_name']?.value || '');
-    });
+  function handleMaterialNameSearch() {
+    const keyword = (el.material_name?.value || '').trim();
+    renderMaterialNameSuggestions(keyword);
+    clearEditingMaterialIfNameChanged();
   }
 
   async function loadAll() {
@@ -955,8 +958,6 @@
       </div>
     `;
 
-
-
     el['materials-list'].querySelectorAll('[data-material-adjust]').forEach(btn => {
       btn.addEventListener('click', () => adjustMaterialStock(btn.dataset.materialAdjust, btn.dataset.mode));
     });
@@ -1046,17 +1047,17 @@
           </div>
 
           <div style="display:grid; gap:12px;">
-            <label class="field" style="position:relative;">
+            <label class="field">
               <span>자재명</span>
-              <input type="text" id="material_name" placeholder="자재명 입력">
-              <div id="material-name-suggest" class="panel hidden" style="
-                position:relative;
-                margin-top:6px;
-                max-height:180px;
-                overflow:auto;
-                padding:6px;
-              "></div>
+              <input type="text" id="material_name" placeholder="자재명 입력" autocomplete="off">
             </label>
+
+            <div id="material-name-suggest" class="panel hidden" style="
+              margin-top:-4px;
+              max-height:180px;
+              overflow-y:auto;
+              padding:6px;
+            "></div>
 
             <label class="field">
               <span>단위</span>
@@ -1112,7 +1113,17 @@
     resetMaterialForm(el.material_unit?.value || state.materialUnits[0]);
     renderMaterialNameSuggestions('');
     removeHidden(el['material-modal']);
-    if (el.material_name) el.material_name.focus();
+    if (el.material_name) {
+      el.material_name.focus();
+      bindMaterialNameInputAgain();
+    }
+  }
+
+  function bindMaterialNameInputAgain() {
+    if (!el.material_name) return;
+    el.material_name.oninput = handleMaterialNameSearch;
+    el.material_name.onkeyup = handleMaterialNameSearch;
+    el.material_name.onfocus = handleMaterialNameSearch;
   }
 
   function openMaterialModalByName(name) {
@@ -1125,7 +1136,10 @@
       el['material-modal-title'].textContent = '자재 수정';
     }
     removeHidden(el['material-modal']);
-    if (el.material_name) el.material_name.focus();
+    if (el.material_name) {
+      el.material_name.focus();
+      bindMaterialNameInputAgain();
+    }
   }
 
   function closeMaterialModal() {
@@ -1158,6 +1172,7 @@
     if (!el['material-name-suggest']) return;
 
     const q = String(keyword || '').trim().toLowerCase();
+
     if (!q) {
       el['material-name-suggest'].innerHTML = '';
       addHidden(el['material-name-suggest']);
@@ -1166,7 +1181,8 @@
 
     const matched = state.materials
       .filter(item => materialName(item).toLowerCase().startsWith(q))
-      .sort((a, b) => materialName(a).localeCompare(materialName(b), 'ko'));
+      .sort((a, b) => materialName(a).localeCompare(materialName(b), 'ko'))
+      .slice(0, 20);
 
     if (!matched.length) {
       el['material-name-suggest'].innerHTML = `

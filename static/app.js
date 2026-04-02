@@ -676,38 +676,26 @@ function resetMoneyFields() {
     <div class="${cardClass}">
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:8px;">
         <strong>${escapeHtml(work.task_name || '')}</strong>
-        <div style="display:flex; gap:6px;">
-          <button class="btn" data-edit-work-id="${work.id}">수정</button>
-          <button class="btn" data-delete-work-id="${work.id}">삭제</button>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn" data-edit-work-id="${escapeHtml(String(work.id))}">수정</button>
+          <button class="btn" data-delete-work-id="${escapeHtml(String(work.id))}">삭제</button>
         </div>
       </div>
-
       <div>작물: ${escapeHtml(work.crops || '')}</div>
       <div>날씨: ${escapeHtml(work.weather || '')}</div>
       <div>병충해: ${escapeHtml(work.pests || '')}</div>
       <div>자재: ${escapeHtml(formatMaterials(meta.materials))}</div>
-      <div>작업시간: ${escapeHtml(work.work_hours || '')}</div>
+      <div>기계: ${escapeHtml(work.machines || '')}</div>
+      <div>작업시간: ${escapeHtml(String(work.work_hours || ''))}</div>
       <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
-
-      <div>인건비: ${
-        laborTotal
-          ? numberWithComma(laborTotal) + '원'
-          : numberWithComma(work.labor_cost || 0) + '원'
-      }</div>
-
-      ${meta.money ? `
-        <div style="color:#2563eb; font-weight:600;">
-          💰 ${meta.money.type} / ${numberWithComma(meta.money.amount)}원 / ${meta.money.method}
-          ${meta.money.note ? ` / ${meta.money.note}` : ''}
-        </div>
-      ` : ''}
-
+      <div>인건비: ${laborTotal ? numberWithComma(laborTotal) + '원' : numberWithComma(work.labor_cost || 0) + '원'}</div>
+      ${meta.money ? `<div style="color:#2563eb; font-weight:600;">💰 ${escapeHtml(meta.money.type || '')} / ${numberWithComma(meta.money.amount || 0)}원 / ${escapeHtml(meta.money.method || '')}${meta.money.note ? ` / ${escapeHtml(meta.money.note)}` : ''}</div>` : ''}
       <div>비고: ${escapeHtml(meta.memo_text || '')}</div>
     </div>
   `;
 }
 
-  async function saveWork() {
+async function saveWork() {
   const materials = state.selectedMaterialsDetailed.map(item => ({
     name: String(item.name || '').trim(),
     qty: String(item.qty ?? '').trim(),
@@ -792,29 +780,51 @@ function resetMoneyFields() {
   }
 }
 
-      async function saveWork() {
-    const materials = state.selectedMaterialsDetailed.map(item => ({
-      name: String(item.name || '').trim(),
-      qty: String(item.qty ?? '').trim(),
-      unit: String(item.unit || '').trim()
-    })).filter(item => item.name);
+async function deleteWork(workId) {
+  if (!confirm('이 작업을 삭제하시겠습니까?')) return;
+  try {
+    await apiDelete(`/api/works/${workId}`);
+    await loadWorks();
+    renderWorks();
+    renderCalendar();
+    renderCalendarSidePanel();
+  } catch (e) {
+    console.error(e);
+    alert('작업 삭제 중 오류가 발생했습니다.');
+  }
+}
 
-    for (const item of materials) {
-      if (item.qty === '') {
-        return alert(`사용자재 [${item.name}] 수량을 입력하세요.`);
-      }
-      const qty = Number(item.qty);
-      if (!Number.isFinite(qty) || qty <= 0) {
-        return alert(`사용자재 [${item.name}] 수량은 0보다 커야 합니다.`);
-      }
-      item.qty = qty;
-    }
+function renderMaterialSearchResults(keyword) {
+  if (!el['material-search-results']) return;
 
-    
+  const q = String(keyword || '').trim().toLowerCase();
+  const selected = new Set(state.selectedMaterialsDetailed.map(item => item.name));
+  const items = state.materials.filter(item => {
+    const name = materialName(item);
+    return !selected.has(name) && (!q || name.toLowerCase().includes(q));
+  });
 
-    
+  el['material-search-results'].innerHTML = items.length
+    ? items.map(item => `
+        <button type="button" class="btn" data-add-material="${escapeHtml(materialName(item))}" data-unit="${escapeHtml(materialUnit(item))}">
+          ${escapeHtml(materialName(item))}${materialUnit(item) ? ` (${escapeHtml(materialUnit(item))})` : ''}
+        </button>
+      `).join('')
+    : '<div class="empty-msg">검색 결과 없음</div>';
 
-  function renderMaterialSearchResults(keyword) {
+  el['material-search-results'].querySelectorAll('[data-add-material]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.selectedMaterialsDetailed.push({
+        name: btn.dataset.addMaterial,
+        qty: '',
+        unit: btn.dataset.unit || getMaterialUnit(btn.dataset.addMaterial) || ''
+      });
+      if (el['material-search-input']) el['material-search-input'].value = '';
+      renderSelectedMaterialsDetailed();
+      renderMaterialSearchResults('');
+    });
+  });
+}
     if (!el['material-search-results']) return;
 
     const q = String(keyword || '').trim().toLowerCase();

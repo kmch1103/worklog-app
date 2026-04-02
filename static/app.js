@@ -34,6 +34,9 @@
     bindCalendarButtons();
     bindWorkButtons();
     bindMaterialButtons();
+
+    window.openMaterialModalFromApp = openMaterialModal;
+    
     await loadAll();
     renderAll();
   }
@@ -952,8 +955,7 @@
       </div>
     `;
 
-    el['btn-open-material-modal'] = document.getElementById('btn-open-material-modal');
-    on(el['btn-open-material-modal'], 'click', openMaterialModal);
+
 
     el['materials-list'].querySelectorAll('[data-material-adjust]').forEach(btn => {
       btn.addEventListener('click', () => adjustMaterialStock(btn.dataset.materialAdjust, btn.dataset.mode));

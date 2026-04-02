@@ -666,7 +666,9 @@ function resetMoneyFields() {
     });
   }
 
-   function renderWorkCard(work, isSingle) {
+
+
+function renderWorkCard(work, isSingle) {
   const meta = parseMemo(work.memo);
   const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
   const laborTotal = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
@@ -825,38 +827,10 @@ function renderMaterialSearchResults(keyword) {
     });
   });
 }
-    if (!el['material-search-results']) return;
 
-    const q = String(keyword || '').trim().toLowerCase();
-    const selected = new Set(state.selectedMaterialsDetailed.map(item => item.name));
-    const items = state.materials.filter(item => {
-      const name = materialName(item);
-      return !selected.has(name) && (!q || name.toLowerCase().includes(q));
-    });
 
-    el['material-search-results'].innerHTML = items.length
-      ? items.map(item => `
-          <button type="button" class="btn" data-add-material="${escapeHtml(materialName(item))}" data-unit="${escapeHtml(materialUnit(item))}">
-            ${escapeHtml(materialName(item))}${materialUnit(item) ? ` (${escapeHtml(materialUnit(item))})` : ''}
-          </button>
-        `).join('')
-      : '<div class="empty-msg">검색 결과 없음</div>';
-
-    el['material-search-results'].querySelectorAll('[data-add-material]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.selectedMaterialsDetailed.push({
-          name: btn.dataset.addMaterial,
-          qty: '',
-          unit: btn.dataset.unit || getMaterialUnit(btn.dataset.addMaterial) || ''
-        });
-        if (el['material-search-input']) el['material-search-input'].value = '';
-        renderSelectedMaterialsDetailed();
-        renderMaterialSearchResults('');
-      });
-    });
-  }
-
-  function renderSelectedMaterialsDetailed() {
+  
+    
     if (!el['selected-materials-detailed']) return;
 
     if (!state.selectedMaterialsDetailed.length) {

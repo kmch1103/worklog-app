@@ -123,23 +123,22 @@
   }
 
   function bindMaterialButtons() {
-    ensureMaterialModal();
+  ensureMaterialModal();
 
-    on(el['btn-open-material-modal'], 'click', openMaterialModal);
-    on(el['btn-close-material-modal'], 'click', closeMaterialModal);
-    on(el['btn-cancel-material'], 'click', closeMaterialModal);
-    on(el['btn-save-material'], 'click', saveMaterial);
+  on(el['btn-open-material-modal'], 'click', openMaterialModal);
+  on(el['btn-close-material-modal'], 'click', closeMaterialModal);
+  on(el['btn-cancel-material'], 'click', closeMaterialModal);
+  on(el['btn-save-material'], 'click', saveMaterial);
 
-    on(el['material-modal'], 'click', (e) => {
-      if (e.target === el['material-modal']) closeMaterialModal();
-    });
+  on(el['material-modal'], 'click', (e) => {
+    if (e.target === el['material-modal']) closeMaterialModal();
+  });
 
-    if (el.material_name) {
-      el.material_name.addEventListener('input', handleMaterialNameInput);
-      el.material_name.addEventListener('change', handleMaterialNameInput);
-      el.material_name.addEventListener('blur', handleMaterialNameInput);
-    }
+  if (el.material_name) {
+    el.material_name.addEventListener('input', handleMaterialNameInput);
+    el.material_name.addEventListener('focus', handleMaterialNameInput);
   }
+}
 
   async function loadAll() {
     await Promise.all([
@@ -1030,81 +1029,92 @@
   }
 
   function ensureMaterialModal() {
-    let modal = document.getElementById('material-modal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'material-modal';
-      modal.className = 'modal hidden';
-      modal.innerHTML = `
-        <div class="modal-content" style="max-width:520px; width:min(92vw, 520px);">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px;">
-            <h3 id="material-modal-title" style="margin:0;">자재 등록</h3>
-            <button type="button" class="btn" id="btn-close-material-modal">닫기</button>
-          </div>
+  let modal = document.getElementById('material-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'material-modal';
+    modal.className = 'modal hidden';
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width:520px; width:min(92vw, 520px);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px;">
+          <h3 id="material-modal-title" style="margin:0;">자재 등록</h3>
+          <button type="button" class="btn" id="btn-close-material-modal">닫기</button>
+        </div>
 
-          <div style="display:grid; gap:12px;">
-            <label class="field">
-              <span>자재명</span>
-              <input type="text" id="material_name" list="material-name-datalist" placeholder="자재명 입력" autocomplete="off">
-              <datalist id="material-name-datalist"></datalist>
-            </label>
+        <div style="display:grid; gap:12px;">
+          <label class="field">
+            <span>자재명</span>
+            <input type="text" id="material_name" placeholder="자재명 입력" autocomplete="off">
+          </label>
 
-            <label class="field">
-              <span>단위</span>
-              <select id="material_unit"></select>
-            </label>
+          <div id="material-search-box" class="panel hidden" style="
+            margin-top:-4px;
+            max-height:180px;
+            overflow-y:auto;
+            padding:6px;
+          "></div>
 
-            <label class="field">
-              <span>재고수량</span>
-              <input type="number" id="material_stock" min="0" step="0.01" value="0">
-            </label>
+          <label class="field">
+            <span>단위</span>
+            <select id="material_unit"></select>
+          </label>
 
-            <label class="field">
-              <span>단가</span>
-              <input type="number" id="material_price" min="0" step="1" value="0">
-            </label>
+          <label class="field">
+            <span>재고수량</span>
+            <input type="number" id="material_stock" min="0" step="0.01" value="0">
+          </label>
 
-            <label class="field">
-              <span>메모</span>
-              <input type="text" id="material_memo" placeholder="메모 입력">
-            </label>
+          <label class="field">
+            <span>단가</span>
+            <input type="number" id="material_price" min="0" step="1" value="0">
+          </label>
 
-            <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:4px;">
-              <button type="button" class="btn" id="btn-save-material">저장</button>
-              <button type="button" class="btn" id="btn-cancel-material">닫기</button>
-            </div>
+          <label class="field">
+            <span>메모</span>
+            <input type="text" id="material_memo" placeholder="메모 입력">
+          </label>
+
+          <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:4px;">
+            <button type="button" class="btn" id="btn-save-material">저장</button>
+            <button type="button" class="btn" id="btn-cancel-material">닫기</button>
           </div>
         </div>
-      `;
-      document.body.appendChild(modal);
-    }
-
-    el['material-modal'] = document.getElementById('material-modal');
-    el['material-modal-title'] = document.getElementById('material-modal-title');
-    el['btn-close-material-modal'] = document.getElementById('btn-close-material-modal');
-    el['btn-cancel-material'] = document.getElementById('btn-cancel-material');
-    el['btn-save-material'] = document.getElementById('btn-save-material');
-    el.material_name = document.getElementById('material_name');
-    el.material_unit = document.getElementById('material_unit');
-    el.material_stock = document.getElementById('material_stock');
-    el.material_price = document.getElementById('material_price');
-    el.material_memo = document.getElementById('material_memo');
-    el['material-name-datalist'] = document.getElementById('material-name-datalist');
-
-    renderMaterialUnitOptions(el.material_unit?.value || state.materialUnits[0]);
-    renderMaterialNameDatalist();
+      </div>
+    `;
+    document.body.appendChild(modal);
   }
+
+  el['material-modal'] = document.getElementById('material-modal');
+  el['material-modal-title'] = document.getElementById('material-modal-title');
+  el['btn-close-material-modal'] = document.getElementById('btn-close-material-modal');
+  el['btn-cancel-material'] = document.getElementById('btn-cancel-material');
+  el['btn-save-material'] = document.getElementById('btn-save-material');
+  el['material-search-box'] = document.getElementById('material-search-box');
+  el.material_name = document.getElementById('material_name');
+  el.material_unit = document.getElementById('material_unit');
+  el.material_stock = document.getElementById('material_stock');
+  el.material_price = document.getElementById('material_price');
+  el.material_memo = document.getElementById('material_memo');
+
+  renderMaterialUnitOptions(el.material_unit?.value || state.materialUnits[0]);
+}
 
   function openMaterialModal() {
-    ensureMaterialModal();
-    state.editingMaterialId = null;
-    if (el['material-modal-title']) {
-      el['material-modal-title'].textContent = '자재 등록';
-    }
-    resetMaterialForm(el.material_unit?.value || state.materialUnits[0]);
-    removeHidden(el['material-modal']);
-    if (el.material_name) el.material_name.focus();
+  ensureMaterialModal();
+  state.editingMaterialId = null;
+
+  if (el['material-modal-title']) {
+    el['material-modal-title'].textContent = '자재 등록';
   }
+
+  resetMaterialForm(el.material_unit?.value || state.materialUnits[0]);
+  renderMaterialSearchBox('');
+  removeHidden(el['material-modal']);
+
+  if (el.material_name) {
+    el.material_name.focus();
+  }
+}
 
   function openMaterialModalByName(name) {
     const item = state.materials.find(m => materialName(m) === name);
@@ -1120,8 +1130,9 @@
   }
 
   function closeMaterialModal() {
-    addHidden(el['material-modal']);
-  }
+  addHidden(el['material-modal']);
+  hideMaterialSearchBox();
+}
 
   function resetMaterialForm(keepUnit = '') {
     state.editingMaterialId = null;
@@ -1183,8 +1194,64 @@
     if (el['material-modal-title']) {
       el['material-modal-title'].textContent = '자재 수정';
     }
+    hideMaterialSearchBox();
   }
 
+
+function renderMaterialSearchBox(keyword) {
+  if (!el['material-search-box']) return;
+
+  const q = String(keyword || '').trim().toLowerCase();
+
+  if (!q) {
+    el['material-search-box'].innerHTML = '';
+    addHidden(el['material-search-box']);
+    return;
+  }
+
+  const matched = state.materials
+    .filter(item => materialName(item).toLowerCase().startsWith(q))
+    .sort((a, b) => materialName(a).localeCompare(materialName(b), 'ko'))
+    .slice(0, 15);
+
+  if (!matched.length) {
+    el['material-search-box'].innerHTML = `
+      <div style="padding:8px 10px; color:#666;">일치 자재 없음 → 신규 등록</div>
+    `;
+    removeHidden(el['material-search-box']);
+    return;
+  }
+
+  el['material-search-box'].innerHTML = matched.map(item => `
+    <button
+      type="button"
+      class="btn"
+      data-pick-material="${escapeHtml(materialName(item))}"
+      style="display:block; width:100%; text-align:left; margin-bottom:6px;"
+    >
+      ${escapeHtml(materialName(item))}
+      / 단위 ${escapeHtml(materialUnit(item) || '-')}
+      / 재고 ${numberWithComma(toNumber(item.stock_qty ?? item.재고 ?? 0))}
+    </button>
+  `).join('');
+
+  removeHidden(el['material-search-box']);
+
+  el['material-search-box'].querySelectorAll('[data-pick-material]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const picked = state.materials.find(item => materialName(item) === btn.dataset.pickMaterial);
+      if (!picked) return;
+      fillMaterialForm(picked);
+      hideMaterialSearchBox();
+    });
+  });
+}
+
+function hideMaterialSearchBox() {
+  if (!el['material-search-box']) return;
+  el['material-search-box'].innerHTML = '';
+  addHidden(el['material-search-box']);
+}
   async function adjustMaterialStock(name, mode) {
     const item = state.materials.find(m => materialName(m) === name);
     if (!item) return;

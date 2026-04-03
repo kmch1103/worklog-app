@@ -128,13 +128,8 @@
     });
 
     on(el['material-search-input'], 'input', (e) => {
-  const keyword = e.target.value || '';
-
-  renderMaterialSearchResults(keyword);
-
-  // 🔥 추가 기능 (자재명 자동 입력)
-  autoFillMaterialName(keyword);
-});
+      renderMaterialSearchResults(e.target.value || '');
+    });
 
     on(el['btn-add-labor-row'], 'click', () => addLaborRow());
 
@@ -154,7 +149,10 @@
     });
 
     on(el['material-search-keyword'], 'input', (e) => {
-      renderMaterialPickerResults(e.target.value || '');
+      const keyword = e.target.value || '';
+
+      renderMaterialPickerResults(keyword);
+      autoFillMaterialName(keyword);
     });
   }
 function autoFillMaterialName(keyword) {

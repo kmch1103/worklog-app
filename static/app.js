@@ -161,8 +161,7 @@ function autoFillMaterialName(keyword) {
   const input = el['material_name'] || el['material-name'];
   if (!input) return;
 
-  // 이미 값이 있으면 덮어쓰지 않음
-  if (!input.value.trim()) {
+  if (input.value !== keyword) {
     input.value = keyword;
   }
 }

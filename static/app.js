@@ -1005,12 +1005,12 @@ function autoFillMaterialName(keyword) {
     document.querySelectorAll('[data-stock-out]').forEach(btn => {
       btn.addEventListener('click', () => adjustMaterialStock(btn.dataset.stockOut, 'out'));
     });
-  }
+
 
     document.querySelectorAll('[data-delete-material]').forEach(btn => {
       btn.addEventListener('click', () => deleteMaterial(btn.dataset.deleteMaterial));
   });
-
+}
   function renderMaterialPickerResults(keyword) {
     if (!el['material-search-box']) return;
 

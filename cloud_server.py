@@ -534,5 +534,44 @@ def delete_material(material_id):
         return jsonify({"ok": False, "error": "삭제할 자재를 찾을 수 없습니다."}), 404
     return jsonify({"ok": True})
 
+
+@app.route("/api/money", methods=["GET"])
+def get_money():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, start_date, end_date, task_name, memo
+        FROM works
+        ORDER BY start_date DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    results = []
+
+    for r in rows:
+        try:
+            import json
+            memo = json.loads(r["memo"]) if r["memo"] else {}
+            money = memo.get("money")
+            if not money:
+                continue
+
+            results.append({
+                "id": r["id"],
+                "date": r["start_date"],
+                "task": r["task_name"],
+                "type": money.get("type", ""),
+                "amount": float(money.get("amount", 0)),
+                "method": money.get("method", ""),
+                "note": money.get("note", "")
+            })
+        except:
+            continue
+
+    return jsonify(results)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

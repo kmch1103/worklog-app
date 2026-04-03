@@ -156,12 +156,14 @@
     });
   }
 function autoFillMaterialName(keyword) {
-  if (!el['material_name']) return;
   if (!keyword) return;
 
-  // 이미 값이 있으면 덮어쓰지 않음 (안전장치)
-  if (!el['material_name'].value.trim()) {
-    el['material_name'].value = keyword;
+  const input = el['material_name'] || el['material-name'];
+  if (!input) return;
+
+  // 이미 값이 있으면 덮어쓰지 않음
+  if (!input.value.trim()) {
+    input.value = keyword;
   }
 }
   async function loadAll() {

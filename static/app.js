@@ -987,6 +987,7 @@ function autoFillMaterialName(keyword) {
           <button class="btn" data-edit-material="${id}">수정</button>
           <button class="btn" data-stock-in="${id}">입고</button>
           <button class="btn" data-stock-out="${id}">사용</button>
+          <button class="btn" data-delete-material="${id}">삭제</button>
         </div>
       </div>
     `;

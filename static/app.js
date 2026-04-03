@@ -60,7 +60,7 @@
       'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-materials', 'options-machines',
       'material-search-input', 'material-search-results', 'selected-materials-detailed',
       'labor-rows-wrap', 'btn-add-labor-row',
-      'has_money', 'money-box', 'money_type', 'money_amount', 'money_method', 'money_note'
+      'has_money', 'money-box', 'money_type', 'money_amount', 'money_method', 'money_note',
       'money-start', 'money-end', 'money-type-filter', 'money-method-filter',
       'btn-money-filter', 'money-list', 'money-total', 'money-cash', 'money-card'
     ];

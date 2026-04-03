@@ -35,7 +35,9 @@
     bindWorkButtons();
     bindMaterialButtons();
     await loadAll();
+    await loadMoney();
     renderAll();
+    
   }
 
   function cacheElements() {
@@ -136,6 +138,8 @@
     on(el['has_money'], 'change', () => {
       toggleMoneyBox(el['has_money'].checked);
     });
+
+    on(el['btn-money-filter'], 'click', renderMoney);
   }
 
   function bindMaterialButtons() {
@@ -255,6 +259,9 @@ function autoFillMaterialName(keyword) {
       ensureWorksSearchBar();
     } else if (page === 'materials') {
       renderMaterials();
+    } else if (page === 'money') {
+      renderMoney();
+    
     } else if (page === 'options') {
       renderOptions();
     }

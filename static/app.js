@@ -1414,4 +1414,58 @@ async function deleteMaterial(materialId) {
       return { ok: true, raw: text };
     }
   }
+
+async function loadMoney() {
+  try {
+    state.money = await apiGet('/api/money');
+  } catch (e) {
+    console.error(e);
+    state.money = [];
+  }
+}
+
+function renderMoney() {
+  if (!el['money-list']) return;
+
+  let list = [...(state.money || [])];
+
+  const start = el['money-start']?.value;
+  const end = el['money-end']?.value;
+  const type = el['money-type-filter']?.value;
+  const method = el['money-method-filter']?.value;
+
+  if (start) list = list.filter(i => i.date >= start);
+  if (end) list = list.filter(i => i.date <= end);
+  if (type) list = list.filter(i => i.type === type);
+  if (method) list = list.filter(i => i.method === method);
+
+  let total = 0;
+  let cash = 0;
+  let card = 0;
+
+  el['money-list'].innerHTML = list.map(i => {
+    total += i.amount;
+
+    if (i.method === '현금' || i.method === '계좌이체') cash += i.amount;
+    else card += i.amount;
+
+    return `
+      <tr>
+        <td>${i.date}</td>
+        <td>${i.task}</td>
+        <td>${i.type}</td>
+        <td>${i.amount.toLocaleString()}</td>
+        <td>${i.method}</td>
+        <td>${i.note}</td>
+      </tr>
+    `;
+  }).join('');
+
+  if (el['money-total']) el['money-total'].textContent = total.toLocaleString();
+  if (el['money-cash']) el['money-cash'].textContent = cash.toLocaleString();
+  if (el['money-card']) el['money-card'].textContent = card.toLocaleString();
+}
+
+
+
 })();

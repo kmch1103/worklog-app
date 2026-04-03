@@ -1007,6 +1007,10 @@ function autoFillMaterialName(keyword) {
     });
   }
 
+    document.querySelectorAll('[data-delete-material]').forEach(btn => {
+      btn.addEventListener('click', () => deleteMaterial(btn.dataset.deleteMaterial));
+  });
+
   function renderMaterialPickerResults(keyword) {
     if (!el['material-search-box']) return;
 
@@ -1136,6 +1140,22 @@ function autoFillMaterialName(keyword) {
     }
   }
 
+async function deleteMaterial(materialId) {
+  const item = state.materials.find(m => String(m.id) === String(materialId));
+  if (!item) return;
+
+  if (!confirm(`${materialName(item)} 자재를 삭제하시겠습니까?`)) return;
+
+  try {
+    await apiDelete(`/api/materials/${item.id}`);
+    await loadMaterials();
+    renderMaterials();
+  } catch (e) {
+    console.error(e);
+    alert('자재 삭제 중 오류가 발생했습니다.');
+  }
+}
+  
   function renderOptions() {
     renderOptionList('weather', el['options-weather']);
     renderOptionList('crops', el['options-crops']);

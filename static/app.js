@@ -128,8 +128,13 @@
     });
 
     on(el['material-search-input'], 'input', (e) => {
-      renderMaterialSearchResults(e.target.value || '');
-    });
+  const keyword = e.target.value || '';
+
+  renderMaterialSearchResults(keyword);
+
+  // 🔥 추가 기능 (자재명 자동 입력)
+  autoFillMaterialName(keyword);
+});
 
     on(el['btn-add-labor-row'], 'click', () => addLaborRow());
 
@@ -152,7 +157,15 @@
       renderMaterialPickerResults(e.target.value || '');
     });
   }
+function autoFillMaterialName(keyword) {
+  if (!el['material_name']) return;
+  if (!keyword) return;
 
+  // 이미 값이 있으면 덮어쓰지 않음 (안전장치)
+  if (!el['material_name'].value.trim()) {
+    el['material_name'].value = keyword;
+  }
+}
   async function loadAll() {
     await Promise.all([
       loadWorks(),

@@ -77,10 +77,52 @@
       </section>
 
       <section id="page-money" class="page">
-        <div class="page-header"><h2>금전관리</h2></div>
+        <div class="page-header">
+          <h2>금전관리</h2>
+        </div>
+
         <div class="panel">
-          <p class="placeholder-title">준비중</p>
-          <p class="placeholder-text">금전관리 화면은 수입/지출/월별정산 기능을 붙일 예정입니다.</p>
+          <div class="money-summary">
+            <div>총 지출: <strong id="money-total">0</strong> 원</div>
+            <div>현금/이체: <strong id="money-cash">0</strong> 원</div>
+            <div>카드/외상: <strong id="money-card">0</strong> 원</div>
+          </div>
+
+          <div class="money-filter">
+            <input type="date" id="money-start">
+            <input type="date" id="money-end">
+
+            <select id="money-type-filter">
+              <option value="">전체</option>
+              <option>자재비</option>
+              <option>인건비</option>
+              <option>기타</option>
+            </select>
+
+            <select id="money-method-filter">
+              <option value="">전체</option>
+              <option>현금</option>
+              <option>계좌이체</option>
+              <option>카드</option>
+              <option>외상</option>
+            </select>
+
+            <button id="btn-money-filter" class="btn">검색</button>
+          </div>
+
+          <table class="money-table">
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>작업</th>
+                <th>구분</th>
+                <th>금액</th>
+                <th>방식</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody id="money-list"></tbody>
+          </table>
         </div>
       </section>
 

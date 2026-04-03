@@ -480,6 +480,47 @@ def add_material():
     conn.close()
     return jsonify({"ok": True, "id": material_id})
 
+@app.route("/api/materials/<int:material_id>", methods=["PUT"])
+def update_material(material_id):
+    data = parse_json()
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return jsonify({"ok": False, "error": "자재명은 필수입니다."}), 400
+
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_conn()
+    cur = conn.cursor()
+
+    try:
+        cur.execute(
+            """
+            UPDATE materials
+            SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, memo = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                name,
+                str(data.get("unit", "")).strip(),
+                float(data.get("stock_qty") or 0),
+                float(data.get("unit_price") or 0),
+                str(data.get("memo", "")).strip(),
+                now,
+                material_id,
+            ),
+        )
+        conn.commit()
+        changed = cur.rowcount
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"ok": False, "error": "이미 존재하는 자재명입니다."}), 400
+
+    conn.close()
+
+    if changed == 0:
+        return jsonify({"ok": False, "error": "수정할 자재를 찾을 수 없습니다."}), 404
+
+    return jsonify({"ok": True})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

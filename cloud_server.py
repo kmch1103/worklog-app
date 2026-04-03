@@ -520,7 +520,19 @@ def update_material(material_id):
         return jsonify({"ok": False, "error": "수정할 자재를 찾을 수 없습니다."}), 404
 
     return jsonify({"ok": True})
+    
+@app.route("/api/materials/<int:material_id>", methods=["DELETE"])
+def delete_material(material_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM materials WHERE id = ?", (material_id,))
+    conn.commit()
+    changed = cur.rowcount
+    conn.close()
 
+    if changed == 0:
+        return jsonify({"ok": False, "error": "삭제할 자재를 찾을 수 없습니다."}), 404
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

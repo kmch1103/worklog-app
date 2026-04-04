@@ -94,6 +94,7 @@
 
             <select id="money-type-filter">
               <option value="">전체</option>
+              <option>통합</option>
               <option>자재비</option>
               <option>인건비</option>
               <option>기타</option>
@@ -339,18 +340,25 @@
         <div id="money-box" class="panel hidden" style="margin-top:10px; padding:14px;">
           <div class="grid two">
             <label class="field">
-              <span>비용구분</span>
-              <select id="money_type">
-                <option value="">선택</option>
-                <option value="자재">자재</option>
-                <option value="인건비">인건비</option>
-                <option value="기타">기타</option>
-              </select>
+              <span>인건비 합계 (자동)</span>
+              <div id="money_labor_total" class="readonly-money-box">0 원</div>
             </label>
 
             <label class="field">
-              <span>금액</span>
-              <input type="number" id="money_amount" min="0" step="100" value="0">
+              <span>자재비 합계 (자동)</span>
+              <div id="money_material_total" class="readonly-money-box">0 원</div>
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label class="field">
+              <span>기타비</span>
+              <input type="number" id="money_other_total" min="0" step="100" value="0">
+            </label>
+
+            <label class="field">
+              <span>총금액 (자동)</span>
+              <div id="money_total_amount" class="readonly-money-box strong">0 원</div>
             </label>
           </div>
 
@@ -448,5 +456,21 @@
   </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <style>
+    .readonly-money-box {
+      min-height: 42px;
+      display:flex;
+      align-items:center;
+      padding:10px 12px;
+      border:1px solid #d1d5db;
+      border-radius:10px;
+      background:#f8fafc;
+      font-weight:600;
+    }
+    .readonly-money-box.strong {
+      color:#2563eb;
+      font-size:16px;
+    }
+  </style>
 </body>
 </html>

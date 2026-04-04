@@ -558,12 +558,15 @@ def get_money():
             if not money:
                 continue
 
+            amount = float(money.get("total_amount") or money.get("amount") or 0)
+            money_type = str(money.get("type") or ("통합" if money.get("total_amount") is not None else ""))
+
             results.append({
                 "id": r["id"],
                 "date": r["start_date"],
                 "task": r["task_name"],
-                "type": money.get("type", ""),
-                "amount": float(money.get("amount", 0)),
+                "type": money_type,
+                "amount": amount,
                 "method": money.get("method", ""),
                 "note": money.get("note", "")
             })

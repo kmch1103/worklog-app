@@ -541,7 +541,7 @@ def get_money():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT id, start_date, end_date, task_name, memo
+        SELECT id, start_date, task_name, memo
         FROM works
         ORDER BY start_date DESC, id DESC
     """)
@@ -556,42 +556,25 @@ def get_money():
 
             memo = json.loads(r["memo"]) if r["memo"] else {}
             money = memo.get("money")
+
             if not money:
                 continue
 
-            # 새 구조 우선, 예전 구조 fallback
-            total_amount = money.get("total_amount", money.get("amount", 0)) or 0
-            labor_total = money.get("labor_total", 0) or 0
-            material_total = money.get("material_total", 0) or 0
-            other_total = money.get("other_total", 0) or 0
-
-            # type 보정
-            money_type = str(money.get("type", "") or "").strip()
-            if not money_type:
-                parts = []
-                if float(labor_total) > 0:
-                    parts.append("인건비")
-                if float(material_total) > 0:
-                    parts.append("자재비")
-                if float(other_total) > 0:
-                    parts.append("기타")
-                money_type = "+".join(parts) if parts else "기타"
+            # 🔥 핵심: 새 구조 우선
+            total = money.get("total_amount") or money.get("amount") or 0
 
             results.append({
                 "id": r["id"],
                 "date": r["start_date"],
                 "task_name": r["task_name"],
-                "type": money_type,
-                "total": float(total_amount),
-                "labor_total": float(labor_total),
-                "material_total": float(material_total),
-                "other_total": float(other_total),
+                "type": money.get("type", ""),
+                "total": total,
                 "method": money.get("method", ""),
                 "note": money.get("note", "")
             })
 
         except Exception as e:
-            print("get_money parse error:", e)
+            print("money parse error:", e)
             continue
 
     return jsonify(results)

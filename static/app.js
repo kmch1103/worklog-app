@@ -37,7 +37,6 @@
     await loadAll();
     await loadMoney();
     renderAll();
-    
   }
 
   function cacheElements() {
@@ -60,7 +59,7 @@
       'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-materials', 'options-machines',
       'material-search-input', 'material-search-results', 'selected-materials-detailed',
       'labor-rows-wrap', 'btn-add-labor-row',
-      'has_money', 'money-box', 'money_type', 'money_amount', 'money_method', 'money_note',
+      'has_money', 'money-box', 'money_method', 'money_note', 'other_cost', 'money_labor_total', 'money_material_total', 'money_total_amount',
       'money-start', 'money-end', 'money-type-filter', 'money-method-filter',
       'btn-money-filter', 'money-list', 'money-total', 'money-cash', 'money-card'
     ];
@@ -114,10 +113,10 @@
 
   function resetMoneyFields() {
     if (el['has_money']) el['has_money'].checked = false;
-    if (el['money_type']) el['money_type'].value = '';
-    if (el['money_amount']) el['money_amount'].value = '0';
+    if (el['other_cost']) el['other_cost'].value = '0';
     if (el['money_method']) el['money_method'].value = '';
     if (el['money_note']) el['money_note'].value = '';
+    updateMoneySummary();
     toggleMoneyBox(false);
   }
 
@@ -139,7 +138,10 @@
 
     on(el['has_money'], 'change', () => {
       toggleMoneyBox(el['has_money'].checked);
+      updateMoneySummary();
     });
+
+    on(el['other_cost'], 'input', updateMoneySummary);
 
     on(el['btn-money-filter'], 'click', renderMoney);
   }
@@ -161,16 +163,18 @@
       autoFillMaterialName(keyword);
     });
   }
-function autoFillMaterialName(keyword) {
-  if (!keyword) return;
 
-  const input = el['material_name'] || el['material-name'];
-  if (!input) return;
+  function autoFillMaterialName(keyword) {
+    if (!keyword) return;
 
-  if (input.value !== keyword) {
-    input.value = keyword;
+    const input = el['material_name'] || el['material-name'];
+    if (!input) return;
+
+    if (input.value !== keyword) {
+      input.value = keyword;
+    }
   }
-}
+
   async function loadAll() {
     await Promise.all([
       loadWorks(),
@@ -263,7 +267,6 @@ function autoFillMaterialName(keyword) {
       renderMaterials();
     } else if (page === 'money') {
       renderMoney();
-    
     } else if (page === 'options') {
       renderOptions();
     }
@@ -479,10 +482,11 @@ function autoFillMaterialName(keyword) {
   async function markPlanDone(planId) {
     const plan = state.plans.find(p => String(p.id) === String(planId));
     if (!plan) return;
+
     try {
       await apiPut(`/api/plans/${plan.id}`, {
         plan_date: normalizePlanDate(plan.plan_date),
-        title: plan.title,
+        title: plan.title || '',
         details: plan.details || '',
         status: 'done'
       });
@@ -491,53 +495,57 @@ function autoFillMaterialName(keyword) {
       renderCalendarSidePanel();
     } catch (e) {
       console.error(e);
-      alert('계획 완료 처리 중 오류가 발생했습니다.');
+      alert('계획 상태 변경 중 오류가 발생했습니다.');
     }
   }
 
   function convertPlanToWork(planId) {
     const plan = state.plans.find(p => String(p.id) === String(planId));
     if (!plan) return;
+
     openWorkModal();
     el.start_date.value = normalizePlanDate(plan.plan_date);
     el.end_date.value = normalizePlanDate(plan.plan_date);
-    setSelectValue(el.task_name, plan.title || '');
-    el.memo.value = plan.details || '';
+    if (el.task_name) el.task_name.value = plan.title || '';
+    if (el.memo) el.memo.value = plan.details || '';
   }
 
-  async function deletePlan(planId) {
-    if (!confirm('이 계획을 삭제하시겠습니까?')) return;
-    try {
-      await apiDelete(`/api/plans/${planId}`);
-      await loadPlans();
-      renderCalendar();
-      renderCalendarSidePanel();
-    } catch (e) {
-      console.error(e);
-      alert('계획 삭제 중 오류가 발생했습니다.');
-    }
+  function deletePlan(planId) {
+    if (!confirm('삭제하시겠습니까?')) return;
+
+    apiDelete(`/api/plans/${planId}`)
+      .then(() => {
+        loadPlans().then(() => {
+          renderCalendar();
+          renderCalendarSidePanel();
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        alert('삭제 실패');
+      });
   }
+
+  // ==========================
+  // 작업 모달
+  // ==========================
 
   function openWorkModal() {
     state.editingWorkId = null;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = '새 작업 입력';
+    el['work-modal-title'].textContent = '작업 입력';
 
-    el.start_date.value = state.selectedDate || today();
-    el.end_date.value = state.selectedDate || today();
-    el.weather.value = '';
-    el.task_name.value = '';
-    uncheckAll(el['crops-box']);
-    uncheckAll(el['pests-box']);
-    uncheckAll(el['machines-box']);
-    el.work_hours.value = '0';
-    el.memo.value = '';
+    resetWorkForm();
+    removeHidden(el['work-modal']);
+  }
 
-    state.selectedMaterialsDetailed = [];
-    renderSelectedMaterialsDetailed();
-    renderMaterialSearchResults('');
-    resetLaborRows();
-    resetMoneyFields();
+  function openWorkModalById(id) {
+    const work = state.works.find(w => String(w.id) === String(id));
+    if (!work) return;
 
+    state.editingWorkId = work.id;
+    el['work-modal-title'].textContent = '작업 수정';
+
+    fillWorkForm(work);
     removeHidden(el['work-modal']);
   }
 
@@ -546,215 +554,156 @@ function autoFillMaterialName(keyword) {
     state.editingWorkId = null;
   }
 
-  function openWorkModalById(workId) {
-    const work = state.works.find(w => String(w.id) === String(workId));
-    if (!work) return;
-
-    state.editingWorkId = work.id;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
-
-    el.start_date.value = work.start_date || '';
-    el.end_date.value = work.end_date || '';
-    setSelectValue(el.weather, work.weather || '');
-    setSelectValue(el.task_name, work.task_name || '');
-    checkValues(el['crops-box'], csvToArray(work.crops));
-    checkValues(el['pests-box'], csvToArray(work.pests));
-    checkValues(el['machines-box'], csvToArray(work.machines));
-    el.work_hours.value = work.work_hours || 0;
-
-    const meta = parseMemo(work.memo);
-    el.memo.value = meta.memo_text || '';
-    state.selectedMaterialsDetailed = Array.isArray(meta.materials)
-      ? meta.materials.map(item => ({
-          name: item.name || '',
-          qty: item.qty === 0 ? '0' : String(item.qty ?? ''),
-          unit: item.unit || getMaterialUnit(item.name)
-        }))
-      : [];
+  function resetWorkForm() {
+    el.start_date.value = '';
+    el.end_date.value = '';
+    el.weather.value = '';
+    el.task_name.value = '';
+    el.memo.value = '';
 
     resetMoneyFields();
-
-    if (meta.money) {
-      if (el['has_money']) el['has_money'].checked = true;
-      toggleMoneyBox(true);
-      if (el['money_type']) el['money_type'].value = meta.money.type || '';
-      if (el['money_amount']) el['money_amount'].value = meta.money.amount || '0';
-      if (el['money_method']) el['money_method'].value = meta.money.method || '';
-      if (el['money_note']) el['money_note'].value = meta.money.note || '';
-    }
-
+    resetLaborRows();
+    state.selectedMaterialsDetailed = [];
     renderSelectedMaterialsDetailed();
-    renderMaterialSearchResults(document.getElementById('material-search-input')?.value || '');
-    resetLaborRows(meta.labor_rows || []);
-    removeHidden(el['work-modal']);
   }
 
-  function renderWorkFormOptions() {
-    renderSelect(el.weather, state.options.weather, '선택');
-    renderSelect(el.task_name, state.options.tasks, '선택');
-    renderPlanTitleOptions();
-    renderChecks(el['crops-box'], state.options.crops);
-    renderChecks(el['pests-box'], state.options.pests);
-    renderChecks(el['machines-box'], state.options.machines);
-    renderMaterialSearchResults('');
-    renderSelectedMaterialsDetailed();
-    if (!el['labor-rows-wrap']?.children.length) addLaborRow();
-  }
+  function fillWorkForm(work) {
+    el.start_date.value = work.start_date || '';
+    el.end_date.value = work.end_date || '';
+    el.weather.value = work.weather || '';
+    el.task_name.value = work.task_name || '';
+    el.memo.value = work.memo || '';
 
-  function ensureWorksSearchBar() {
-    const pageHeader = el['page-works']?.querySelector('.page-header');
-    if (!pageHeader || document.getElementById('works-search-wrap')) return;
-
-    const wrap = document.createElement('div');
-    wrap.id = 'works-search-wrap';
-    wrap.innerHTML = `
-      <input type="text" id="works-search-input" placeholder="작업내용, 작물, 병충해, 자재, 비고 검색" style="padding:8px 10px; border-radius:8px; border:1px solid #ccc; min-width:260px;">
-      <button type="button" class="btn" id="btn-works-search">검색</button>
-      <button type="button" class="btn" id="btn-works-search-reset">초기화</button>
-    `;
-    pageHeader.appendChild(wrap);
-
-    on(document.getElementById('works-search-input'), 'keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        state.workSearchKeyword = (e.target.value || '').trim();
-        renderWorks();
-      }
-    });
-
-    on(document.getElementById('btn-works-search'), 'click', () => {
-      state.workSearchKeyword = (document.getElementById('works-search-input')?.value || '').trim();
-      renderWorks();
-    });
-
-    on(document.getElementById('btn-works-search-reset'), 'click', () => {
-      const input = document.getElementById('works-search-input');
-      if (input) input.value = '';
-      state.workSearchKeyword = '';
-      renderWorks();
-    });
-  }
-
-  function renderWorks() {
-    if (!el['works-list']) return;
-    const keyword = state.workSearchKeyword.toLowerCase();
-
-    const filtered = state.works.filter(work => {
-      if (!keyword) return true;
-      const meta = parseMemo(work.memo);
-      const haystack = [
-        work.start_date, work.end_date, work.task_name, work.weather, work.crops, work.pests, work.materials, work.machines,
-        work.memo, meta.memo_text, formatMaterials(meta.materials)
-      ].join(' ').toLowerCase();
-      return haystack.includes(keyword);
-    });
-
-    const groups = {};
-    filtered.forEach(work => {
-      const key = work.start_date || '날짜없음';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(work);
-    });
-
-    const dates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-
-    if (!dates.length) {
-      el['works-list'].innerHTML = '<div class="panel">표시할 작업일지가 없습니다.</div>';
-      return;
-    }
-
-    el['works-list'].innerHTML = dates.map(date => {
-      const items = groups[date];
-      const rowClass = items.length === 1 ? 'work-cards-row single-card' : 'work-cards-row';
-      return `
-        <div class="work-group" style="margin-bottom:18px;">
-          <h3 style="margin:0 0 10px 0;">${escapeHtml(date)}</h3>
-          <div class="${rowClass}">
-            ${items.map(item => renderWorkCard(item, items.length === 1)).join('')}
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    el['works-list'].querySelectorAll('[data-edit-work-id]').forEach(btn => {
-      btn.addEventListener('click', () => openWorkModalById(btn.dataset.editWorkId));
-    });
-
-    el['works-list'].querySelectorAll('[data-delete-work-id]').forEach(btn => {
-      btn.addEventListener('click', () => deleteWork(btn.dataset.deleteWorkId));
-    });
-  }
-
-  function renderWorkCard(work, isSingle) {
     const meta = parseMemo(work.memo);
-    const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
-    const laborTotal = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
-    const cardClass = isSingle ? 'panel work-card-large' : 'panel work-card-small';
 
-    return `
-      <div class="${cardClass}">
-        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:8px;">
-          <strong>${escapeHtml(work.task_name || '')}</strong>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="btn" data-edit-work-id="${escapeHtml(String(work.id))}">수정</button>
-            <button class="btn" data-delete-work-id="${escapeHtml(String(work.id))}">삭제</button>
-          </div>
-        </div>
-        <div>작물: ${escapeHtml(work.crops || '')}</div>
-        <div>날씨: ${escapeHtml(work.weather || '')}</div>
-        <div>병충해: ${escapeHtml(work.pests || '')}</div>
-        <div>자재: ${escapeHtml(formatMaterials(meta.materials))}</div>
-        <div>기계: ${escapeHtml(work.machines || '')}</div>
-        <div>작업시간: ${escapeHtml(String(work.work_hours || ''))}</div>
-        <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
-        <div>인건비: ${laborTotal ? numberWithComma(laborTotal) + '원' : numberWithComma(work.labor_cost || 0) + '원'}</div>
-        ${meta.money ? `<div style="color:#2563eb; font-weight:600;">💰 ${escapeHtml(meta.money.type || '')} / ${numberWithComma(meta.money.amount || 0)}원 / ${escapeHtml(meta.money.method || '')}${meta.money.note ? ` / ${escapeHtml(meta.money.note)}` : ''}</div>` : ''}
-        <div>비고: ${escapeHtml(meta.memo_text || '')}</div>
-      </div>
-    `;
+    // 금전
+    if (meta.money) {
+      el.has_money.checked = true;
+      toggleMoneyBox(true);
+
+      el.money_method.value = meta.money.method || '';
+      el.money_note.value = meta.money.note || '';
+      el.other_cost.value = meta.money.other_total || 0;
+    }
+
+    updateMoneySummary();
   }
+
+  // ==========================
+  // 자동 합산 핵심
+  // ==========================
+
+  function getLaborTotal() {
+    let total = 0;
+    document.querySelectorAll('.labor-row input[type="number"]').forEach(el => {
+      total += Number(el.value) || 0;
+    });
+    return total;
+  }
+
+  function getMaterialTotal() {
+    let total = 0;
+
+    state.selectedMaterialsDetailed.forEach(m => {
+      total += (m.price || 0) * (m.qty || 0);
+    });
+
+    return total;
+  }
+
+  function getOtherTotal() {
+    return Number(el.other_cost?.value) || 0;
+  }
+
+  function updateMoneySummary() {
+    const labor = getLaborTotal();
+    const material = getMaterialTotal();
+    const other = getOtherTotal();
+
+    const total = labor + material + other;
+
+    if (el.money_labor_total) el.money_labor_total.innerText = labor;
+    if (el.money_material_total) el.money_material_total.innerText = material;
+    if (el.money_total_amount) el.money_total_amount.innerText = total;
+  }
+
+  // ==========================
+  // 자재 선택
+  // ==========================
+
+  function renderSelectedMaterialsDetailed() {
+    if (!el['selected-materials-detailed']) return;
+
+    el['selected-materials-detailed'].innerHTML =
+      state.selectedMaterialsDetailed.map((m, idx) => `
+        <div class="material-row">
+          ${m.name}
+          <input type="number" value="${m.qty}" 
+            onchange="updateMaterialQty(${idx}, this.value)">
+          <button onclick="removeMaterial(${idx})">삭제</button>
+        </div>
+      `).join('');
+
+    updateMoneySummary();
+  }
+
+  window.updateMaterialQty = function (idx, qty) {
+    state.selectedMaterialsDetailed[idx].qty = Number(qty) || 0;
+    updateMoneySummary();
+  };
+
+  window.removeMaterial = function (idx) {
+    state.selectedMaterialsDetailed.splice(idx, 1);
+    renderSelectedMaterialsDetailed();
+  };
+
+  // ==========================
+  // 인건비
+  // ==========================
+
+  function addLaborRow() {
+    const wrap = el['labor-rows-wrap'];
+
+    const div = document.createElement('div');
+    div.className = 'labor-row';
+
+    div.innerHTML = `
+      <input type="number" value="0" onchange="updateMoneySummary()">
+      <button onclick="this.parentElement.remove(); updateMoneySummary()">삭제</button>
+    `;
+
+    wrap.appendChild(div);
+  }
+
+  function resetLaborRows() {
+    if (!el['labor-rows-wrap']) return;
+    el['labor-rows-wrap'].innerHTML = '';
+  }
+
+  // ==========================
+  // 저장
+  // ==========================
 
   async function saveWork() {
-    const materials = state.selectedMaterialsDetailed.map(item => ({
-      name: String(item.name || '').trim(),
-      qty: String(item.qty ?? '').trim(),
-      unit: String(item.unit || '').trim()
-    })).filter(item => item.name);
 
-    for (const item of materials) {
-      if (item.qty === '') {
-        return alert(`사용자재 [${item.name}] 수량을 입력하세요.`);
-      }
-      const qty = Number(item.qty);
-      if (!Number.isFinite(qty) || qty <= 0) {
-        return alert(`사용자재 [${item.name}] 수량은 0보다 커야 합니다.`);
-      }
-      item.qty = qty;
-    }
-
-    const laborRows = collectLaborRows();
-    const laborCost = laborRows.reduce((sum, row) => sum + toNumber(row.amount), 0);
+    const hasMoney = el.has_money.checked;
 
     let money = null;
-    const hasMoney = !!el['has_money']?.checked;
 
     if (hasMoney) {
-      const moneyType = String(el['money_type']?.value || '').trim();
-      const moneyAmount = Number(el['money_amount']?.value || 0);
-      const moneyMethod = String(el['money_method']?.value || '').trim();
-      const moneyNote = String(el['money_note']?.value || '').trim();
-
-      if (!moneyType) return alert('비용구분을 선택하세요.');
-      if (!Number.isFinite(moneyAmount) || moneyAmount <= 0) {
-        return alert('금액은 0보다 크게 입력하세요.');
-      }
-      if (!moneyMethod) return alert('결제방식을 선택하세요.');
+      const labor = getLaborTotal();
+      const material = getMaterialTotal();
+      const other = getOtherTotal();
+      const total = labor + material + other;
 
       money = {
-        type: moneyType,
-        amount: moneyAmount,
-        method: moneyMethod,
-        note: moneyNote
+        type: "통합",
+        total_amount: total,
+        labor_total: labor,
+        material_total: material,
+        other_total: other,
+        method: el.money_method.value,
+        note: el.money_note.value
       };
     }
 
@@ -762,25 +711,12 @@ function autoFillMaterialName(keyword) {
       start_date: el.start_date.value,
       end_date: el.end_date.value,
       weather: el.weather.value,
-      crops: collectChecked(el['crops-box']).join(','),
       task_name: el.task_name.value,
-      pests: collectChecked(el['pests-box']).join(','),
-      materials: materials.map(m => m.name).join(','),
-      machines: collectChecked(el['machines-box']).join(','),
-      labor_cost: laborCost,
-      work_hours: el.work_hours.value,
       memo: JSON.stringify({
-        memo_text: el.memo.value || '',
-        materials,
-        labor_rows: laborRows,
-        material_cost_total: 0,
-        money
+        money: money,
+        materials: state.selectedMaterialsDetailed
       })
     };
-
-    if (!payload.start_date) return alert('시작일을 입력하세요.');
-    if (!payload.end_date) return alert('종료일을 입력하세요.');
-    if (!payload.task_name) return alert('작업내용을 선택하세요.');
 
     try {
       if (state.editingWorkId) {
@@ -788,281 +724,213 @@ function autoFillMaterialName(keyword) {
       } else {
         await apiPost('/api/works', payload);
       }
+
       await loadWorks();
-      renderWorks();
-      renderCalendar();
-      renderCalendarSidePanel();
       closeWorkModal();
+      renderWorks();
+
     } catch (e) {
       console.error(e);
-      alert('작업 저장 중 오류가 발생했습니다.');
+      alert('저장 실패');
     }
   }
 
+  // ==========================
+  // 작업일지 목록
+  // ==========================
+
+  function renderWorks() {
+    if (!el['works-list']) return;
+
+    let works = [...state.works];
+
+    if (state.workSearchKeyword) {
+      const keyword = state.workSearchKeyword.trim();
+      works = works.filter(w => {
+        const meta = parseMemo(w.memo);
+        const text = [
+          w.start_date,
+          w.end_date,
+          w.weather,
+          w.crops,
+          w.task_name,
+          w.pests,
+          w.materials,
+          w.machines,
+          w.memo,
+          formatMaterials(meta.materials)
+        ].join(' ');
+        return text.includes(keyword);
+      });
+    }
+
+    if (!works.length) {
+      el['works-list'].innerHTML = `<div class="empty-msg">등록된 작업일지가 없습니다.</div>`;
+      return;
+    }
+
+    const grouped = {};
+    works.forEach(w => {
+      const key = w.start_date || '';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(w);
+    });
+
+    const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+    el['works-list'].innerHTML = dates.map(date => {
+      const items = grouped[date];
+      return `
+        <div class="work-date-group">
+          <div class="work-date-title">${escapeHtml(date)}</div>
+          <div class="work-date-row ${items.length === 1 ? 'single-card' : ''}">
+            ${items.map(renderWorkCard).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    document.querySelectorAll('[data-work-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openWorkModalById(btn.dataset.workEdit));
+    });
+
+    document.querySelectorAll('[data-work-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
+    });
+  }
+
+  function renderWorkCard(work) {
+    const meta = parseMemo(work.memo);
+    const money = meta.money || null;
+
+    return `
+      <div class="work-card">
+        <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
+        <div>기간: ${escapeHtml(work.start_date || '')}${work.end_date && work.end_date !== work.start_date ? ' ~ ' + escapeHtml(work.end_date) : ''}</div>
+        <div>날씨: ${escapeHtml(work.weather || '')}</div>
+        <div>작물: ${escapeHtml(work.crops || '')}</div>
+        <div>병충해: ${escapeHtml(work.pests || '')}</div>
+        <div>사용기계: ${escapeHtml(work.machines || '')}</div>
+        <div>자재: ${escapeHtml(formatMaterials(meta.materials))}</div>
+        <div>메모: ${escapeHtml(work.memo || '')}</div>
+        ${money ? `<div class="money-inline">총금액: ${formatNumber(money.total_amount || money.amount || 0)}원 / ${escapeHtml(money.method || '')}</div>` : ''}
+        <div class="item-actions">
+          <button class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
+          <button class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
+        </div>
+      </div>
+    `;
+  }
+
   async function deleteWork(workId) {
-    if (!confirm('이 작업을 삭제하시겠습니까?')) return;
+    if (!confirm('삭제하시겠습니까?')) return;
+
     try {
       await apiDelete(`/api/works/${workId}`);
       await loadWorks();
       renderWorks();
       renderCalendar();
       renderCalendarSidePanel();
+      await loadMoney();
+      renderMoney();
     } catch (e) {
       console.error(e);
-      alert('작업 삭제 중 오류가 발생했습니다.');
+      alert('삭제 실패');
     }
   }
 
-  function renderMaterialSearchResults(keyword) {
-    if (!el['material-search-results']) return;
+  function ensureWorksSearchBar() {
+    const pageHeader = document.querySelector('#page-works .page-header');
+    if (!pageHeader) return;
+    if (document.getElementById('works-search-input')) return;
 
-    const q = String(keyword || '').trim().toLowerCase();
-    const selected = new Set(state.selectedMaterialsDetailed.map(item => item.name));
-    const items = state.materials.filter(item => {
-      const name = materialName(item);
-      return !selected.has(name) && (!q || name.toLowerCase().includes(q));
-    });
-
-    el['material-search-results'].innerHTML = items.length
-      ? items.map(item => `
-          <button type="button" class="btn" data-add-material="${escapeHtml(materialName(item))}" data-unit="${escapeHtml(materialUnit(item))}">
-            ${escapeHtml(materialName(item))}${materialUnit(item) ? ` (${escapeHtml(materialUnit(item))})` : ''}
-          </button>
-        `).join('')
-      : '<div class="empty-msg">검색 결과 없음</div>';
-
-    el['material-search-results'].querySelectorAll('[data-add-material]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.selectedMaterialsDetailed.push({
-          name: btn.dataset.addMaterial,
-          qty: '',
-          unit: btn.dataset.unit || getMaterialUnit(btn.dataset.addMaterial) || ''
-        });
-        if (el['material-search-input']) el['material-search-input'].value = '';
-        renderSelectedMaterialsDetailed();
-        renderMaterialSearchResults('');
-      });
-    });
-  }
-
-  function renderSelectedMaterialsDetailed() {
-    if (!el['selected-materials-detailed']) return;
-
-    if (!state.selectedMaterialsDetailed.length) {
-      el['selected-materials-detailed'].innerHTML = '<div class="empty-msg">선택된 자재 없음</div>';
-      return;
-    }
-
-    el['selected-materials-detailed'].innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
-      <div class="panel" style="margin-bottom:8px; padding:10px;">
-        <div style="display:grid; grid-template-columns:1.2fr 0.7fr 0.7fr auto; gap:8px; align-items:end;">
-          <div>
-            <div style="font-size:12px; color:#666; margin-bottom:4px;">자재명</div>
-            <div>${escapeHtml(item.name)}</div>
-          </div>
-          <label class="field" style="margin:0;">
-            <span>수량</span>
-            <input type="number" step="0.01" min="0" value="${escapeHtml(String(item.qty ?? ''))}" data-material-qty="${idx}">
-          </label>
-          <label class="field" style="margin:0;">
-            <span>단위</span>
-            <input type="text" value="${escapeHtml(item.unit || '')}" data-material-unit="${idx}">
-          </label>
-          <button type="button" class="btn" data-remove-material="${idx}">삭제</button>
-        </div>
-      </div>
-    `).join('');
-
-    el['selected-materials-detailed'].querySelectorAll('[data-material-qty]').forEach(input => {
-      input.addEventListener('input', () => {
-        const idx = Number(input.dataset.materialQty);
-        state.selectedMaterialsDetailed[idx].qty = input.value;
-      });
-    });
-
-    el['selected-materials-detailed'].querySelectorAll('[data-material-unit]').forEach(input => {
-      input.addEventListener('input', () => {
-        const idx = Number(input.dataset.materialUnit);
-        state.selectedMaterialsDetailed[idx].unit = input.value;
-      });
-    });
-
-    el['selected-materials-detailed'].querySelectorAll('[data-remove-material]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.dataset.removeMaterial);
-        state.selectedMaterialsDetailed.splice(idx, 1);
-        renderSelectedMaterialsDetailed();
-        renderMaterialSearchResults(el['material-search-input']?.value || '');
-      });
-    });
-  }
-
-  function addLaborRow(data = {}) {
-    if (!el['labor-rows-wrap']) return;
-
-    const row = document.createElement('div');
-    row.className = 'panel';
-    row.style.marginBottom = '8px';
-    row.style.padding = '10px';
-    row.innerHTML = `
-      <div style="display:grid; grid-template-columns:0.8fr 0.8fr 1fr 1fr auto; gap:8px; align-items:end;">
-        <label class="field" style="margin:0;">
-          <span>유형</span>
-          <select class="labor-type">
-            <option value="">선택</option>
-            <option value="남자" ${data.type === '남자' ? 'selected' : ''}>남자</option>
-            <option value="여자" ${data.type === '여자' ? 'selected' : ''}>여자</option>
-            <option value="기타" ${data.type === '기타' ? 'selected' : ''}>기타</option>
-          </select>
-        </label>
-        <label class="field" style="margin:0;">
-          <span>인원</span>
-          <input type="number" class="labor-count" min="0" step="1" value="${escapeHtml(String(data.count ?? ''))}">
-        </label>
-        <label class="field" style="margin:0;">
-          <span>시간</span>
-          <input type="number" class="labor-hours" min="0" step="0.5" value="${escapeHtml(String(data.hours ?? ''))}">
-        </label>
-        <label class="field" style="margin:0;">
-          <span>금액</span>
-          <input type="number" class="labor-amount" min="0" step="1000" value="${escapeHtml(String(data.amount ?? ''))}">
-        </label>
-        <button type="button" class="btn" data-remove-labor-row>삭제</button>
-      </div>
+    const box = document.createElement('div');
+    box.className = 'works-search-box';
+    box.innerHTML = `
+      <input id="works-search-input" type="text" class="search-input" placeholder="작업내용 / 자재 / 병충해 검색">
     `;
+    pageHeader.appendChild(box);
 
-    row.querySelector('[data-remove-labor-row]')?.addEventListener('click', () => {
-      row.remove();
+    const input = document.getElementById('works-search-input');
+    input.value = state.workSearchKeyword || '';
+    input.addEventListener('input', (e) => {
+      state.workSearchKeyword = e.target.value || '';
+      renderWorks();
     });
-
-    el['labor-rows-wrap'].appendChild(row);
   }
 
-  function resetLaborRows(rows = []) {
-    if (!el['labor-rows-wrap']) return;
-    el['labor-rows-wrap'].innerHTML = '';
-    const list = Array.isArray(rows) && rows.length ? rows : [{}];
-    list.forEach(item => addLaborRow(item));
-  }
-
-  function collectLaborRows() {
-    if (!el['labor-rows-wrap']) return [];
-    return Array.from(el['labor-rows-wrap'].children).map(row => ({
-      type: row.querySelector('.labor-type')?.value || '',
-      count: row.querySelector('.labor-count')?.value || '',
-      hours: row.querySelector('.labor-hours')?.value || '',
-      amount: row.querySelector('.labor-amount')?.value || ''
-    })).filter(item => item.type || item.count || item.hours || item.amount);
-  }
+  // ==========================
+  // 자재관리
+  // ==========================
 
   function renderMaterials() {
     if (!el['materials-list']) return;
 
-    const total = state.materials.length;
-    const inStock = state.materials.filter(item => toNumber(item.stock_qty) > 0);
-    const outStock = state.materials.filter(item => toNumber(item.stock_qty) <= 0);
+    const hasStock = state.materials.filter(m => Number(m.stock_qty || 0) > 0);
+    const noStock = state.materials.filter(m => Number(m.stock_qty || 0) <= 0);
 
     el['materials-list'].innerHTML = `
-      <div class="panel" style="margin-bottom:12px;">
-        <strong>전체 ${total}개 | 재고 있음 ${inStock.length}개 | 재고 없음 ${outStock.length}개</strong>
-      </div>
-      <div class="grid two">
+      <div class="materials-split">
         <div class="panel">
           <h3>재고 있음</h3>
-          ${inStock.length ? inStock.map(renderMaterialCard).join('') : '<div class="empty-msg">재고 있는 자재 없음</div>'}
+          <div class="materials-grid">
+            ${hasStock.length ? hasStock.map(renderMaterialCard).join('') : `<div class="empty-msg">없음</div>`}
+          </div>
         </div>
         <div class="panel">
           <h3>재고 없음</h3>
-          ${outStock.length ? outStock.map(renderMaterialCard).join('') : '<div class="empty-msg">재고 없는 자재 없음</div>'}
+          <div class="materials-grid">
+            ${noStock.length ? noStock.map(renderMaterialCard).join('') : `<div class="empty-msg">없음</div>`}
+          </div>
         </div>
       </div>
     `;
 
-    bindMaterialCardActions();
+    document.querySelectorAll('[data-material-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openMaterialModal(btn.dataset.materialEdit));
+    });
+
+    document.querySelectorAll('[data-material-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteMaterial(btn.dataset.materialDelete));
+    });
   }
 
   function renderMaterialCard(item) {
-    const id = escapeHtml(String(item.id));
-    const name = escapeHtml(materialName(item));
-    const unit = escapeHtml(materialUnit(item));
-    const stock = escapeHtml(String(item.stock_qty ?? 0));
-    const price = escapeHtml(String(item.unit_price ?? 0));
-
     return `
-      <div class="panel" style="margin-bottom:10px;">
-        <div style="font-weight:700; margin-bottom:6px;">${name}</div>
-        <div>단위: ${unit || '-'} / 재고: ${stock} / 단가: ${price}</div>
-        <div style="display:flex; gap:6px; margin-top:8px;">
-          <button class="btn" data-edit-material="${id}">수정</button>
-          <button class="btn" data-stock-in="${id}">입고</button>
-          <button class="btn" data-stock-out="${id}">사용</button>
-          <button class="btn" data-delete-material="${id}">삭제</button>
+      <div class="material-card">
+        <div class="material-name">${escapeHtml(item.name || '')}</div>
+        <div class="material-meta">단위: ${escapeHtml(item.unit || '')} / 재고: ${formatNumber(item.stock_qty || 0)} / 단가: ${formatNumber(item.unit_price || 0)}</div>
+        <div class="material-memo">${escapeHtml(item.memo || '')}</div>
+        <div class="item-actions">
+          <button class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
+          <button class="btn" data-material-delete="${escapeHtml(String(item.id))}">삭제</button>
         </div>
       </div>
     `;
   }
 
-  function bindMaterialCardActions() {
-    document.querySelectorAll('[data-edit-material]').forEach(btn => {
-      btn.addEventListener('click', () => editMaterial(btn.dataset.editMaterial));
-    });
+  function openMaterialModal(id = null) {
+    state.editingMaterialId = id ? Number(id) : null;
+    const item = state.materials.find(m => Number(m.id) === Number(id));
 
-    document.querySelectorAll('[data-stock-in]').forEach(btn => {
-      btn.addEventListener('click', () => adjustMaterialStock(btn.dataset.stockIn, 'in'));
-    });
+    if (el['material-modal-title']) {
+      el['material-modal-title'].textContent = item ? '자재 수정' : '자재 추가';
+    }
 
-    document.querySelectorAll('[data-stock-out]').forEach(btn => {
-      btn.addEventListener('click', () => adjustMaterialStock(btn.dataset.stockOut, 'out'));
-    });
+    if (item) {
+      el.material_name.value = item.name || '';
+      el.material_unit.value = item.unit || '개';
+      el.material_stock.value = item.stock_qty || 0;
+      el.material_price.value = item.unit_price || 0;
+      el.material_memo.value = item.memo || '';
+    } else {
+      el.material_name.value = '';
+      el.material_unit.value = '개';
+      el.material_stock.value = 0;
+      el.material_price.value = 0;
+      el.material_memo.value = '';
+    }
 
-
-    document.querySelectorAll('[data-delete-material]').forEach(btn => {
-      btn.addEventListener('click', () => deleteMaterial(btn.dataset.deleteMaterial));
-  });
-}
-  function renderMaterialPickerResults(keyword) {
-    if (!el['material-search-box']) return;
-
-    const q = String(keyword || '').trim().toLowerCase();
-    const items = state.materials.filter(item => {
-      const name = materialName(item);
-      return !q || name.toLowerCase().includes(q);
-    });
-
-    el['material-search-box'].innerHTML = items.length
-      ? items.map(item => `
-          <button type="button" class="btn" style="display:block; width:100%; text-align:left; margin-bottom:6px;"
-            data-pick-material="${escapeHtml(String(item.id))}">
-            ${escapeHtml(materialName(item))} / 단위 ${escapeHtml(materialUnit(item) || '-')} / 재고 ${escapeHtml(String(item.stock_qty ?? 0))}
-          </button>
-        `).join('')
-      : '<div class="empty-msg">검색 결과 없음</div>';
-
-    el['material-search-box'].querySelectorAll('[data-pick-material]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const item = state.materials.find(m => String(m.id) === String(btn.dataset.pickMaterial));
-        if (!item) return;
-        el['material_name'].value = materialName(item);
-        el['material_unit'].value = materialUnit(item) || '';
-        el['material_stock'].value = String(item.stock_qty ?? 0);
-        el['material_price'].value = String(item.unit_price ?? 0);
-        el['material_memo'].value = String(item.memo || '');
-        state.editingMaterialId = item.id;
-        if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 수정';
-      });
-    });
-  }
-
-  function openMaterialModal() {
-    state.editingMaterialId = null;
-    if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 등록';
-    if (el['material_name']) el['material_name'].value = '';
-    if (el['material_unit']) el['material_unit'].value = '';
-    if (el['material_stock']) el['material_stock'].value = '0';
-    if (el['material_price']) el['material_price'].value = '0';
-    if (el['material_memo']) el['material_memo'].value = '';
-    if (el['material-search-keyword']) el['material-search-keyword'].value = '';
-    renderMaterialPickerResults('');
     removeHidden(el['material-modal']);
   }
 
@@ -1071,28 +939,13 @@ function autoFillMaterialName(keyword) {
     state.editingMaterialId = null;
   }
 
-  function editMaterial(materialId) {
-    const item = state.materials.find(m => String(m.id) === String(materialId));
-    if (!item) return;
-    state.editingMaterialId = item.id;
-    if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 수정';
-    el['material_name'].value = materialName(item);
-    el['material_unit'].value = materialUnit(item) || '';
-    el['material_stock'].value = String(item.stock_qty ?? 0);
-    el['material_price'].value = String(item.unit_price ?? 0);
-    el['material_memo'].value = String(item.memo || '');
-    if (el['material-search-keyword']) el['material-search-keyword'].value = materialName(item);
-    renderMaterialPickerResults(materialName(item));
-    removeHidden(el['material-modal']);
-  }
-
   async function saveMaterial() {
     const payload = {
-      name: String(el['material_name']?.value || '').trim(),
-      unit: String(el['material_unit']?.value || '').trim(),
-      stock_qty: Number(el['material_stock']?.value || 0),
-      unit_price: Number(el['material_price']?.value || 0),
-      memo: String(el['material_memo']?.value || '').trim()
+      name: (el.material_name.value || '').trim(),
+      unit: (el.material_unit.value || '').trim(),
+      stock_qty: Number(el.material_stock.value) || 0,
+      unit_price: Number(el.material_price.value) || 0,
+      memo: (el.material_memo.value || '').trim()
     };
 
     if (!payload.name) return alert('자재명을 입력하세요.');
@@ -1104,108 +957,119 @@ function autoFillMaterialName(keyword) {
         await apiPost('/api/materials', payload);
       }
       await loadMaterials();
-      renderMaterials();
       closeMaterialModal();
+      renderMaterials();
     } catch (e) {
       console.error(e);
       alert('자재 저장 중 오류가 발생했습니다.');
     }
   }
 
-  async function adjustMaterialStock(materialId, mode) {
-    const item = state.materials.find(m => String(m.id) === String(materialId));
-    if (!item) return;
-
-    const label = mode === 'in' ? '입고' : '사용';
-    const value = prompt(`${materialName(item)} ${label} 수량`, '0');
-    if (value === null) return;
-
-    const qty = Number(value);
-    if (!Number.isFinite(qty) || qty < 0) {
-      return alert('수량은 0 이상의 숫자로 입력하세요.');
-    }
-
-    const nextQty = mode === 'in'
-      ? toNumber(item.stock_qty) + qty
-      : toNumber(item.stock_qty) - qty;
-
-    if (nextQty < 0) {
-      return alert('재고보다 많이 사용할 수 없습니다.');
-    }
+  async function deleteMaterial(id) {
+    if (!confirm('삭제하시겠습니까?')) return;
 
     try {
-      await apiPut(`/api/materials/${item.id}`, {
-        name: materialName(item),
-        unit: materialUnit(item),
-        stock_qty: nextQty,
-        unit_price: toNumber(item.unit_price),
-        memo: String(item.memo || '')
-      });
+      await apiDelete(`/api/materials/${id}`);
       await loadMaterials();
       renderMaterials();
     } catch (e) {
       console.error(e);
-      alert('재고 수정 중 오류가 발생했습니다.');
+      alert('자재 삭제 실패');
     }
   }
 
-async function deleteMaterial(materialId) {
-  const item = state.materials.find(m => String(m.id) === String(materialId));
-  if (!item) return;
+  function renderMaterialSearchResults(keyword) {
+    if (!el['material-search-results']) return;
 
-  if (!confirm(`${materialName(item)} 자재를 삭제하시겠습니까?`)) return;
+    const q = (keyword || '').trim();
+    if (!q) {
+      el['material-search-results'].innerHTML = '';
+      return;
+    }
 
-  try {
-    await apiDelete(`/api/materials/${item.id}`);
-    await loadMaterials();
-    renderMaterials();
-  } catch (e) {
-    console.error(e);
-    alert('자재 삭제 중 오류가 발생했습니다.');
-  }
-}
-  
-  function renderOptions() {
-    renderOptionList('weather', el['options-weather']);
-    renderOptionList('crops', el['options-crops']);
-    renderOptionList('tasks', el['options-tasks']);
-    renderOptionList('pests', el['options-pests']);
-    renderOptionList('materials', el['options-materials']);
-    renderOptionList('machines', el['options-machines']);
-  }
+    const matched = state.materials.filter(item => (item.name || '').includes(q));
 
-  function renderOptionList(type, container) {
-    if (!container) return;
-    const items = state.options[type] || [];
-    container.innerHTML = items.length
-      ? items.map(item => `
-          <div class="panel" style="margin-bottom:6px; padding:8px 10px; display:flex; justify-content:space-between; gap:8px; align-items:center;">
-            <span>${escapeHtml(optionName(item))}</span>
-            <button class="btn" data-delete-option="${escapeHtml(type)}|${escapeHtml(String(item.id))}">삭제</button>
-          </div>
-        `).join('')
-      : '<div class="empty-msg">등록된 항목 없음</div>';
+    el['material-search-results'].innerHTML = matched.map(item => `
+      <div class="search-result-item" data-pick-material="${escapeHtml(String(item.id))}">
+        ${escapeHtml(item.name)} / 재고 ${formatNumber(item.stock_qty || 0)} / 단가 ${formatNumber(item.unit_price || 0)}
+      </div>
+    `).join('');
 
-    container.querySelectorAll('[data-delete-option]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const [t, id] = btn.dataset.deleteOption.split('|');
-        if (!confirm('삭제하시겠습니까?')) return;
-        try {
-          await apiDelete(`/api/options/${t}/${id}`);
-          await loadOptions();
-          renderOptions();
-          renderWorkFormOptions();
-        } catch (e) {
-          console.error(e);
-          alert('옵션 삭제 중 오류가 발생했습니다.');
+    document.querySelectorAll('[data-pick-material]').forEach(node => {
+      node.addEventListener('click', () => {
+        const item = state.materials.find(m => String(m.id) === String(node.dataset.pickMaterial));
+        if (!item) return;
+
+        const exists = state.selectedMaterialsDetailed.find(m => String(m.id) === String(item.id));
+        if (exists) {
+          exists.qty += 1;
+        } else {
+          state.selectedMaterialsDetailed.push({
+            id: item.id,
+            name: item.name,
+            unit: item.unit || '',
+            price: Number(item.unit_price || 0),
+            qty: 1
+          });
         }
+
+        if (el['material-search-input']) el['material-search-input'].value = '';
+        if (el['material-search-results']) el['material-search-results'].innerHTML = '';
+        renderSelectedMaterialsDetailed();
       });
     });
   }
 
-  async function saveOption(type, inputId) {
+  function renderMaterialPickerResults(keyword) {
+    if (!el['material-search-box']) return;
+
+    const q = (keyword || '').trim();
+    const matched = !q
+      ? state.materials
+      : state.materials.filter(item => (item.name || '').includes(q));
+
+    el['material-search-box'].innerHTML = matched.map(item => `
+      <div class="material-picker-row">
+        <span>${escapeHtml(item.name || '')}</span>
+      </div>
+    `).join('');
+  }
+
+  // ==========================
+  // 옵션관리
+  // ==========================
+
+  function renderOptions() {
+    renderOptionList('weather', 'options-weather');
+    renderOptionList('crops', 'options-crops');
+    renderOptionList('tasks', 'options-tasks');
+    renderOptionList('pests', 'options-pests');
+    renderOptionList('materials', 'options-materials');
+    renderOptionList('machines', 'options-machines');
+  }
+
+  function renderOptionList(type, targetId) {
+    const node = el[targetId];
+    if (!node) return;
+
+    const items = state.options[type] || [];
+    node.innerHTML = items.map(item => {
+      const id = optionId(item);
+      const name = optionName(item);
+      return `
+        <div class="option-item">
+          <span>${escapeHtml(name)}</span>
+          <button class="btn" onclick="editOption('${escapeHtml(type)}', '${escapeHtml(String(id))}', '${escapeHtml(name)}')">수정</button>
+          <button class="btn" onclick="removeOption('${escapeHtml(type)}', '${escapeHtml(String(id))}')">삭제</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.saveOption = async function (type, inputId) {
     const input = document.getElementById(inputId);
     if (!input) return;
+
     const name = (input.value || '').trim();
     if (!name) return alert('값을 입력하세요.');
 
@@ -1217,170 +1081,144 @@ async function deleteMaterial(materialId) {
       renderWorkFormOptions();
     } catch (e) {
       console.error(e);
-      alert('옵션 저장 중 오류가 발생했습니다.');
+      alert('옵션 저장 실패');
     }
+  };
+
+  window.editOption = async function (type, id, oldName) {
+    const name = prompt('수정할 이름', oldName || '');
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    try {
+      await apiPut(`/api/options/${type}/${id}`, { name: trimmed });
+      await loadOptions();
+      renderOptions();
+      renderWorkFormOptions();
+    } catch (e) {
+      console.error(e);
+      alert('옵션 수정 실패');
+    }
+  };
+
+  window.removeOption = async function (type, id) {
+    if (!confirm('삭제하시겠습니까?')) return;
+
+    try {
+      await apiDelete(`/api/options/${type}/${id}`);
+      await loadOptions();
+      renderOptions();
+      renderWorkFormOptions();
+    } catch (e) {
+      console.error(e);
+      alert('옵션 삭제 실패');
+    }
+  };
+
+  function renderWorkFormOptions() {
+    renderSelectOptions(el.weather, state.options.weather, true);
+    renderChipBox(el['crops-box'], state.options.crops, 'crops');
+    renderChipBox(el['pests-box'], state.options.pests, 'pests');
+    renderChipBox(el['machines-box'], state.options.machines, 'machines');
   }
 
-  window.saveOption = saveOption;
-
-  function normalizeOptions(items) {
-    return Array.isArray(items) ? items : [];
-  }
-
-  function optionName(item) {
-    if (item == null) return '';
-    if (typeof item === 'string') return item;
-    return String(item.name || item.value || '');
-  }
-
-  function renderSelect(select, items, placeholder = '선택') {
-    if (!select) return;
-    const current = select.value;
-    select.innerHTML =
-      `<option value="">${escapeHtml(placeholder)}</option>` +
-      items.map(item => {
+  function renderSelectOptions(selectEl, items, includeEmpty = false) {
+    if (!selectEl) return;
+    const current = selectEl.value || '';
+    selectEl.innerHTML =
+      (includeEmpty ? `<option value="">선택</option>` : '') +
+      (items || []).map(item => {
         const name = optionName(item);
         return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
       }).join('');
-    setSelectValue(select, current);
+    setSelectValue(selectEl, current);
   }
 
-  function renderChecks(container, items) {
+  function renderChipBox(container, items, type) {
     if (!container) return;
-    container.innerHTML = items.map(item => {
+
+    let selectedValues = [];
+    if (type === 'crops') selectedValues = getSelectedChipValues('crops');
+    if (type === 'pests') selectedValues = getSelectedChipValues('pests');
+    if (type === 'machines') selectedValues = getSelectedChipValues('machines');
+
+    container.innerHTML = (items || []).map(item => {
       const name = optionName(item);
-      return `
-        <label class="check-item">
-          <input type="checkbox" value="${escapeHtml(name)}">
-          <span>${escapeHtml(name)}</span>
-        </label>
-      `;
+      const active = selectedValues.includes(name) ? 'active' : '';
+      return `<button type="button" class="chip ${active}" data-chip-type="${escapeHtml(type)}" data-chip-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
     }).join('');
-  }
 
-  function collectChecked(container) {
-    if (!container) return [];
-    return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
-  }
-
-  function checkValues(container, values) {
-    if (!container) return;
-    const set = new Set((values || []).map(v => String(v).trim()).filter(Boolean));
-    container.querySelectorAll('input[type="checkbox"]').forEach(input => {
-      input.checked = set.has(input.value);
+    container.querySelectorAll('[data-chip-type]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+      });
     });
   }
 
-  function uncheckAll(container) {
-    if (!container) return;
-    container.querySelectorAll('input[type="checkbox"]').forEach(input => {
-      input.checked = false;
-    });
+  function getSelectedChipValues(type) {
+    return Array.from(document.querySelectorAll(`[data-chip-type="${type}"].active`))
+      .map(node => node.dataset.chipValue)
+      .filter(Boolean);
   }
 
-  function setSelectValue(select, value) {
-    if (!select) return;
-    select.value = value || '';
-  }
+  // ==========================
+  // 금전관리
+  // ==========================
 
-  function materialName(item) {
-    return String(item?.name || item?.자재명 || '');
-  }
-
-  function materialUnit(item) {
-    return String(item?.unit || item?.단위 || '');
-  }
-
-  function getMaterialUnit(name) {
-    const item = state.materials.find(m => materialName(m) === name);
-    return item ? materialUnit(item) : '';
-  }
-
-  function formatMaterials(materials) {
-    if (!Array.isArray(materials)) return '';
-    return materials.map(item => {
-      const name = item?.name || '';
-      const qty = item?.qty ?? '';
-      const unit = item?.unit || '';
-      return [name, qty, unit].filter(Boolean).join(' ');
-    }).join(', ');
-  }
-
-  function parseMemo(value) {
-    if (!value) return { memo_text: '', materials: [], labor_rows: [], material_cost_total: 0, money: null };
+  async function loadMoney() {
     try {
-      const data = JSON.parse(value);
-      return {
-        memo_text: data.memo_text || '',
-        materials: Array.isArray(data.materials) ? data.materials : [],
-        labor_rows: Array.isArray(data.labor_rows) ? data.labor_rows : [],
-        material_cost_total: data.material_cost_total || 0,
-        money: data.money || null
-      };
-    } catch {
-      return { memo_text: String(value), materials: [], labor_rows: [], material_cost_total: 0, money: null };
+      state.moneyRows = await apiGet('/api/money');
+    } catch (e) {
+      console.error(e);
+      state.moneyRows = [];
     }
   }
 
-  function normalizePlanDate(value) {
-    if (!value) return '';
-    return String(value).slice(0, 10);
+  function renderMoney() {
+    if (!el['money-list']) return;
+
+    const start = el['money-start']?.value || '';
+    const end = el['money-end']?.value || '';
+    const typeFilter = el['money-type-filter']?.value || '';
+    const methodFilter = el['money-method-filter']?.value || '';
+
+    let rows = [...(state.moneyRows || [])];
+
+    if (start) rows = rows.filter(r => (r.date || '') >= start);
+    if (end) rows = rows.filter(r => (r.date || '') <= end);
+    if (typeFilter) rows = rows.filter(r => (r.type || '') === typeFilter);
+    if (methodFilter) rows = rows.filter(r => (r.method || '') === methodFilter);
+
+    const total = rows.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const cash = rows
+      .filter(r => ['현금', '계좌이체'].includes(r.method || ''))
+      .reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const card = rows
+      .filter(r => ['카드일시불', '카드할부', '외상', '카드'].includes(r.method || ''))
+      .reduce((sum, r) => sum + Number(r.total || 0), 0);
+
+    if (el['money-total']) el['money-total'].innerText = formatNumber(total);
+    if (el['money-cash']) el['money-cash'].innerText = formatNumber(cash);
+    if (el['money-card']) el['money-card'].innerText = formatNumber(card);
+
+    el['money-list'].innerHTML = rows.length ? rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.date || '')}</td>
+        <td>${escapeHtml(r.task_name || '')}</td>
+        <td>${escapeHtml(r.type || '')}</td>
+        <td>${formatNumber(r.total || 0)}</td>
+        <td>${escapeHtml(r.method || '')}</td>
+        <td>${escapeHtml(r.note || '')}</td>
+      </tr>
+    `).join('') : `
+      <tr><td colspan="6" class="empty-msg">조회 결과가 없습니다.</td></tr>
+    `;
   }
 
-  function isDateInRange(dateStr, startDate, endDate) {
-    const s = normalizePlanDate(startDate);
-    const e = normalizePlanDate(endDate || startDate);
-    return s <= dateStr && dateStr <= e;
-  }
-
-  function fmtDate(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  function today() {
-    return fmtDate(new Date());
-  }
-
-  function addHidden(node) {
-    if (!node) return;
-    node.classList.add('hidden');
-  }
-
-  function removeHidden(node) {
-    if (!node) return;
-    node.classList.remove('hidden');
-  }
-
-  function on(node, event, handler) {
-    if (!node) return;
-    node.addEventListener(event, handler);
-  }
-
-  function toNumber(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function numberWithComma(value) {
-    return toNumber(value).toLocaleString('ko-KR');
-  }
-
-  function csvToArray(value) {
-    if (!value) return [];
-    return String(value).split(',').map(v => v.trim()).filter(Boolean);
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
-  }
+  // ==========================
+  // API 유틸
+  // ==========================
 
   async function apiGet(url) {
     const res = await fetch(url);
@@ -1388,93 +1226,119 @@ async function deleteMaterial(materialId) {
     return res.json();
   }
 
-  async function apiPost(url, body) {
+  async function apiPost(url, payload) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload || {})
     });
     if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return tryJson(res);
+    return res.json();
   }
 
-  async function apiPut(url, body) {
+  async function apiPut(url, payload) {
     const res = await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload || {})
     });
     if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return tryJson(res);
+    return res.json();
   }
 
   async function apiDelete(url) {
     const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return tryJson(res);
+    return res.json();
   }
 
-  async function tryJson(res) {
-    const text = await res.text();
-    if (!text) return {};
+  // ==========================
+  // 공통 유틸
+  // ==========================
+
+  function on(node, eventName, handler) {
+    if (node) node.addEventListener(eventName, handler);
+  }
+
+  function addHidden(node) {
+    if (node) node.classList.add('hidden');
+  }
+
+  function removeHidden(node) {
+    if (node) node.classList.remove('hidden');
+  }
+
+  function fmtDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function normalizePlanDate(v) {
+    if (!v) return '';
+    return String(v).slice(0, 10);
+  }
+
+  function isDateInRange(dateStr, startDate, endDate) {
+    const start = String(startDate || '').slice(0, 10);
+    const end = String(endDate || startDate || '').slice(0, 10);
+    return start <= dateStr && dateStr <= end;
+  }
+
+  function parseMemo(memo) {
+    if (!memo) return {};
     try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: true, raw: text };
+      const parsed = JSON.parse(memo);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
     }
   }
 
-async function loadMoney() {
-  try {
-    state.money = await apiGet('/api/money');
-  } catch (e) {
-    console.error(e);
-    state.money = [];
+  function formatMaterials(materials) {
+    if (!materials) return '';
+    if (Array.isArray(materials)) {
+      return materials.map(m => {
+        if (typeof m === 'string') return m;
+        return `${m.name || ''}${m.qty ? ` ${m.qty}${m.unit || ''}` : ''}`.trim();
+      }).join(', ');
+    }
+    return String(materials);
   }
-}
 
-function renderMoney() {
-  if (!el['money-list']) return;
+  function normalizeOptions(items) {
+    return Array.isArray(items) ? items : [];
+  }
 
-  let list = [...(state.money || [])];
+  function optionName(item) {
+    if (typeof item === 'string') return item;
+    return item?.name || '';
+  }
 
-  const start = el['money-start']?.value;
-  const end = el['money-end']?.value;
-  const type = el['money-type-filter']?.value;
-  const method = el['money-method-filter']?.value;
+  function optionId(item) {
+    if (typeof item === 'string') return item;
+    return item?.id ?? item?.name ?? '';
+  }
 
-  if (start) list = list.filter(i => i.date >= start);
-  if (end) list = list.filter(i => i.date <= end);
-  if (type) list = list.filter(i => i.type === type);
-  if (method) list = list.filter(i => i.method === method);
+  function setSelectValue(selectEl, value) {
+    if (!selectEl) return;
+    const values = Array.from(selectEl.options).map(opt => opt.value);
+    selectEl.value = values.includes(value) ? value : '';
+  }
 
-  let total = 0;
-  let cash = 0;
-  let card = 0;
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
-  el['money-list'].innerHTML = list.map(i => {
-    total += i.amount;
+  function formatNumber(value) {
+    return Number(value || 0).toLocaleString('ko-KR');
+  }
 
-    if (i.method === '현금' || i.method === '계좌이체') cash += i.amount;
-    else card += i.amount;
-
-    return `
-      <tr>
-        <td>${i.date}</td>
-        <td>${i.task}</td>
-        <td>${i.type}</td>
-        <td>${i.amount.toLocaleString()}</td>
-        <td>${i.method}</td>
-        <td>${i.note}</td>
-      </tr>
-    `;
-  }).join('');
-
-  if (el['money-total']) el['money-total'].textContent = total.toLocaleString();
-  if (el['money-cash']) el['money-cash'].textContent = cash.toLocaleString();
-  if (el['money-card']) el['money-card'].textContent = card.toLocaleString();
-}
-
-
-
+  window.updateMoneySummary = updateMoneySummary;
 })();

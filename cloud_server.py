@@ -541,9 +541,9 @@ def get_money():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT id, start_date, task_name, memo
+        SELECT id, start_date, end_date, task_name, memo
         FROM works
-        ORDER BY start_date DESC, id DESC
+        ORDER BY start_date DESC
     """)
     rows = cur.fetchall()
     conn.close()
@@ -553,28 +553,25 @@ def get_money():
     for r in rows:
         try:
             import json
-
             memo = json.loads(r["memo"]) if r["memo"] else {}
             money = memo.get("money")
-
             if not money:
                 continue
 
-            # 🔥 핵심: 새 구조 우선
-            total = money.get("total_amount") or money.get("amount") or 0
-
+            amount = float(money.get("total_amount") or money.get("amount") or 0)
             results.append({
                 "id": r["id"],
                 "date": r["start_date"],
-                "task_name": r["task_name"],
-                "type": money.get("type", ""),
-                "total": total,
+                "task": r["task_name"],
+                "type": money.get("type", "통합"),
+                "amount": amount,
                 "method": money.get("method", ""),
-                "note": money.get("note", "")
+                "note": money.get("note", ""),
+                "labor_total": float(money.get("labor_total") or 0),
+                "material_total": float(money.get("material_total") or 0),
+                "other_total": float(money.get("other_total") or 0),
             })
-
-        except Exception as e:
-            print("money parse error:", e)
+        except:
             continue
 
     return jsonify(results)

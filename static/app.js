@@ -1341,4 +1341,4 @@
   }
 
   window.updateMoneySummary = updateMoneySummary;
-})();
+})(); 

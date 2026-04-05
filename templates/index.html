@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>작업일지 v2</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <style>
+    .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
+    .readonly-money.total{font-size:18px; color:#0f172a;}
+  </style>
 </head>
 <body>
   <div class="app">
@@ -94,7 +99,6 @@
 
             <select id="money-type-filter">
               <option value="">전체</option>
-              <option>통합</option>
               <option>자재비</option>
               <option>인건비</option>
               <option>기타</option>
@@ -340,25 +344,25 @@
         <div id="money-box" class="panel hidden" style="margin-top:10px; padding:14px;">
           <div class="grid two">
             <label class="field">
-              <span>인건비 합계 (자동)</span>
-              <div id="money_labor_total" class="readonly-money-box">0 원</div>
+              <span>인건비 합계</span>
+              <div class="readonly-money" id="money_labor_total">0</div>
             </label>
 
             <label class="field">
-              <span>자재비 합계 (자동)</span>
-              <div id="money_material_total" class="readonly-money-box">0 원</div>
+              <span>자재비 합계</span>
+              <div class="readonly-money" id="money_material_total">0</div>
             </label>
           </div>
 
           <div class="grid two">
             <label class="field">
               <span>기타비</span>
-              <input type="number" id="money_other_total" min="0" step="100" value="0">
+              <input type="number" id="other_cost" min="0" step="100" value="0">
             </label>
 
             <label class="field">
-              <span>총금액 (자동)</span>
-              <div id="money_total_amount" class="readonly-money-box strong">0 원</div>
+              <span>총금액</span>
+              <div class="readonly-money total" id="money_total_amount">0</div>
             </label>
           </div>
 
@@ -456,21 +460,5 @@
   </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
-  <style>
-    .readonly-money-box {
-      min-height: 42px;
-      display:flex;
-      align-items:center;
-      padding:10px 12px;
-      border:1px solid #d1d5db;
-      border-radius:10px;
-      background:#f8fafc;
-      font-weight:600;
-    }
-    .readonly-money-box.strong {
-      color:#2563eb;
-      font-size:16px;
-    }
-  </style>
 </body>
 </html>

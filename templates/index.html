@@ -9,6 +9,20 @@
   <style>
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
     .readonly-money.total{font-size:18px; color:#0f172a;}
+    .work-date-group{margin-bottom:24px;}
+    .work-date-title{font-size:28px; font-weight:800; margin-bottom:12px;}
+    .work-date-row{display:flex; gap:16px; flex-wrap:wrap; align-items:stretch;}
+    .work-card{flex:1 1 320px; min-width:280px; background:#fff; border:1px solid #d7dbe3; border-radius:16px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,.04);}
+    .work-date-row.single-card .work-card{flex:1 1 100%;}
+    .work-card-title{font-size:20px; font-weight:800; margin-bottom:10px;}
+    .checks{display:flex; flex-wrap:wrap; gap:8px;}
+    .chip{border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:8px 14px; cursor:pointer;}
+    .chip.active{background:#3b82f6; border-color:#3b82f6; color:#fff;}
+    .search-result-item{padding:8px 10px; border:1px solid #d7dbe3; border-radius:10px; cursor:pointer; background:#fff;}
+    .material-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+    .material-row input{width:90px;}
+    .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
+    .inline-help{font-size:12px; color:#64748b; margin-top:4px;}
   </style>
 </head>
 <body>
@@ -262,14 +276,19 @@
       </div>
 
       <div class="modal-body">
-        <div class="grid two">
+        <div class="grid three">
           <label class="field">
             <span>시작일</span>
             <input type="date" id="start_date">
           </label>
           <label class="field">
-            <span>종료일</span>
-            <input type="date" id="end_date">
+            <span>연속작업일수</span>
+            <input type="number" id="repeat_days" min="1" step="1" value="1">
+            <div class="inline-help">1이면 하루 작업</div>
+          </label>
+          <label class="field">
+            <span>작업종료일</span>
+            <input type="date" id="end_date" readonly>
           </label>
         </div>
 
@@ -284,56 +303,6 @@
           </label>
         </div>
 
-        <div class="field">
-          <span>작물</span>
-          <div id="crops-box" class="checks"></div>
-        </div>
-
-        <div class="field">
-          <span>병충해</span>
-          <div id="pests-box" class="checks"></div>
-        </div>
-
-        <div class="field">
-          <span>사용자재</span>
-          <div id="material-picker-wrap">
-            <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-              <input type="text" id="material-search-input" placeholder="자재명 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:220px;">
-            </div>
-            <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
-            <div id="selected-materials-detailed"></div>
-          </div>
-        </div>
-
-        <div class="field">
-          <span>사용기계</span>
-          <div id="machines-box" class="checks"></div>
-        </div>
-
-                <div class="field">
-          <span>인건비 상세</span>
-          <div id="labor-rows-wrap"></div>
-          <div style="margin-top:8px;">
-            <button type="button" class="btn" id="btn-add-labor-row">행추가</button>
-          </div>
-        </div>
-
-        <div class="grid two">
-          <label class="field" style="display:none;">
-            <span>인건비</span>
-            <input type="number" id="labor_cost" min="0" step="1000" value="0">
-          </label>
-          <label class="field">
-            <span>작업시간</span>
-            <input type="number" id="work_hours" min="0" step="0.5" value="0">
-          </label>
-        </div>
-
-        <label class="field">
-          <span>비고</span>
-          <textarea id="memo" rows="4"></textarea>
-        </label>
-
         <div class="field money-field-wrap">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
             <input type="checkbox" id="has_money">
@@ -341,7 +310,7 @@
           </label>
         </div>
 
-        <div id="money-box" class="panel hidden" style="margin-top:10px; padding:14px;">
+        <div id="money-box" class="panel hidden" style="margin-top:10px; margin-bottom:14px; padding:14px;">
           <div class="grid two">
             <label class="field">
               <span>인건비 합계</span>
@@ -386,9 +355,56 @@
           </div>
         </div>
 
+        <div class="field">
+          <span>작물</span>
+          <div id="crops-box" class="checks"></div>
+        </div>
 
-        
-      </div>
+        <div class="field">
+          <span>병충해</span>
+          <div id="pests-box" class="checks"></div>
+        </div>
+
+        <div class="field">
+          <span>사용자재</span>
+          <div id="material-picker-wrap">
+            <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+              <input type="text" id="material-search-input" placeholder="자재명 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:220px;">
+            </div>
+            <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
+            <div id="selected-materials-detailed"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>사용기계</span>
+          <div id="machines-box" class="checks"></div>
+        </div>
+
+        <div class="field">
+          <span>인건비 상세</span>
+          <div id="labor-rows-wrap"></div>
+          <div style="margin-top:8px;">
+            <button type="button" class="btn" id="btn-add-labor-row">행추가</button>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <label class="field" style="display:none;">
+            <span>인건비</span>
+            <input type="number" id="labor_cost" min="0" step="1000" value="0">
+          </label>
+          <label class="field">
+            <span>작업시간</span>
+            <input type="number" id="work_hours" min="0" step="0.5" value="0">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>비고</span>
+          <textarea id="memo" rows="4"></textarea>
+        </label>
+</div>
 
       <div class="modal-footer">
         <button id="btn-save-work" class="btn primary">저장</button>
@@ -431,6 +447,7 @@
               <option value="L">L</option>
               <option value="ml">ml</option>
               <option value="말">말</option>
+              <option value="M">M</option>
             </select>
           </label>
         </div>

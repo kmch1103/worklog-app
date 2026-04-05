@@ -1,25 +1,18 @@
 from flask import Flask, request, jsonify, render_template
-import sqlite3, json, datetime
+import sqlite3, json
 
 app = Flask(__name__)
-
 DB = "worklog.db"
 
-# =========================
-# DB 연결
-# =========================
 def db():
     return sqlite3.connect(DB)
 
-# =========================
-# 기본 페이지
-# =========================
 @app.route("/")
 def index():
     return render_template("index.html")
 
 # =========================
-# 작업 조회
+# WORKS
 # =========================
 @app.route("/api/works", methods=["GET"])
 def get_works():
@@ -28,31 +21,20 @@ def get_works():
     cur.execute("SELECT * FROM works ORDER BY start_date DESC")
     rows = cur.fetchall()
     cols = [c[0] for c in cur.description]
-
-    result = []
-    for r in rows:
-        item = dict(zip(cols, r))
-        result.append(item)
-
+    result = [dict(zip(cols, r)) for r in rows]
     conn.close()
     return jsonify(result)
 
-# =========================
-# 작업 저장
-# =========================
 @app.route("/api/works", methods=["POST"])
 def save_work():
     data = request.json
-
     conn = db()
     cur = conn.cursor()
 
     cur.execute("""
-    INSERT INTO works (
-        start_date, end_date, weather, task_name,
-        crops, pests, machines,
-        work_hours, memo
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO works
+    (start_date,end_date,weather,task_name,crops,pests,machines,work_hours,memo)
+    VALUES (?,?,?,?,?,?,?,?,?)
     """, (
         data.get("start_date"),
         data.get("end_date"),
@@ -67,30 +49,18 @@ def save_work():
 
     conn.commit()
     conn.close()
+    return jsonify({"ok": True})
 
-    return jsonify({"result": "ok"})
-
-# =========================
-# 작업 수정
-# =========================
 @app.route("/api/works/<int:id>", methods=["PUT"])
 def update_work(id):
     data = request.json
-
     conn = db()
     cur = conn.cursor()
 
     cur.execute("""
     UPDATE works SET
-        start_date=?,
-        end_date=?,
-        weather=?,
-        task_name=?,
-        crops=?,
-        pests=?,
-        machines=?,
-        work_hours=?,
-        memo=?
+    start_date=?,end_date=?,weather=?,task_name=?,
+    crops=?,pests=?,machines=?,work_hours=?,memo=?
     WHERE id=?
     """, (
         data.get("start_date"),
@@ -107,12 +77,8 @@ def update_work(id):
 
     conn.commit()
     conn.close()
+    return jsonify({"ok": True})
 
-    return jsonify({"result": "ok"})
-
-# =========================
-# 삭제
-# =========================
 @app.route("/api/works/<int:id>", methods=["DELETE"])
 def delete_work(id):
     conn = db()
@@ -120,18 +86,118 @@ def delete_work(id):
     cur.execute("DELETE FROM works WHERE id=?", (id,))
     conn.commit()
     conn.close()
-    return jsonify({"result": "ok"})
+    return jsonify({"ok": True})
 
 # =========================
-# 금전관리
+# PLANS
 # =========================
-@app.route("/api/money", methods=["GET"])
+@app.route("/api/plans", methods=["GET"])
+def get_plans():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM plans ORDER BY plan_date DESC")
+    rows = cur.fetchall()
+    cols = [c[0] for c in cur.description]
+    result = [dict(zip(cols, r)) for r in rows]
+    conn.close()
+    return jsonify(result)
+
+@app.route("/api/plans", methods=["POST"])
+def save_plan():
+    data = request.json
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT INTO plans (plan_date,title,details,status)
+    VALUES (?,?,?,?)
+    """, (
+        data.get("plan_date"),
+        data.get("title"),
+        data.get("details"),
+        data.get("status")
+    ))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/plans/<int:id>", methods=["PUT"])
+def update_plan(id):
+    data = request.json
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute("""
+    UPDATE plans SET
+    plan_date=?,title=?,details=?,status=?
+    WHERE id=?
+    """, (
+        data.get("plan_date"),
+        data.get("title"),
+        data.get("details"),
+        data.get("status"),
+        id
+    ))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/plans/<int:id>", methods=["DELETE"])
+def delete_plan(id):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM plans WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+# =========================
+# OPTIONS
+# =========================
+@app.route("/api/options", methods=["GET"])
+def get_options():
+    conn = db()
+    cur = conn.cursor()
+
+    result = {}
+    for t in ["weather","crops","tasks","pests","machines"]:
+        try:
+            cur.execute(f"SELECT name FROM options_{t}")
+            result[t] = [r[0] for r in cur.fetchall()]
+        except:
+            result[t] = []
+
+    conn.close()
+    return jsonify(result)
+
+@app.route("/api/options/<type>", methods=["POST"])
+def save_option(type):
+    data = request.json
+    name = data.get("name")
+
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute(f"""
+    CREATE TABLE IF NOT EXISTS options_{type} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT
+    )
+    """)
+
+    cur.execute(f"INSERT INTO options_{type} (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True})
+
+# =========================
+# MONEY
+# =========================
+@app.route("/api/money")
 def money():
-    start = request.args.get("start")
-    end = request.args.get("end")
-    mtype = request.args.get("type")
-    method = request.args.get("method")
-
     conn = db()
     cur = conn.cursor()
     cur.execute("SELECT * FROM works")
@@ -142,73 +208,25 @@ def money():
 
     for r in rows:
         item = dict(zip(cols, r))
-
         try:
             memo = json.loads(item.get("memo") or "{}")
         except:
             memo = {}
 
-        money = memo.get("money", {})
-
-        if not money:
-            continue
-
-        date = item.get("start_date")
-
-        # 날짜 필터
-        if start and date < start:
-            continue
-        if end and date > end:
-            continue
-
-        # 구분
-        if mtype and money.get("type") != mtype:
-            continue
-
-        # 방식
-        if method and money.get("method") != method:
-            continue
+        m = memo.get("money")
+        if not m: continue
 
         result.append({
-            "date": date,
-            "task": item.get("task_name"),
-            "type": money.get("type"),
-            "amount": money.get("amount", 0),
-            "method": money.get("method"),
-            "note": money.get("note", "")
+            "date": item["start_date"],
+            "task": item["task_name"],
+            "type": m.get("type"),
+            "amount": m.get("total_amount",0),
+            "method": m.get("method"),
+            "note": m.get("note")
         })
 
     conn.close()
     return jsonify(result)
 
-# =========================
-# 옵션관리
-# =========================
-@app.route("/api/options", methods=["GET"])
-def options():
-    conn = db()
-    cur = conn.cursor()
-
-    result = {
-        "weather": [],
-        "crops": [],
-        "tasks": [],
-        "pests": [],
-        "machines": []
-    }
-
-    for key in result.keys():
-        try:
-            cur.execute(f"SELECT name FROM options_{key}")
-            result[key] = [r[0] for r in cur.fetchall()]
-        except:
-            pass
-
-    conn.close()
-    return jsonify(result)
-
-# =========================
-# 실행
-# =========================
 if __name__ == "__main__":
     app.run(debug=True)

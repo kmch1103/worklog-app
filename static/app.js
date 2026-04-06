@@ -127,8 +127,9 @@
     on(el['btn-cancel-work'], 'click', closeWorkModal);
     on(el['btn-save-work'], 'click', saveWork);
 
-    on(el['work-modal'], 'click', (e) => {
-      if (e.target === el['work-modal']) closeWorkModal();
+    // ✅ ESC로만 닫히게
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeWorkModal();
     });
 
     on(el['material-search-input'], 'input', (e) => {

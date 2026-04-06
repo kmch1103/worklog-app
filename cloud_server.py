@@ -140,7 +140,7 @@ def get_options():
     cur = conn.cursor()
 
     result = {}
-    for t in ["weather","crops","tasks","pests","machines"]:
+    for t in ["weather","crops","tasks","pests","materials","machines"]:
         cur.execute(f"""
         CREATE TABLE IF NOT EXISTS options_{t} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -16,13 +16,37 @@
     .work-date-row.single-card .work-card{flex:1 1 100%;}
     .work-card-title{font-size:20px; font-weight:800; margin-bottom:10px;}
     .checks{display:flex; flex-wrap:wrap; gap:8px;}
-    .chip{border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:8px 14px; cursor:pointer;}
+    .chip{border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:8px 14px; cursor:pointer; user-select:none;}
     .chip.active{background:#3b82f6; border-color:#3b82f6; color:#fff;}
     .search-result-item{padding:8px 10px; border:1px solid #d7dbe3; border-radius:10px; cursor:pointer; background:#fff;}
     .material-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
     .material-row input{width:90px;}
     .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
     .inline-help{font-size:12px; color:#64748b; margin-top:4px;}
+    .option-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #eef2f7;}
+    .option-item:last-child{border-bottom:0;}
+    .option-item span{flex:1;}
+    .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
+    .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+    .money-table{width:100%;}
+    .money-table th,.money-table td{padding:10px; border-bottom:1px solid #e5e7eb; text-align:left;}
+    .calendar-day{min-height:92px; border:1px solid #dde3ea; border-radius:14px; background:#fff; padding:10px; cursor:pointer;}
+    .calendar-day.empty{background:#f8fafc; cursor:default;}
+    .calendar-day.selected{background:#eff6ff; border-color:#2563eb;}
+    .calendar-day .day-num{font-size:18px; font-weight:700;}
+    .calendar-day .day-count{margin-top:6px; font-size:12px; color:#2563eb;}
+    .day-item{border:1px solid #dde3ea; border-radius:12px; padding:12px; background:#fff; margin-bottom:8px;}
+    .item-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+    .empty-msg{color:#64748b; padding:16px 0;}
+    .modal-overlay{position:fixed; inset:0; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; z-index:1000;}
+    .modal-overlay.hidden{display:none;}
+    .modal-box{width:min(760px, calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:auto; background:#fff; border-radius:18px; box-shadow:0 10px 32px rgba(0,0,0,.18);}
+    .modal-box-large{width:min(980px, calc(100vw - 24px));}
+    .modal-box-material{width:min(700px, calc(100vw - 24px));}
+    .modal-header,.modal-footer{padding:16px 18px; border-bottom:1px solid #eef2f7; display:flex; align-items:center; justify-content:space-between; gap:8px;}
+    .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
+    .modal-body{padding:18px;}
+    .page-header-actions{display:flex; gap:8px;}
   </style>
 </head>
 <body>
@@ -80,7 +104,6 @@
           <h2>작업일지</h2>
           <button id="btn-new-work" class="btn primary">새 작업 입력</button>
         </div>
-
         <div id="works-list" class="cards"></div>
       </section>
 
@@ -91,7 +114,6 @@
             <button id="btn-open-material-modal" class="btn primary">+ 자재 추가</button>
           </div>
         </div>
-
         <div id="materials-list"></div>
       </section>
 
@@ -239,6 +261,12 @@
         </label>
 
         <label class="field">
+          <span>계획 제목 검색</span>
+          <input type="text" id="plan-search" placeholder="작업내용 검색">
+          <div class="inline-help">작업내용 옵션에서 검색 후 아래 선택칸에서 고르세요.</div>
+        </label>
+
+        <label class="field">
           <span>계획 제목</span>
           <select id="plan_title">
             <option value="">선택</option>
@@ -281,13 +309,14 @@
             <span>시작일</span>
             <input type="date" id="start_date">
           </label>
+
           <label class="field">
             <span>연속작업일수</span>
             <input type="number" id="repeat_days" min="1" step="1" value="1">
-            <div class="inline-help">1이면 하루 작업</div>
           </label>
+
           <label class="field">
-            <span>작업종료일</span>
+            <span>종료일</span>
             <input type="date" id="end_date" readonly>
           </label>
         </div>
@@ -301,58 +330,6 @@
             <span>작업내용</span>
             <select id="task_name"></select>
           </label>
-        </div>
-
-        <div class="field money-field-wrap">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="has_money">
-            <span>비용 발생</span>
-          </label>
-        </div>
-
-        <div id="money-box" class="panel hidden" style="margin-top:10px; margin-bottom:14px; padding:14px;">
-          <div class="grid two">
-            <label class="field">
-              <span>인건비 합계</span>
-              <div class="readonly-money" id="money_labor_total">0</div>
-            </label>
-
-            <label class="field">
-              <span>자재비 합계</span>
-              <div class="readonly-money" id="money_material_total">0</div>
-            </label>
-          </div>
-
-          <div class="grid two">
-            <label class="field">
-              <span>기타비</span>
-              <input type="number" id="other_cost" min="0" step="100" value="0">
-            </label>
-
-            <label class="field">
-              <span>총금액</span>
-              <div class="readonly-money total" id="money_total_amount">0</div>
-            </label>
-          </div>
-
-          <div class="grid two">
-            <label class="field">
-              <span>결제방식</span>
-              <select id="money_method">
-                <option value="">선택</option>
-                <option value="현금">현금</option>
-                <option value="계좌이체">계좌이체</option>
-                <option value="카드일시불">카드일시불</option>
-                <option value="카드할부">카드할부</option>
-                <option value="외상">외상</option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>금전비고</span>
-              <input type="text" id="money_note" placeholder="예: 농약값, 일당, 수리비">
-            </label>
-          </div>
         </div>
 
         <div class="field">
@@ -382,29 +359,70 @@
         </div>
 
         <div class="field">
-          <span>인건비 상세</span>
-          <div id="labor-rows-wrap"></div>
-          <div style="margin-top:8px;">
-            <button type="button" class="btn" id="btn-add-labor-row">행추가</button>
+          <span>비용 발생</span>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+            <input type="checkbox" id="has_money">
+            <span>비용 있음</span>
+          </label>
+        </div>
+
+        <div id="money-box" class="panel hidden" style="margin-top:8px;">
+          <div class="grid three">
+            <label class="field">
+              <span>결제방식</span>
+              <select id="money_method">
+                <option value="">선택</option>
+                <option value="현금">현금</option>
+                <option value="계좌이체">계좌이체</option>
+                <option value="카드일시불">카드일시불</option>
+                <option value="카드할부">카드할부</option>
+                <option value="외상">외상</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>기타비용</span>
+              <input type="number" id="other_cost" value="0" min="0">
+            </label>
+
+            <label class="field">
+              <span>금전비고</span>
+              <input type="text" id="money_note" placeholder="비고 입력">
+            </label>
+          </div>
+
+          <div class="grid three">
+            <div class="field">
+              <span>인건비 합계</span>
+              <div class="readonly-money" id="money_labor_total">0</div>
+            </div>
+            <div class="field">
+              <span>자재비 합계</span>
+              <div class="readonly-money" id="money_material_total">0</div>
+            </div>
+            <div class="field">
+              <span>총 비용</span>
+              <div class="readonly-money total" id="money_total_amount">0</div>
+            </div>
           </div>
         </div>
 
-        <div class="grid two">
-          <label class="field" style="display:none;">
-            <span>인건비</span>
-            <input type="number" id="labor_cost" min="0" step="1000" value="0">
-          </label>
-          <label class="field">
-            <span>작업시간</span>
-            <input type="number" id="work_hours" min="0" step="0.5" value="0">
-          </label>
+        <div class="field">
+          <span>인건비 상세</span>
+          <div id="labor-rows-wrap"></div>
+          <button type="button" id="btn-add-labor-row" class="btn" style="margin-top:8px;">행추가</button>
         </div>
 
-        <label class="field">
+        <div class="field">
+          <span>작업시간</span>
+          <input type="number" id="work_hours" value="0" min="0" step="0.5">
+        </div>
+
+        <div class="field">
           <span>비고</span>
-          <textarea id="memo" rows="4"></textarea>
-        </label>
-</div>
+          <textarea id="memo" rows="4" placeholder="비고 입력"></textarea>
+        </div>
+      </div>
 
       <div class="modal-footer">
         <button id="btn-save-work" class="btn primary">저장</button>

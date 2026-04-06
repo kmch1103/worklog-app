@@ -689,19 +689,28 @@
     if (el.money_material_total) el.money_material_total.innerText = material;
     if (el.money_total_amount) el.money_total_amount.innerText = total;
   }
-
   function renderSelectedMaterialsDetailed() {
-    if (!el['selected-materials-detailed']) return;
-
     el['selected-materials-detailed'].innerHTML =
       state.selectedMaterialsDetailed.map((m, idx) => `
         <div class="material-row">
+
           ${m.name}
-          <input type="number" value="${m.qty}" 
-            onchange="updateMaterialQty(${idx}, this.value)">
+
+          <input type="number" value="${m.qty}" onchange="updateMaterialQty(${idx}, this.value)">
+
+          <select onchange="updateMaterialMethod(${idx}, this.value)">
+            <option value="현금">현금</option>
+            <option value="계좌이체">계좌이체</option>
+            <option value="카드">카드</option>
+            <option value="외상">외상</option>
+          </select>
+
           <button onclick="removeMaterial(${idx})">삭제</button>
+
         </div>
       `).join('');
+  }
+  
 
     updateMoneySummary();
   }
@@ -716,21 +725,51 @@
     renderSelectedMaterialsDetailed();
   };
 
-  function addLaborRow(amount = 0) {
-    const wrap = el['labor-rows-wrap'];
-    if (!wrap) return;
+  function addLaborRow() {
+  const wrap = el['labor-rows-wrap'];
 
-    const div = document.createElement('div');
-    div.className = 'labor-row';
+  const div = document.createElement('div');
+  div.className = 'labor-row';
 
-    div.innerHTML = `
-      <input type="number" class="labor-amount-input" min="0" step="100" value="${Number(amount) || 0}" onchange="updateMoneySummary()">
-      <button type="button" onclick="this.parentElement.remove(); updateMoneySummary()">삭제</button>
-    `;
+  div.innerHTML = `
+    <select class="labor-type">
+      <option value="남자">남자</option>
+      <option value="여자">여자</option>
+      <option value="기타">기타</option>
+    </select>
 
-    wrap.appendChild(div);
+    <input type="number" class="labor-count" placeholder="인원" value="1">
+    <input type="number" class="labor-price" placeholder="단가" value="0">
+
+    <input type="number" class="labor-amount" placeholder="금액" readonly>
+
+    <select class="labor-method">
+      <option value="현금">현금</option>
+      <option value="계좌이체">계좌이체</option>
+      <option value="카드">카드</option>
+      <option value="외상">외상</option>
+    </select>
+
+    <input type="text" class="labor-note" placeholder="비고">
+
+    <button type="button" onclick="this.parentElement.remove(); updateMoneySummary()">삭제</button>
+  `;
+
+  wrap.appendChild(div);
+
+  const count = div.querySelector('.labor-count');
+  const price = div.querySelector('.labor-price');
+  const amount = div.querySelector('.labor-amount');
+
+  function calc() {
+    amount.value = (Number(count.value) || 0) * (Number(price.value) || 0);
     updateMoneySummary();
   }
+
+  count.addEventListener('input', calc);
+  price.addEventListener('input', calc);
+}
+
 
   function resetLaborRows() {
     if (!el['labor-rows-wrap']) return;
@@ -738,10 +777,17 @@
   }
 
   function getLaborRows() {
-    return Array.from(document.querySelectorAll('.labor-amount-input')).map(node => ({
-      amount: Number(node.value) || 0
-    })).filter(row => row.amount > 0);
+    return Array.from(document.querySelectorAll('.labor-row')).map(row => ({
+      type: row.querySelector('.labor-type').value,
+      count: Number(row.querySelector('.labor-count').value),
+      price: Number(row.querySelector('.labor-price').value),
+      amount: Number(row.querySelector('.labor-amount').value),
+      method: row.querySelector('.labor-method').value,
+      note: row.querySelector('.labor-note').value
+    }));
   }
+
+
 
   function updateEndDateFromRepeatDays() {
     if (!el.start_date || !el.end_date) return;
@@ -1428,3 +1474,7 @@
 
   window.updateMoneySummary = updateMoneySummary;
 })();
+
+window.updateMaterialMethod = function(idx, method){
+  state.selectedMaterialsDetailed[idx].method = method;
+}

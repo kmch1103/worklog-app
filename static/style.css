@@ -1153,3 +1153,70 @@ th, td{
     min-width:620px;
   }
 }
+
+/* ===== 자재관리 좌우 분할 ===== */
+.materials-split,
+.materials-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.material-section-panel,
+.materials-split > .panel,
+.materials-sections > .panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.materials-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.material-card {
+  border: 1px solid #dde3ea;
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+}
+
+.material-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.material-meta {
+  font-size: 14px;
+  color: #475569;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.material-memo {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  min-height: 20px;
+}
+
+.material-actions,
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .materials-split,
+  .materials-sections {
+    grid-template-columns: 1fr;
+  }
+}
+

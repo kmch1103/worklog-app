@@ -1220,3 +1220,21 @@ th, td{
   }
 }
 
+.money-toggle {
+  margin: 15px 0;
+}
+
+.money-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.money-toggle input {
+  width: 20px;
+  height: 20px;
+}
+

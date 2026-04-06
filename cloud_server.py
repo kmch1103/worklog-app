@@ -7,6 +7,54 @@ DB = "worklog.db"
 def db():
     return sqlite3.connect(DB)
 
+# =========================
+# DB 초기화 (자동 생성)
+# =========================
+def init_db():
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS works (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_date TEXT,
+        end_date TEXT,
+        weather TEXT,
+        task_name TEXT,
+        crops TEXT,
+        pests TEXT,
+        machines TEXT,
+        work_hours TEXT,
+        memo TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_date TEXT,
+        title TEXT,
+        details TEXT,
+        status TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS materials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        unit TEXT,
+        stock REAL,
+        price REAL,
+        memo TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -21,9 +69,8 @@ def get_works():
     cur.execute("SELECT * FROM works ORDER BY start_date DESC")
     rows = cur.fetchall()
     cols = [c[0] for c in cur.description]
-    result = [dict(zip(cols, r)) for r in rows]
     conn.close()
-    return jsonify(result)
+    return jsonify([dict(zip(cols, r)) for r in rows])
 
 @app.route("/api/works", methods=["POST"])
 def save_work():
@@ -51,43 +98,6 @@ def save_work():
     conn.close()
     return jsonify({"ok": True})
 
-@app.route("/api/works/<int:id>", methods=["PUT"])
-def update_work(id):
-    data = request.json
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute("""
-    UPDATE works SET
-    start_date=?,end_date=?,weather=?,task_name=?,
-    crops=?,pests=?,machines=?,work_hours=?,memo=?
-    WHERE id=?
-    """, (
-        data.get("start_date"),
-        data.get("end_date"),
-        data.get("weather"),
-        data.get("task_name"),
-        data.get("crops"),
-        data.get("pests"),
-        data.get("machines"),
-        data.get("work_hours"),
-        data.get("memo"),
-        id
-    ))
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-@app.route("/api/works/<int:id>", methods=["DELETE"])
-def delete_work(id):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM works WHERE id=?", (id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
 # =========================
 # PLANS
 # =========================
@@ -98,9 +108,8 @@ def get_plans():
     cur.execute("SELECT * FROM plans ORDER BY plan_date DESC")
     rows = cur.fetchall()
     cols = [c[0] for c in cur.description]
-    result = [dict(zip(cols, r)) for r in rows]
     conn.close()
-    return jsonify(result)
+    return jsonify([dict(zip(cols, r)) for r in rows])
 
 @app.route("/api/plans", methods=["POST"])
 def save_plan():
@@ -122,39 +131,8 @@ def save_plan():
     conn.close()
     return jsonify({"ok": True})
 
-@app.route("/api/plans/<int:id>", methods=["PUT"])
-def update_plan(id):
-    data = request.json
-    conn = db()
-    cur = conn.cursor()
-
-    cur.execute("""
-    UPDATE plans SET
-    plan_date=?,title=?,details=?,status=?
-    WHERE id=?
-    """, (
-        data.get("plan_date"),
-        data.get("title"),
-        data.get("details"),
-        data.get("status"),
-        id
-    ))
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-@app.route("/api/plans/<int:id>", methods=["DELETE"])
-def delete_plan(id):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM plans WHERE id=?", (id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
 # =========================
-# OPTIONS
+# OPTIONS (핵심 수정)
 # =========================
 @app.route("/api/options", methods=["GET"])
 def get_options():
@@ -163,11 +141,14 @@ def get_options():
 
     result = {}
     for t in ["weather","crops","tasks","pests","machines"]:
-        try:
-            cur.execute(f"SELECT name FROM options_{t}")
-            result[t] = [r[0] for r in cur.fetchall()]
-        except:
-            result[t] = []
+        cur.execute(f"""
+        CREATE TABLE IF NOT EXISTS options_{t} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT
+        )
+        """)
+        cur.execute(f"SELECT id,name FROM options_{t}")
+        result[t] = [{"id":r[0],"name":r[1]} for r in cur.fetchall()]
 
     conn.close()
     return jsonify(result)
@@ -175,58 +156,65 @@ def get_options():
 @app.route("/api/options/<type>", methods=["POST"])
 def save_option(type):
     data = request.json
-    name = data.get("name")
-
     conn = db()
     cur = conn.cursor()
 
-    cur.execute(f"""
-    CREATE TABLE IF NOT EXISTS options_{type} (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT
-    )
-    """)
-
-    cur.execute(f"INSERT INTO options_{type} (name) VALUES (?)", (name,))
+    cur.execute(f"INSERT INTO options_{type} (name) VALUES (?)", (data["name"],))
     conn.commit()
     conn.close()
+    return jsonify({"ok": True})
 
+@app.route("/api/options/<type>/<int:id>", methods=["PUT"])
+def update_option(type, id):
+    data = request.json
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute(f"UPDATE options_{type} SET name=? WHERE id=?", (data["name"], id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+@app.route("/api/options/<type>/<int:id>", methods=["DELETE"])
+def delete_option(type, id):
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute(f"DELETE FROM options_{type} WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
     return jsonify({"ok": True})
 
 # =========================
-# MONEY
+# MATERIALS (핵심 추가)
 # =========================
-@app.route("/api/money")
-def money():
+@app.route("/api/materials", methods=["GET"])
+def get_materials():
     conn = db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM works")
+    cur.execute("SELECT * FROM materials")
     rows = cur.fetchall()
     cols = [c[0] for c in cur.description]
-
-    result = []
-
-    for r in rows:
-        item = dict(zip(cols, r))
-        try:
-            memo = json.loads(item.get("memo") or "{}")
-        except:
-            memo = {}
-
-        m = memo.get("money")
-        if not m: continue
-
-        result.append({
-            "date": item["start_date"],
-            "task": item["task_name"],
-            "type": m.get("type"),
-            "amount": m.get("total_amount",0),
-            "method": m.get("method"),
-            "note": m.get("note")
-        })
-
     conn.close()
-    return jsonify(result)
+    return jsonify([dict(zip(cols, r)) for r in rows])
 
-if __name__ == "__main__":
-    app.run(debug=True)
+@app.route("/api/materials", methods=["POST"])
+def save_material():
+    data = request.json
+    conn = db()
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT INTO materials (name,unit,stock,price,memo)
+    VALUES (?,?,?,?,?)
+    """, (
+        data.get("name"),
+        data.get("unit"),
+        data.get("stock"),
+        data.get("price"),
+        data.get("memo")
+    ))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})

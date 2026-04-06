@@ -50,7 +50,7 @@
       'btn-save-plan', 'btn-cancel-plan',
       'work-modal', 'work-modal-title', 'btn-close-work-modal',
       'btn-new-work',
-      'start_date', 'end_date', 'weather', 'task_name', 'crops-box', 'pests-box', 'machines-box',
+      'start_date', 'repeat_days', 'end_date', 'weather', 'task_name', 'crops-box', 'pests-box', 'machines-box',
       'labor_cost', 'work_hours', 'memo', 'btn-save-work', 'btn-cancel-work', 'works-list',
       'material_name', 'material_unit', 'material_stock', 'material_price', 'material_memo',
       'btn-save-material', 'btn-open-material-modal', 'btn-close-material-modal', 'btn-cancel-material',
@@ -658,8 +658,8 @@
 
   function getLaborTotal() {
     let total = 0;
-    document.querySelectorAll('.labor-row .labor-amount-input').forEach(el => {
-      total += Number(el.value) || 0;
+    document.querySelectorAll('.labor-row .labor-amount').forEach(node => {
+      total += Number(node.value) || 0;
     });
     return total;
   }
@@ -690,27 +690,25 @@
     if (el.money_total_amount) el.money_total_amount.innerText = total;
   }
   function renderSelectedMaterialsDetailed() {
+    if (!el['selected-materials-detailed']) return;
+
     el['selected-materials-detailed'].innerHTML =
       state.selectedMaterialsDetailed.map((m, idx) => `
         <div class="material-row">
-
           ${m.name}
 
           <input type="number" value="${m.qty}" onchange="updateMaterialQty(${idx}, this.value)">
 
           <select onchange="updateMaterialMethod(${idx}, this.value)">
-            <option value="현금">현금</option>
-            <option value="계좌이체">계좌이체</option>
-            <option value="카드">카드</option>
-            <option value="외상">외상</option>
+            <option value="현금" ${m.method === '현금' ? 'selected' : ''}>현금</option>
+            <option value="계좌이체" ${m.method === '계좌이체' ? 'selected' : ''}>계좌이체</option>
+            <option value="카드" ${m.method === '카드' ? 'selected' : ''}>카드</option>
+            <option value="외상" ${m.method === '외상' ? 'selected' : ''}>외상</option>
           </select>
 
-          <button onclick="removeMaterial(${idx})">삭제</button>
-
+          <button type="button" onclick="removeMaterial(${idx})">삭제</button>
         </div>
       `).join('');
-  }
-  
 
     updateMoneySummary();
   }

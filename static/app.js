@@ -638,7 +638,7 @@
 
     resetLaborRows();
     if (Array.isArray(meta.labor_rows) && meta.labor_rows.length) {
-      meta.labor_rows.forEach(row => addLaborRow(row.amount || 0));
+      meta.labor_rows.forEach(row => addLaborRow(row));
     }
 
     if (meta.money) {
@@ -789,14 +789,7 @@
   calc();
 }
 
-  function calc() {
-    amount.value = (Number(count.value) || 0) * (Number(price.value) || 0);
-    updateMoneySummary();
-  }
-
-  count.addEventListener('input', calc);
-  price.addEventListener('input', calc);
-}
+  
 
 
   function resetLaborRows() {

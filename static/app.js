@@ -35,6 +35,7 @@
     bindWorkButtons();
     bindMaterialButtons();
     bindCalendarDetailModal();
+    bindBackupButtons();
     await loadAll();
     await loadMoney();
     renderAll();
@@ -64,7 +65,8 @@
       'labor-rows-wrap', 'btn-add-labor-row',
       'has_money', 'money-box', 'money_note', 'other_cost', 'money_labor_total', 'money_material_total', 'money_total_amount',
       'money-start', 'money-end', 'money-type-filter', 'money-method-filter',
-      'btn-money-filter', 'money-list', 'money-total', 'money-cash', 'money-card'
+      'btn-money-filter', 'money-list', 'money-total', 'money-cash', 'money-card',
+      'backup-file-input', 'btn-import-old-db', 'backup-import-status'
     ];
 
     ids.forEach(id => {
@@ -133,40 +135,8 @@
     });
   }
 
-  function bindWorkButtons() {
-    on(el['btn-new-work'], 'click', () => openWorkModal());
-    on(el['btn-close-work-modal'], 'click', closeWorkModal);
-    on(el['btn-cancel-work'], 'click', closeWorkModal);
-    on(el['btn-save-work'], 'click', saveWork);
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeWorkModal();
-        closePlanModal();
-        closeCalendarDetailModal();
-        closeMaterialModal();
-      }
-    });
-
-    on(el['material-search-input'], 'input', (e) => {
-      renderMaterialSearchResults(e.target.value || '');
-    });
-
-    on(el['btn-add-labor-row'], 'click', () => addLaborRow());
-
-    on(el['start_date'], 'change', updateEndDateFromRepeatDays);
-    on(el['repeat_days'], 'input', updateEndDateFromRepeatDays);
-
-    on(el['start_time'], 'change', updateWorkHoursFromTime);
-    on(el['end_time'], 'change', updateWorkHoursFromTime);
-
-    on(el['has_money'], 'change', () => {
-      toggleMoneyBox(el['has_money'].checked);
-      updateMoneySummary();
-    });
-
-    on(el['other_cost'], 'input', updateMoneySummary);
-    on(el['btn-money-filter'], 'click', renderMoney);
+  function bindBackupButtons() {
+    on(el['btn-import-old-db'], 'click', importOldDbFile);
   }
 
   function bindMaterialButtons() {
@@ -184,6 +154,56 @@
       renderMaterialPickerResults(keyword);
       autoFillMaterialName(keyword);
     });
+  }
+
+
+  async function importOldDbFile() {
+    const fileInput = el['backup-file-input'];
+    const statusBox = el['backup-import-status'];
+
+    if (!fileInput || !fileInput.files || !fileInput.files.length) {
+      alert('가져올 DB 파일을 먼저 선택하세요.');
+      return;
+    }
+
+    const ok = confirm('현재 작업일지/자재/옵션 데이터가 기존 DB 내용으로 교체됩니다. 계속할까요?');
+    if (!ok) return;
+
+    if (statusBox) statusBox.textContent = '가져오는 중...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+      const res = await fetch('/api/import_old_db', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || '가져오기에 실패했습니다.');
+      }
+
+      await loadAll();
+      await loadMoney();
+      renderAll();
+      renderCalendar();
+
+      if (fileInput) fileInput.value = '';
+
+      const summary = data.imported
+        ? `가져오기 완료: 작업일지 ${formatNumber(data.imported.works || 0)}건 / 자재 ${formatNumber(data.imported.materials || 0)}건`
+        : '가져오기 완료';
+
+      if (statusBox) statusBox.textContent = summary;
+      alert(summary);
+    } catch (e) {
+      console.error(e);
+      if (statusBox) statusBox.textContent = `오류: ${e.message || '가져오기 실패'}`;
+      alert(`가져오기 실패: ${e.message || ''}`);
+    }
   }
 
   function autoFillMaterialName(keyword) {
@@ -474,7 +494,7 @@
     document.querySelectorAll('[data-work-edit]').forEach(btn => {
       btn.addEventListener('click', () => {
         closeCalendarDetailModal();
-        openWorkModalById(btn.dataset.workEdit);
+        editWork(btn.dataset.workEdit);
       });
     });
     document.querySelectorAll('[data-work-delete]').forEach(btn => {
@@ -482,26 +502,35 @@
     });
   }
 
-  function openPlanModal(plan = null) {
-    if (!state.selectedDate && !plan) return;
-
-    state.editingPlanId = plan ? plan.id : null;
+  function openPlanModal(planId = null) {
+    state.editingPlanId = planId ? Number(planId) : null;
     if (el['plan-modal-title']) {
-      el['plan-modal-title'].textContent = plan ? '작업계획 수정' : '작업계획 입력';
+      el['plan-modal-title'].textContent = state.editingPlanId ? '작업계획 수정' : '작업계획 입력';
     }
 
-    el.plan_date.value = plan ? normalizePlanDate(plan.plan_date) : state.selectedDate;
-    el.plan_details.value = plan?.details || '';
-    el.plan_status.value = plan?.status || 'planned';
-    if (el['plan-search']) el['plan-search'].value = '';
-    if (el['plan-search-results']) el['plan-search-results'].innerHTML = '';
-    renderPlanTitleOptions(plan?.title || '');
+    resetPlanForm();
+
+    if (state.editingPlanId) {
+      const plan = state.plans.find(p => Number(p.id) === Number(state.editingPlanId));
+      if (plan) {
+        el.plan_date.value = normalizePlanDate(plan.plan_date) || '';
+        el.plan_title.value = plan.title || '';
+        el.plan_details.value = plan.details || '';
+        el.plan_status.value = plan.status || 'planned';
+      }
+    } else {
+      el.plan_date.value = state.selectedDate || fmtDate(new Date());
+    }
+
+    renderPlanSearchResults();
     removeHidden(el['plan-modal']);
   }
 
   function closePlanModal() {
     addHidden(el['plan-modal']);
-    state.editingPlanId = null;
+  }
+
+  function resetPlanForm() {
     if (el.plan_date) el.plan_date.value = '';
     if (el.plan_title) el.plan_title.value = '';
     if (el.plan_details) el.plan_details.value = '';
@@ -510,57 +539,77 @@
     if (el['plan-search-results']) el['plan-search-results'].innerHTML = '';
   }
 
-  function renderPlanTitleOptions(selectedValue = '') {
-    if (!el.plan_title) return;
-    const current = selectedValue || el.plan_title.value || '';
-    el.plan_title.innerHTML =
-      `<option value="">선택</option>` +
-      state.options.tasks.map(item => {
-        const name = optionName(item);
-        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-      }).join('');
-    setSelectValue(el.plan_title, current);
-    renderPlanSearchResults();
-  }
-
   function renderPlanSearchResults() {
     if (!el['plan-search-results']) return;
-    const keyword = String(el['plan-search']?.value || '').trim();
-    if (!keyword) {
-      el['plan-search-results'].innerHTML = '';
-      return;
-    }
+    const q = (el['plan-search']?.value || '').trim();
+    const list = state.options.tasks || [];
+    const matched = q ? list.filter(item => String(item.name || '').includes(q)).slice(0, 30) : list.slice(0, 30);
 
-    const matched = state.options.tasks.filter(item => optionName(item).includes(keyword));
-    if (!matched.length) {
-      el['plan-search-results'].innerHTML = `<div class="inline-help">검색 결과 없음</div>`;
-      return;
-    }
-
-    el['plan-search-results'].innerHTML = matched.map(item => {
-      const name = optionName(item);
-      return `<button type="button" class="search-result-item" data-plan-title-pick="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
-    }).join('');
+    el['plan-search-results'].innerHTML = matched.map(item => `
+      <button type="button" class="search-result-item" data-plan-title-pick="${escapeHtml(item.name || '')}">
+        ${escapeHtml(item.name || '')}
+      </button>
+    `).join('');
 
     el['plan-search-results'].querySelectorAll('[data-plan-title-pick]').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (el.plan_title) el.plan_title.value = btn.dataset.planTitlePick || '';
-        if (el['plan-search']) el['plan-search'].value = btn.dataset.planTitlePick || '';
-        el['plan-search-results'].innerHTML = '';
+        if (el.plan_title) {
+          ensurePlanTitleOption(btn.dataset.planTitlePick || '');
+          el.plan_title.value = btn.dataset.planTitlePick || '';
+        }
       });
     });
+
+    rebuildPlanTitleSelect(q);
+  }
+
+  function rebuildPlanTitleSelect(searchKeyword = '') {
+    if (!el.plan_title) return;
+    const current = el.plan_title.value || '';
+    const list = (state.options.tasks || []).map(item => item.name || '');
+    const filtered = searchKeyword ? list.filter(name => String(name).includes(searchKeyword)) : list;
+
+    const uniq = Array.from(new Set(filtered.filter(Boolean)));
+    el.plan_title.innerHTML = `<option value="">선택</option>` + uniq.map(name => `
+      <option value="${escapeHtml(name)}">${escapeHtml(name)}</option>
+    `).join('');
+
+    if (current && !uniq.includes(current)) {
+      ensurePlanTitleOption(current);
+    }
+    el.plan_title.value = current;
+  }
+
+  function ensurePlanTitleOption(value) {
+    if (!el.plan_title) return;
+    const name = String(value || '').trim();
+    if (!name) return;
+    const exists = Array.from(el.plan_title.options).some(opt => opt.value === name);
+    if (!exists) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      el.plan_title.appendChild(option);
+    }
   }
 
   async function savePlan() {
+    const title = (el.plan_title?.value || '').trim();
+    if (!el.plan_date?.value) {
+      alert('날짜를 선택하세요.');
+      return;
+    }
+    if (!title) {
+      alert('계획 제목을 선택하세요.');
+      return;
+    }
+
     const payload = {
       plan_date: el.plan_date.value,
-      title: (el.plan_title.value || '').trim(),
-      details: (el.plan_details.value || '').trim(),
-      status: el.plan_status.value || 'planned'
+      title,
+      details: el.plan_details?.value || '',
+      status: el.plan_status?.value || 'planned'
     };
-
-    if (!payload.plan_date) return alert('계획일을 입력하세요.');
-    if (!payload.title) return alert('계획 제목을 선택하세요.');
 
     try {
       if (state.editingPlanId) {
@@ -568,20 +617,32 @@
       } else {
         await apiPost('/api/plans', payload);
       }
+
       await loadPlans();
       closePlanModal();
       renderCalendar();
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
     } catch (e) {
       console.error(e);
-      alert('작업계획 저장 중 오류가 발생했습니다.');
+      alert('계획 저장 실패');
     }
   }
 
-  function editPlan(planId) {
-    const plan = state.plans.find(p => String(p.id) === String(planId));
-    if (!plan) return;
-    openPlanModal(plan);
+  async function editPlan(planId) {
+    openPlanModal(planId);
+  }
+
+  async function deletePlan(planId) {
+    if (!confirm('계획을 삭제할까요?')) return;
+    try {
+      await apiDelete(`/api/plans/${planId}`);
+      await loadPlans();
+      renderCalendar();
+      if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
+    } catch (e) {
+      console.error(e);
+      alert('삭제 실패');
+    }
   }
 
   async function markPlanDone(planId) {
@@ -589,7 +650,7 @@
     if (!plan) return;
 
     try {
-      await apiPut(`/api/plans/${plan.id}`, {
+      await apiPut(`/api/plans/${planId}`, {
         plan_date: normalizePlanDate(plan.plan_date),
         title: plan.title || '',
         details: plan.details || '',
@@ -600,34 +661,58 @@
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
     } catch (e) {
       console.error(e);
-      alert('계획 상태 변경 중 오류가 발생했습니다.');
+      alert('완료 처리 실패');
     }
   }
 
   function convertPlanToWork(planId) {
     const plan = state.plans.find(p => String(p.id) === String(planId));
+    openWorkModal();
     if (!plan) return;
 
-    openWorkModal();
-    el.start_date.value = normalizePlanDate(plan.plan_date);
+    if (el.start_date) el.start_date.value = normalizePlanDate(plan.plan_date) || fmtDate(new Date());
     if (el.repeat_days) el.repeat_days.value = 1;
-    updateEndDateFromRepeatDays();
+    if (el.end_date) el.end_date.value = normalizePlanDate(plan.plan_date) || fmtDate(new Date());
     if (el.task_name) el.task_name.value = plan.title || '';
     if (el.memo) el.memo.value = plan.details || '';
+    updateEndDateFromRepeatDays();
+    updateWorkHoursFromTime();
   }
 
-  async function deletePlan(planId) {
-    if (!confirm('삭제하시겠습니까?')) return;
+  function bindWorkButtons() {
+    on(el['btn-new-work'], 'click', () => openWorkModal());
+    on(el['btn-close-work-modal'], 'click', closeWorkModal);
+    on(el['btn-cancel-work'], 'click', closeWorkModal);
+    on(el['btn-save-work'], 'click', saveWork);
 
-    try {
-      await apiDelete(`/api/plans/${planId}`);
-      await loadPlans();
-      renderCalendar();
-      if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
-    } catch (err) {
-      console.error(err);
-      alert('삭제 실패');
-    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeWorkModal();
+        closePlanModal();
+        closeCalendarDetailModal();
+        closeMaterialModal();
+      }
+    });
+
+    on(el['material-search-input'], 'input', (e) => {
+      renderMaterialSearchResults(e.target.value || '');
+    });
+
+    on(el['btn-add-labor-row'], 'click', () => addLaborRow());
+
+    on(el['start_date'], 'change', updateEndDateFromRepeatDays);
+    on(el['repeat_days'], 'input', updateEndDateFromRepeatDays);
+
+    on(el['start_time'], 'change', updateWorkHoursFromTime);
+    on(el['end_time'], 'change', updateWorkHoursFromTime);
+
+    on(el['has_money'], 'change', () => {
+      toggleMoneyBox(el['has_money'].checked);
+      updateMoneySummary();
+    });
+
+    on(el['other_cost'], 'input', updateMoneySummary);
+    on(el['btn-money-filter'], 'click', renderMoney);
   }
 
   function openWorkModal() {
@@ -644,19 +729,8 @@
     removeHidden(el['work-modal']);
   }
 
-  function openWorkModalById(id) {
-    const work = state.works.find(w => String(w.id) === String(id));
-    if (!work) return;
-
-    state.editingWorkId = work.id;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
-    fillWorkForm(work);
-    removeHidden(el['work-modal']);
-  }
-
   function closeWorkModal() {
     addHidden(el['work-modal']);
-    state.editingWorkId = null;
   }
 
   function resetWorkForm() {
@@ -667,17 +741,24 @@
     if (el.end_time) el.end_time.value = '';
     if (el.weather) el.weather.value = '';
     if (el.task_name) el.task_name.value = '';
-    if (el.work_hours) el.work_hours.value = 0;
     if (el.memo) el.memo.value = '';
+    if (el.work_hours) el.work_hours.value = 0;
+    if (el.labor_cost) el.labor_cost.value = 0;
 
-    clearChipSelections('crops');
-    clearChipSelections('pests');
-    clearChipSelections('machines');
+    setChipSelections('crops', []);
+    setChipSelections('pests', []);
+    setChipSelections('machines', []);
 
-    resetMoneyFields();
-    resetLaborRows();
     state.selectedMaterialsDetailed = [];
     renderSelectedMaterialsDetailed();
+
+    resetLaborRows();
+    addLaborRow();
+
+    resetMoneyFields();
+    updateEndDateFromRepeatDays();
+    updateWorkHoursFromTime();
+    updateMoneySummary();
   }
 
   function fillWorkForm(work) {
@@ -730,195 +811,15 @@
     updateMoneySummary();
   }
 
-  function updateWorkHoursFromTime() {
-    if (!el.start_time || !el.end_time || !el.work_hours) return;
-    const start = el.start_time.value;
-    const end = el.end_time.value;
-    if (!start || !end) return;
+  async function editWork(workId) {
+    const work = state.works.find(item => String(item.id) === String(workId));
+    if (!work) return;
 
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    const startMin = sh * 60 + sm;
-    const endMin = eh * 60 + em;
-    const diff = endMin - startMin;
-    if (diff >= 0) {
-      el.work_hours.value = Math.round((diff / 60) * 10) / 10;
-    }
-  }
-
-  function toggleMoneyBox(show) {
-    if (!el['money-box']) return;
-    el['money-box'].classList.toggle('hidden', !show);
-  }
-
-  function resetMoneyFields() {
-    if (el['has_money']) el['has_money'].checked = false;
-    if (el['other_cost']) el['other_cost'].value = '0';
-    if (el['money_note']) el['money_note'].value = '';
-    updateMoneySummary();
-    toggleMoneyBox(false);
-  }
-
-  function getLaborTotal() {
-    let total = 0;
-    document.querySelectorAll('.labor-row .labor-amount').forEach(node => {
-      total += Number(node.value) || 0;
-    });
-    return total;
-  }
-
-  function getMaterialTotal() {
-    let total = 0;
-    state.selectedMaterialsDetailed.forEach(m => {
-      total += (m.price || 0) * (m.qty || 0);
-    });
-    return total;
-  }
-
-  function getOtherTotal() {
-    return Number(el.other_cost?.value) || 0;
-  }
-
-  function updateMoneySummary() {
-    const labor = getLaborTotal();
-    const material = getMaterialTotal();
-    const other = getOtherTotal();
-    const total = labor + material + other;
-
-    if (el.money_labor_total) el.money_labor_total.innerText = formatNumber(labor);
-    if (el.money_material_total) el.money_material_total.innerText = formatNumber(material);
-    if (el.money_total_amount) el.money_total_amount.innerText = formatNumber(total);
-  }
-
-  function renderSelectedMaterialsDetailed() {
-    if (!el['selected-materials-detailed']) return;
-
-    el['selected-materials-detailed'].innerHTML =
-      state.selectedMaterialsDetailed.map((m, idx) => `
-        <div class="material-row">
-          <span>${escapeHtml(m.name)}</span>
-          <input type="number" value="${m.qty}" min="0" step="0.1" onchange="updateMaterialQty(${idx}, this.value)">
-          <select onchange="updateMaterialMethod(${idx}, this.value)">
-            <option value="현금" ${m.method === '현금' ? 'selected' : ''}>현금</option>
-            <option value="계좌이체" ${m.method === '계좌이체' ? 'selected' : ''}>계좌이체</option>
-            <option value="카드" ${m.method === '카드' ? 'selected' : ''}>카드</option>
-            <option value="외상" ${m.method === '외상' ? 'selected' : ''}>외상</option>
-          </select>
-          <button type="button" class="btn" onclick="removeMaterial(${idx})">삭제</button>
-        </div>
-      `).join('');
-
-    updateMoneySummary();
-  }
-
-  window.updateMaterialQty = function (idx, qty) {
-    state.selectedMaterialsDetailed[idx].qty = Number(qty) || 0;
-    updateMoneySummary();
-  };
-
-  window.updateMaterialMethod = function (idx, method) {
-    state.selectedMaterialsDetailed[idx].method = method;
-  };
-
-  window.removeMaterial = function (idx) {
-    state.selectedMaterialsDetailed.splice(idx, 1);
-    renderSelectedMaterialsDetailed();
-  };
-
-  function addLaborRow(row = null) {
-    const wrap = el['labor-rows-wrap'];
-    if (!wrap) return;
-
-    const div = document.createElement('div');
-    div.className = 'labor-row';
-
-    div.innerHTML = `
-      <select class="labor-type">
-        <option value="남자">남자</option>
-        <option value="여자">여자</option>
-        <option value="기타">기타</option>
-      </select>
-      <input type="number" class="labor-count" placeholder="인원" value="${row?.count ?? 1}">
-      <input type="number" class="labor-price" placeholder="단가" value="${row?.price ?? 0}">
-      <select class="labor-method">
-        <option value="현금">현금</option>
-        <option value="계좌이체">계좌이체</option>
-        <option value="카드">카드</option>
-        <option value="외상">외상</option>
-      </select>
-      <input type="text" class="labor-note" placeholder="비고" value="${escapeHtml(row?.note ?? '')}">
-      <button type="button" class="btn labor-delete-btn">삭제</button>
-      <input type="number" class="labor-amount" placeholder="금액" readonly value="${row?.amount ?? 0}" style="grid-column:1 / -1;">
-    `;
-
-    wrap.appendChild(div);
-
-    const typeEl = div.querySelector('.labor-type');
-    const countEl = div.querySelector('.labor-count');
-    const priceEl = div.querySelector('.labor-price');
-    const methodEl = div.querySelector('.labor-method');
-    const amountEl = div.querySelector('.labor-amount');
-    const deleteBtn = div.querySelector('.labor-delete-btn');
-
-    if (row?.type) typeEl.value = row.type;
-    if (row?.method) methodEl.value = row.method;
-
-    function calc() {
-      const count = Number(countEl.value) || 0;
-      const price = Number(priceEl.value) || 0;
-      amountEl.value = count * price;
-      updateMoneySummary();
-    }
-
-    countEl.addEventListener('input', calc);
-    priceEl.addEventListener('input', calc);
-
-    deleteBtn.addEventListener('click', () => {
-      div.remove();
-      updateMoneySummary();
-    });
-
-    calc();
-  }
-
-  function resetLaborRows() {
-    if (!el['labor-rows-wrap']) return;
-    el['labor-rows-wrap'].innerHTML = '';
-  }
-
-  function getLaborRows() {
-    return Array.from(document.querySelectorAll('.labor-row')).map(row => ({
-      type: row.querySelector('.labor-type')?.value || '',
-      count: Number(row.querySelector('.labor-count')?.value || 0),
-      price: Number(row.querySelector('.labor-price')?.value || 0),
-      amount: Number(row.querySelector('.labor-amount')?.value || 0),
-      method: row.querySelector('.labor-method')?.value || '',
-      note: row.querySelector('.labor-note')?.value || ''
-    })).filter(row => row.amount > 0 || row.count > 0 || row.price > 0);
-  }
-
-  function updateEndDateFromRepeatDays() {
-    if (!el.start_date || !el.end_date) return;
-    const start = el.start_date.value;
-    const repeatDays = Math.max(1, Number(el.repeat_days?.value) || 1);
-    if (!start) {
-      el.end_date.value = '';
-      return;
-    }
-
-    const d = new Date(start + 'T00:00:00');
-    d.setDate(d.getDate() + repeatDays - 1);
-    el.end_date.value = fmtDate(d);
-  }
-
-  function calcRepeatDays(startDate, endDate) {
-    const start = String(startDate || '').slice(0, 10);
-    const end = String(endDate || startDate || '').slice(0, 10);
-    if (!start || !end) return 1;
-    const s = new Date(start + 'T00:00:00');
-    const e = new Date(end + 'T00:00:00');
-    const diff = Math.round((e - s) / 86400000);
-    return diff >= 0 ? diff + 1 : 1;
+    state.editingWorkId = Number(workId);
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
+    resetWorkForm();
+    fillWorkForm(work);
+    removeHidden(el['work-modal']);
   }
 
   async function saveWork() {
@@ -1038,7 +939,7 @@
     }).join('');
 
     document.querySelectorAll('[data-work-edit]').forEach(btn => {
-      btn.addEventListener('click', () => openWorkModalById(btn.dataset.workEdit));
+      btn.addEventListener('click', () => editWork(btn.dataset.workEdit));
     });
 
     document.querySelectorAll('[data-work-delete]').forEach(btn => {
@@ -1048,51 +949,25 @@
 
   function renderWorkCard(work) {
     const meta = parseMemo(work.memo);
-    const money = meta.money || null;
+    const materialsText = formatMaterials(meta.materials);
+    const laborTotal = Number(meta?.money?.labor_total || 0);
+    const materialTotal = Number(meta?.money?.material_total || 0);
+    const totalAmount = Number(meta?.money?.total_amount || 0);
     const memoText = meta.memo_text || '';
-    const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
-    const materials = Array.isArray(meta.materials) ? meta.materials : [];
-    const repeatDays = Number(meta.repeat_days || calcRepeatDays(work.start_date, work.end_date) || 1);
-
-    const laborSummary = laborRows.map(row => {
-      const type = row.type || '';
-      const count = Number(row.count || 0);
-      const price = Number(row.price || 0);
-      return `${type} ${count}명 × ${formatNumber(price)}원`;
-    }).join(', ');
-
-    const laborCountText = laborRows.map(row => {
-      const type = row.type || '';
-      const count = Number(row.count || 0);
-      return `${type} ${count}명`;
-    }).join(', ');
-
-    const materialText = materials.map(m => {
-      const name = m.name || '';
-      const qty = Number(m.qty || 0);
-      const unit = m.unit || '';
-      return `${name} ${qty}${unit}`;
-    }).join(', ');
-
-    const timeText = meta.start_time && meta.end_time
-      ? `${meta.start_time} ~ ${meta.end_time}`
-      : '';
 
     return `
       <div class="work-card">
         <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
-        <div>기간: ${escapeHtml(work.start_date || '')}${work.end_date && work.end_date !== work.start_date ? ' ~ ' + escapeHtml(work.end_date) : ''}${repeatDays > 1 ? ` (${repeatDays}일)` : ''}</div>
-        <div>시간: ${escapeHtml(timeText)}${timeText ? ' / ' : ''}${escapeHtml(String(work.work_hours || 0))}시간</div>
+        <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
+        <div>날씨: ${escapeHtml(work.weather || '')}</div>
         <div>작물: ${escapeHtml(work.crops || '')}</div>
         <div>병충해: ${escapeHtml(work.pests || '')}</div>
         <div>사용기계: ${escapeHtml(work.machines || '')}</div>
-        <div>사용자재: ${escapeHtml(materialText)}</div>
-        <div>인부: ${escapeHtml(laborCountText)}</div>
-        <div>인건비 상세: ${escapeHtml(laborSummary)}</div>
-        <div>인건비: ${formatNumber(money?.labor_total || 0)}원</div>
-        <div>자재비: ${formatNumber(money?.material_total || 0)}원</div>
-        <div>기타비: ${formatNumber(money?.other_total || 0)}원</div>
-        <div><strong>총비용: ${formatNumber(money?.total_amount || 0)}원</strong></div>
+        <div>사용자재: ${escapeHtml(materialsText)}</div>
+        <div>작업시간: ${formatNumber(work.work_hours || 0)}시간</div>
+        <div>인건비: ${formatNumber(laborTotal)}원</div>
+        <div>자재비: ${formatNumber(materialTotal)}원</div>
+        <div><strong>총비용: ${formatNumber(totalAmount || 0)}원</strong></div>
         <div>비고: ${escapeHtml(memoText)}</div>
         <div class="item-actions">
           <button class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
@@ -1175,8 +1050,9 @@
     return `
       <div class="material-card">
         <div class="material-name">${escapeHtml(item.name || '')}</div>
-        <div class="material-meta">단위: ${escapeHtml(item.unit || '')} / 재고: ${formatNumber(item.stock_qty || 0)} / 단가: ${formatNumber(item.unit_price || 0)}</div>
-        <div class="material-memo">${escapeHtml(item.memo || '')}</div>
+        <div class="material-meta">단위: ${escapeHtml(item.unit || '')} / 재고: ${formatNumber(item.stock_qty || 0)}</div>
+        <div class="material-meta">단가: ${formatNumber(item.unit_price || 0)}원</div>
+        <div class="material-meta">${escapeHtml(item.memo || '')}</div>
         <div class="item-actions">
           <button class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
           <button class="btn" data-material-delete="${escapeHtml(String(item.id))}">삭제</button>
@@ -1185,48 +1061,81 @@
     `;
   }
 
-  function openMaterialModal(id = null) {
-    state.editingMaterialId = id ? Number(id) : null;
-    const item = state.materials.find(m => String(m.id) === String(id));
-
+  function openMaterialModal(materialId = null) {
+    state.editingMaterialId = materialId ? Number(materialId) : null;
     if (el['material-modal-title']) {
-      el['material-modal-title'].textContent = item ? '자재 수정' : '자재 추가';
+      el['material-modal-title'].textContent = state.editingMaterialId ? '자재 수정' : '자재 추가';
     }
 
-    if (item) {
-      el['material_name'].value = item.name || '';
-      el['material_unit'].value = item.unit || '';
-      el['material_stock'].value = item.stock_qty || 0;
-      el['material_price'].value = item.unit_price || 0;
-      el['material_memo'].value = item.memo || '';
-    } else {
-      el['material_name'].value = '';
-      el['material_unit'].value = '';
-      el['material_stock'].value = '';
-      el['material_price'].value = '';
-      el['material_memo'].value = '';
-      if (el['material-search-keyword']) el['material-search-keyword'].value = '';
-      if (el['material-search-box']) el['material-search-box'].innerHTML = '';
+    resetMaterialForm();
+
+    if (state.editingMaterialId) {
+      const item = state.materials.find(m => Number(m.id) === Number(state.editingMaterialId));
+      if (item) {
+        el.material_name.value = item.name || '';
+        el.material_unit.value = item.unit || state.materialUnits[0] || '';
+        el.material_stock.value = item.stock_qty || 0;
+        el.material_price.value = item.unit_price || 0;
+        el.material_memo.value = item.memo || '';
+      }
     }
 
+    renderMaterialPickerResults('');
     removeHidden(el['material-modal']);
   }
 
   function closeMaterialModal() {
     addHidden(el['material-modal']);
-    state.editingMaterialId = null;
+  }
+
+  function resetMaterialForm() {
+    if (el.material_name) el.material_name.value = '';
+    if (el.material_unit) el.material_unit.value = state.materialUnits[0] || '';
+    if (el.material_stock) el.material_stock.value = 0;
+    if (el.material_price) el.material_price.value = 0;
+    if (el.material_memo) el.material_memo.value = '';
+    if (el['material-search-keyword']) el['material-search-keyword'].value = '';
+    if (el['material-search-box']) el['material-search-box'].innerHTML = '';
+  }
+
+  function renderMaterialPickerResults(keyword) {
+    if (!el['material-search-box']) return;
+
+    const q = String(keyword || '').trim();
+    const list = !q
+      ? state.materials.slice(0, 20)
+      : state.materials.filter(item => (item.name || '').includes(q)).slice(0, 20);
+
+    el['material-search-box'].innerHTML = list.map(item => `
+      <button type="button" class="search-result-item" data-material-fill="${escapeHtml(String(item.id))}">
+        ${escapeHtml(item.name || '')}
+      </button>
+    `).join('');
+
+    el['material-search-box'].querySelectorAll('[data-material-fill]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = state.materials.find(m => String(m.id) === String(btn.dataset.materialFill));
+        if (!item) return;
+        el.material_name.value = item.name || '';
+        el.material_unit.value = item.unit || state.materialUnits[0] || '';
+        el.material_price.value = item.unit_price || 0;
+      });
+    });
   }
 
   async function saveMaterial() {
     const payload = {
-      name: (el['material_name']?.value || '').trim(),
-      unit: el['material_unit']?.value || '',
-      stock_qty: Number(el['material_stock']?.value || 0),
-      unit_price: Number(el['material_price']?.value || 0),
-      memo: (el['material_memo']?.value || '').trim()
+      name: (el.material_name?.value || '').trim(),
+      unit: el.material_unit?.value || '',
+      stock_qty: Number(el.material_stock?.value || 0),
+      unit_price: Number(el.material_price?.value || 0),
+      memo: (el.material_memo?.value || '').trim()
     };
 
-    if (!payload.name) return alert('자재명을 입력하세요.');
+    if (!payload.name) {
+      alert('자재명을 입력하세요.');
+      return;
+    }
 
     try {
       if (state.editingMaterialId) {
@@ -1236,25 +1145,183 @@
       }
 
       await loadMaterials();
+      await loadOptions();
       renderMaterials();
-      closeMaterialModal();
+      renderOptions();
+      resetMaterialForm();
+
+      if (state.editingMaterialId) {
+        closeMaterialModal();
+      } else if (el.material_unit) {
+        el.material_unit.value = payload.unit || state.materialUnits[0] || '';
+      }
     } catch (e) {
       console.error(e);
       alert('자재 저장 실패');
     }
   }
 
-  async function deleteMaterial(id) {
-    if (!confirm('삭제하시겠습니까?')) return;
+  async function deleteMaterial(materialId) {
+    if (!confirm('자재를 삭제할까요?')) return;
+    try {
+      await apiDelete(`/api/materials/${materialId}`);
+      await loadMaterials();
+      await loadOptions();
+      renderMaterials();
+      renderOptions();
+    } catch (e) {
+      console.error(e);
+      alert('삭제 실패');
+    }
+  }
+
+  function renderOptions() {
+    renderOptionList('weather', el['options-weather']);
+    renderOptionList('crops', el['options-crops']);
+    renderOptionList('tasks', el['options-tasks']);
+    renderOptionList('pests', el['options-pests']);
+    renderOptionList('machines', el['options-machines']);
+    renderWorkFormOptions();
+    rebuildPlanTitleSelect(el['plan-search']?.value || '');
+  }
+
+  function renderOptionList(type, target) {
+    if (!target) return;
+    const list = state.options[type] || [];
+    target.innerHTML = list.map(item => `
+      <div class="option-item">
+        <span>${escapeHtml(item.name || '')}</span>
+        <div class="item-actions">
+          <button class="btn" data-option-edit="${escapeHtml(type)}|${escapeHtml(String(item.id))}">수정</button>
+          <button class="btn" data-option-delete="${escapeHtml(type)}|${escapeHtml(String(item.id))}">삭제</button>
+        </div>
+      </div>
+    `).join('');
+
+    target.querySelectorAll('[data-option-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const [optionType, optionId] = (btn.dataset.optionEdit || '').split('|');
+        editOption(optionType, optionId);
+      });
+    });
+
+    target.querySelectorAll('[data-option-delete]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const [optionType, optionId] = (btn.dataset.optionDelete || '').split('|');
+        deleteOption(optionType, optionId);
+      });
+    });
+  }
+
+  async function saveOption(type, inputId) {
+    const input = document.getElementById(inputId);
+    const name = (input?.value || '').trim();
+    if (!name) return;
 
     try {
-      await apiDelete(`/api/materials/${id}`);
+      await apiPost(`/api/options/${type}`, { name });
+      if (input) input.value = '';
+      await loadOptions();
       await loadMaterials();
+      renderOptions();
       renderMaterials();
     } catch (e) {
       console.error(e);
-      alert('자재 삭제 실패');
+      alert('옵션 저장 실패');
     }
+  }
+
+  async function editOption(type, optionId) {
+    const list = state.options[type] || [];
+    const row = list.find(item => String(item.id) === String(optionId));
+    if (!row) return;
+
+    const newName = prompt('새 이름', row.name || '');
+    if (newName === null) return;
+
+    try {
+      await apiPut(`/api/options/${type}/${optionId}`, { name: newName });
+      await loadOptions();
+      await loadMaterials();
+      renderOptions();
+      renderMaterials();
+    } catch (e) {
+      console.error(e);
+      alert('옵션 수정 실패');
+    }
+  }
+
+  async function deleteOption(type, optionId) {
+    if (!confirm('삭제할까요?')) return;
+
+    try {
+      await apiDelete(`/api/options/${type}/${optionId}`);
+      await loadOptions();
+      await loadMaterials();
+      renderOptions();
+      renderMaterials();
+    } catch (e) {
+      console.error(e);
+      alert('옵션 삭제 실패');
+    }
+  }
+
+  function renderWorkFormOptions() {
+    renderSelectOptions(el.weather, state.options.weather, true);
+    renderChipBox(el['crops-box'], state.options.crops, 'crops');
+    renderChipBox(el['pests-box'], state.options.pests, 'pests');
+    renderChipBox(el['machines-box'], state.options.machines, 'machines');
+
+    if (el.material_unit) {
+      el.material_unit.innerHTML = state.materialUnits.map(unit => `
+        <option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>
+      `).join('');
+    }
+
+    rebuildPlanTitleSelect(el['plan-search']?.value || '');
+  }
+
+  function renderSelectOptions(target, list, includeDefault = false) {
+    if (!target) return;
+    const current = target.value;
+    target.innerHTML =
+      (includeDefault ? `<option value="">선택</option>` : '') +
+      (list || []).map(item => `<option value="${escapeHtml(item.name || '')}">${escapeHtml(item.name || '')}</option>`).join('');
+    target.value = current || '';
+  }
+
+  function renderChipBox(target, list, groupName) {
+    if (!target) return;
+    const selectedValues = getSelectedChipValues(groupName);
+
+    target.innerHTML = (list || []).map(item => {
+      const name = item.name || '';
+      const active = selectedValues.includes(name);
+      return `
+        <button type="button" class="chip ${active ? 'active' : ''}" data-chip-group="${escapeHtml(groupName)}" data-chip-value="${escapeHtml(name)}">
+          ${escapeHtml(name)}
+        </button>
+      `;
+    }).join('');
+
+    target.querySelectorAll('[data-chip-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+      });
+    });
+  }
+
+  function getSelectedChipValues(groupName) {
+    return Array.from(document.querySelectorAll(`[data-chip-group="${groupName}"].active`))
+      .map(node => node.dataset.chipValue || '')
+      .filter(Boolean);
+  }
+
+  function setChipSelections(groupName, values) {
+    const wanted = new Set((values || []).map(v => String(v).trim()).filter(Boolean));
+    document.querySelectorAll(`[data-chip-group="${groupName}"]`).forEach(node => {
+      node.classList.toggle('active', wanted.has(node.dataset.chipValue || ''));
+    });
   }
 
   function renderMaterialSearchResults(keyword) {
@@ -1295,142 +1362,188 @@
     });
   }
 
-  function renderMaterialPickerResults(keyword) {
-    if (!el['material-search-box']) return;
+  function renderSelectedMaterialsDetailed() {
+    if (!el['selected-materials-detailed']) return;
 
-    const q = (keyword || '').trim();
-    const matched = !q
-      ? state.materials
-      : state.materials.filter(item => (item.name || '').includes(q));
-
-    el['material-search-box'].innerHTML = matched.map(item => `
-      <div class="material-picker-row">
-        <span>${escapeHtml(item.name || '')}</span>
-      </div>
-    `).join('');
-  }
-
-  function renderOptions() {
-    renderOptionList('weather', 'options-weather');
-    renderOptionList('crops', 'options-crops');
-    renderOptionList('tasks', 'options-tasks');
-    renderOptionList('pests', 'options-pests');
-    renderOptionList('machines', 'options-machines');
-  }
-
-  function renderOptionList(type, targetId) {
-    const node = el[targetId];
-    if (!node) return;
-
-    const items = state.options[type] || [];
-    node.innerHTML = items.map(item => {
-      const id = optionId(item);
-      const name = optionName(item);
-      return `
-        <div class="option-item">
-          <span>${escapeHtml(name)}</span>
-          <button class="btn" onclick="editOption('${escapeHtml(type)}', '${escapeHtml(String(id))}', '${escapeHtml(name)}')">수정</button>
-          <button class="btn" onclick="removeOption('${escapeHtml(type)}', '${escapeHtml(String(id))}')">삭제</button>
+    el['selected-materials-detailed'].innerHTML =
+      state.selectedMaterialsDetailed.map((m, idx) => `
+        <div class="material-row">
+          <span>${escapeHtml(m.name)}</span>
+          <input type="number" value="${m.qty}" min="0" step="0.1" onchange="updateMaterialQty(${idx}, this.value)">
+          <select onchange="updateMaterialMethod(${idx}, this.value)">
+            <option value="현금" ${m.method === '현금' ? 'selected' : ''}>현금</option>
+            <option value="계좌이체" ${m.method === '계좌이체' ? 'selected' : ''}>계좌이체</option>
+            <option value="카드" ${m.method === '카드' ? 'selected' : ''}>카드</option>
+            <option value="외상" ${m.method === '외상' ? 'selected' : ''}>외상</option>
+          </select>
+          <button type="button" class="btn" onclick="removeMaterial(${idx})">삭제</button>
         </div>
-      `;
-    }).join('');
+      `).join('');
+
+    updateMoneySummary();
   }
 
-  window.saveOption = async function (type, inputId) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-
-    const name = (input.value || '').trim();
-    if (!name) return alert('값을 입력하세요.');
-
-    try {
-      await apiPost(`/api/options/${type}`, { name });
-      input.value = '';
-      await loadOptions();
-      renderOptions();
-      renderWorkFormOptions();
-    } catch (e) {
-      console.error(e);
-      alert('옵션 저장 실패');
-    }
-  };
-
-  window.editOption = async function (type, id, oldName) {
-    const name = prompt('수정할 이름', oldName || '');
-    if (name === null) return;
-    const trimmed = name.trim();
-    if (!trimmed) return;
-
-    try {
-      await apiPut(`/api/options/${type}/${id}`, { name: trimmed });
-      await loadOptions();
-      renderOptions();
-      renderWorkFormOptions();
-    } catch (e) {
-      console.error(e);
-      alert('옵션 수정 실패');
-    }
-  };
-
-  window.removeOption = async function (type, id) {
-    if (!confirm('삭제하시겠습니까?')) return;
-
-    try {
-      await apiDelete(`/api/options/${type}/${id}`);
-      await loadOptions();
-      renderOptions();
-      renderWorkFormOptions();
-    } catch (e) {
-      console.error(e);
-      alert('옵션 삭제 실패');
-    }
-  };
-
-  function renderWorkFormOptions() {
-    renderSelectOptions(el.weather, state.options.weather, true);
-    renderSelectOptions(el.task_name, state.options.tasks, true);
-    renderChipBox(el['crops-box'], state.options.crops, 'crops');
-    renderChipBox(el['pests-box'], state.options.pests, 'pests');
-    renderChipBox(el['machines-box'], state.options.machines, 'machines');
+  function updateMaterialQty(index, value) {
+    if (!state.selectedMaterialsDetailed[index]) return;
+    state.selectedMaterialsDetailed[index].qty = Number(value || 0);
+    updateMoneySummary();
   }
 
-  function renderSelectOptions(selectEl, items, includeEmpty = false) {
-    if (!selectEl) return;
-    const current = selectEl.value || '';
-    selectEl.innerHTML =
-      (includeEmpty ? `<option value="">선택</option>` : '') +
-      (items || []).map(item => {
-        const name = optionName(item);
-        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-      }).join('');
-    setSelectValue(selectEl, current);
+  function updateMaterialMethod(index, value) {
+    if (!state.selectedMaterialsDetailed[index]) return;
+    state.selectedMaterialsDetailed[index].method = value || '현금';
+    updateMoneySummary();
   }
 
-  function renderChipBox(container, items, type) {
-    if (!container) return;
+  function removeMaterial(index) {
+    state.selectedMaterialsDetailed.splice(index, 1);
+    renderSelectedMaterialsDetailed();
+  }
 
-    let selectedValues = [];
-    if (type === 'crops') selectedValues = getSelectedChipValues('crops');
-    if (type === 'pests') selectedValues = getSelectedChipValues('pests');
-    if (type === 'machines') selectedValues = getSelectedChipValues('machines');
+  function resetLaborRows() {
+    if (el['labor-rows-wrap']) el['labor-rows-wrap'].innerHTML = '';
+  }
 
-    container.innerHTML = (items || []).map(item => {
-      const name = optionName(item);
-      const active = selectedValues.includes(name) ? 'active' : '';
-      return `<button type="button" class="chip ${active}" data-chip-type="${escapeHtml(type)}" data-chip-value="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
-    }).join('');
+  function addLaborRow(data = null) {
+    if (!el['labor-rows-wrap']) return;
 
-    container.querySelectorAll('[data-chip-type]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.classList.toggle('active');
-      });
+    const row = document.createElement('div');
+    row.className = 'labor-row';
+    row.innerHTML = `
+      <select class="labor-type">
+        <option value="">구분</option>
+        <option value="남자">남자</option>
+        <option value="여자">여자</option>
+        <option value="기타">기타</option>
+      </select>
+      <input type="number" class="labor-count" min="0" step="1" value="0" placeholder="인원수">
+      <input type="number" class="labor-price" min="0" step="1000" value="0" placeholder="단가">
+      <input type="number" class="labor-amount" min="0" step="1000" value="0" placeholder="금액" readonly>
+      <select class="labor-method">
+        <option value="현금">현금</option>
+        <option value="계좌이체">계좌이체</option>
+        <option value="카드">카드</option>
+        <option value="외상">외상</option>
+      </select>
+      <div style="display:flex; gap:8px;">
+        <input type="text" class="labor-note" placeholder="비고">
+        <button type="button" class="btn labor-remove">삭제</button>
+      </div>
+    `;
+
+    el['labor-rows-wrap'].appendChild(row);
+
+    if (data) {
+      row.querySelector('.labor-type').value = data.type || '';
+      row.querySelector('.labor-count').value = Number(data.count || 0);
+      row.querySelector('.labor-price').value = Number(data.price || 0);
+      row.querySelector('.labor-method').value = data.method || '현금';
+      row.querySelector('.labor-note').value = data.note || '';
+    }
+
+    const recalc = () => {
+      const count = Number(row.querySelector('.labor-count').value || 0);
+      const price = Number(row.querySelector('.labor-price').value || 0);
+      row.querySelector('.labor-amount').value = count * price;
+      updateMoneySummary();
+    };
+
+    row.querySelector('.labor-count').addEventListener('input', recalc);
+    row.querySelector('.labor-price').addEventListener('input', recalc);
+    row.querySelector('.labor-method').addEventListener('change', updateMoneySummary);
+    row.querySelector('.labor-note').addEventListener('input', updateMoneySummary);
+    row.querySelector('.labor-remove').addEventListener('click', () => {
+      row.remove();
+      updateMoneySummary();
     });
+
+    recalc();
   }
 
-  function getSelectedChipValues(type) {
-    return Array.from(document.querySelectorAll(`[data-chip-type="${type}"].active`))
-      .map(node => node.dataset.chipValue)
-      .filter(Boolean);
+  function getLaborRows() {
+    return Array.from(document.querySelectorAll('.labor-row')).map(row => ({
+      type: row.querySelector('.labor-type')?.value || '',
+      count: Number(row.querySelector('.labor-count')?.value || 0),
+      price: Number(row.querySelector('.labor-price')?.value || 0),
+      amount: Number(row.querySelector('.labor-amount')?.value || 0),
+      method: row.querySelector('.labor-method')?.value || '',
+      note: row.querySelector('.labor-note')?.value || ''
+    })).filter(row => row.amount > 0 || row.count > 0 || row.price > 0);
+  }
+
+  function getLaborTotal() {
+    return getLaborRows().reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  }
+
+  function getMaterialTotal() {
+    return (state.selectedMaterialsDetailed || []).reduce((sum, item) => {
+      return sum + (Number(item.qty || 0) * Number(item.price || 0));
+    }, 0);
+  }
+
+  function getOtherTotal() {
+    return Number(el.other_cost?.value || 0);
+  }
+
+  function updateMoneySummary() {
+    const labor = getLaborTotal();
+    const material = getMaterialTotal();
+    const other = getOtherTotal();
+    const total = labor + material + other;
+
+    if (el.money_labor_total) el.money_labor_total.innerText = formatNumber(labor);
+    if (el.money_material_total) el.money_material_total.innerText = formatNumber(material);
+    if (el.money_total_amount) el.money_total_amount.innerText = formatNumber(total);
+  }
+
+  function toggleMoneyBox(show) {
+    if (!el['money-box']) return;
+    el['money-box'].classList.toggle('hidden', !show);
+  }
+
+  function resetMoneyFields() {
+    if (el.has_money) el.has_money.checked = false;
+    toggleMoneyBox(false);
+    if (el.money_note) el.money_note.value = '';
+    if (el.other_cost) el.other_cost.value = 0;
+    updateMoneySummary();
+  }
+
+  function updateEndDateFromRepeatDays() {
+    if (!el.start_date || !el.end_date || !el.repeat_days) return;
+
+    const start = el.start_date.value;
+    const repeatDays = Math.max(1, Number(el.repeat_days.value || 1));
+    if (!start) {
+      el.end_date.value = '';
+      return;
+    }
+
+    const startDate = parseDate(start);
+    if (!startDate) {
+      el.end_date.value = '';
+      return;
+    }
+
+    const endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + repeatDays - 1);
+    el.end_date.value = fmtDate(endDate);
+  }
+
+  function updateWorkHoursFromTime() {
+    if (!el.start_time || !el.end_time || !el.work_hours) return;
+    const start = el.start_time.value || '';
+    const end = el.end_time.value || '';
+
+    if (!start || !end) return;
+
+    const startMinutes = parseTimeToMinutes(start);
+    const endMinutes = parseTimeToMinutes(end);
+    if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes)) return;
+
+    let diff = endMinutes - startMinutes;
+    if (diff < 0) diff += 24 * 60;
+
+    el.work_hours.value = (diff / 60).toFixed(1).replace(/\.0$/, '');
   }
 
   function renderMoney() {
@@ -1474,68 +1587,6 @@
     `;
   }
 
-  async function apiGet(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return res.json();
-  }
-
-  async function apiPost(url, payload) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-    if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return res.json();
-  }
-
-  async function apiPut(url, payload) {
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-    if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return res.json();
-  }
-
-  async function apiDelete(url) {
-    const res = await fetch(url, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`${url} ${res.status}`);
-    return res.json();
-  }
-
-  function on(node, eventName, handler) {
-    if (node) node.addEventListener(eventName, handler);
-  }
-
-  function addHidden(node) {
-    if (node) node.classList.add('hidden');
-  }
-
-  function removeHidden(node) {
-    if (node) node.classList.remove('hidden');
-  }
-
-  function fmtDate(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
-
-  function normalizePlanDate(v) {
-    if (!v) return '';
-    return String(v).slice(0, 10);
-  }
-
-  function isDateInRange(dateStr, startDate, endDate) {
-    const start = String(startDate || '').slice(0, 10);
-    const end = String(endDate || startDate || '').slice(0, 10);
-    return start <= dateStr && dateStr <= end;
-  }
-
   function parseMemo(memo) {
     if (!memo) return {};
     try {
@@ -1557,52 +1608,119 @@
     return String(materials);
   }
 
-  function normalizeOptions(items) {
-    return Array.isArray(items) ? items : [];
+  function normalizeOptions(list) {
+    return (list || []).map(item => ({
+      id: item.id,
+      name: item.name || item.항목 || item.이름 || ''
+    })).filter(item => item.name);
   }
 
-  function optionName(item) {
-    if (typeof item === 'string') return item;
-    return item?.name || '';
+  function normalizePlanDate(value) {
+    if (!value) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const d = parseDate(value);
+    return d ? fmtDate(d) : '';
   }
 
-  function optionId(item) {
-    if (typeof item === 'string') return item;
-    return item?.id ?? item?.name ?? '';
-  }
-
-  function setSelectValue(selectEl, value) {
-    if (!selectEl) return;
-    const values = Array.from(selectEl.options).map(opt => opt.value);
-    selectEl.value = values.includes(value) ? value : '';
+  function isDateInRange(targetDate, startDate, endDate) {
+    const start = normalizePlanDate(startDate);
+    const end = normalizePlanDate(endDate || startDate);
+    return targetDate >= start && targetDate <= end;
   }
 
   function splitCsv(value) {
     return String(value || '').split(',').map(v => v.trim()).filter(Boolean);
   }
 
-  function clearChipSelections(type) {
-    document.querySelectorAll(`[data-chip-type="${type}"]`).forEach(node => node.classList.remove('active'));
+  function calcRepeatDays(startDate, endDate) {
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    if (!start || !end) return 1;
+    const diff = Math.round((end - start) / (1000 * 60 * 60 * 24));
+    return Math.max(1, diff + 1);
   }
 
-  function setChipSelections(type, values) {
-    clearChipSelections(type);
-    const set = new Set(values || []);
-    document.querySelectorAll(`[data-chip-type="${type}"]`).forEach(node => {
-      if (set.has(node.dataset.chipValue)) node.classList.add('active');
-    });
+  function parseDate(value) {
+    if (!value) return null;
+    const parts = String(value).split('-').map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function parseTimeToMinutes(value) {
+    const parts = String(value || '').split(':').map(Number);
+    if (parts.length !== 2 || parts.some(Number.isNaN)) return NaN;
+    return parts[0] * 60 + parts[1];
+  }
+
+  function fmtDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
   function escapeHtml(value) {
     return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
   }
 
   function formatNumber(value) {
-    return Number(value || 0).toLocaleString('ko-KR');
+    const num = Number(value || 0);
+    if (!Number.isFinite(num)) return '0';
+    return new Intl.NumberFormat('ko-KR').format(num);
   }
+
+  async function apiGet(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`GET ${url} failed`);
+    return res.json();
+  }
+
+  async function apiPost(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    if (!res.ok) throw new Error(`POST ${url} failed`);
+    return res.json();
+  }
+
+  async function apiPut(url, body) {
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    if (!res.ok) throw new Error(`PUT ${url} failed`);
+    return res.json();
+  }
+
+  async function apiDelete(url) {
+    const res = await fetch(url, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`DELETE ${url} failed`);
+    return res.json();
+  }
+
+  function on(node, eventName, handler) {
+    if (node) node.addEventListener(eventName, handler);
+  }
+
+  function addHidden(node) {
+    if (node) node.classList.add('hidden');
+  }
+
+  function removeHidden(node) {
+    if (node) node.classList.remove('hidden');
+  }
+
+  window.saveOption = saveOption;
+  window.updateMaterialQty = updateMaterialQty;
+  window.updateMaterialMethod = updateMaterialMethod;
+  window.removeMaterial = removeMaterial;
 })();

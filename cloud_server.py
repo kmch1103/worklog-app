@@ -12,17 +12,42 @@ def db():
     return conn
 
 
+def rows_to_dicts(rows):
+    return [dict(r) for r in rows]
+
+
 def ensure_column(cur, table_name, column_name, column_def):
     cols = [r["name"] for r in cur.execute(f"PRAGMA table_info({table_name})").fetchall()]
     if column_name not in cols:
         cur.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
 
 
+def normalize_name(value):
+    return (value or "").strip()
+
+
+def sync_material_option(cur, material_name):
+    name = normalize_name(material_name)
+    if not name:
+        return
+
+    row = cur.execute(
+        "SELECT id FROM options_materials WHERE name = ?",
+        (name,)
+    ).fetchone()
+
+    if not row:
+        cur.execute(
+            "INSERT INTO options_materials (name) VALUES (?)",
+            (name,)
+        )
+
+
 def init_db():
     conn = db()
     cur = conn.cursor()
 
-    # 작업일지
+    # works
     cur.execute("""
     CREATE TABLE IF NOT EXISTS works (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +63,7 @@ def init_db():
     )
     """)
 
-    # 작업계획
+    # plans
     cur.execute("""
     CREATE TABLE IF NOT EXISTS plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +74,7 @@ def init_db():
     )
     """)
 
-    # 자재관리
+    # materials
     cur.execute("""
     CREATE TABLE IF NOT EXISTS materials (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,15 +86,13 @@ def init_db():
     )
     """)
 
-    # 혹시 예전 materials 테이블이 stock / price 필드만 가진 경우 대비
+    ensure_column(cur, "materials", "unit", "TEXT DEFAULT ''")
     ensure_column(cur, "materials", "stock_qty", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "unit_price", "REAL DEFAULT 0")
-    ensure_column(cur, "materials", "unit", "TEXT DEFAULT ''")
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
 
-    # 옵션 테이블들
-    option_types = ["weather", "crops", "tasks", "pests", "materials", "machines"]
-    for t in option_types:
+    # option tables
+    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
         cur.execute(f"""
         CREATE TABLE IF NOT EXISTS options_{t} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,29 +107,6 @@ def init_db():
 init_db()
 
 
-def rows_to_dicts(rows):
-    return [dict(r) for r in rows]
-
-
-def normalize_option_name(name):
-    return (name or "").strip()
-
-
-def sync_material_option(cur, material_name):
-    name = normalize_option_name(material_name)
-    if not name:
-        return
-    row = cur.execute(
-        "SELECT id FROM options_materials WHERE name = ?",
-        (name,)
-    ).fetchone()
-    if not row:
-        cur.execute(
-            "INSERT INTO options_materials (name) VALUES (?)",
-            (name,)
-        )
-
-
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -118,7 +118,9 @@ def index():
 @app.route("/api/works", methods=["GET"])
 def get_works():
     conn = db()
-    rows = conn.execute("SELECT * FROM works ORDER BY start_date DESC, id DESC").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM works ORDER BY start_date DESC, id DESC"
+    ).fetchall()
     conn.close()
     return jsonify(rows_to_dicts(rows))
 
@@ -201,7 +203,9 @@ def delete_work(work_id):
 @app.route("/api/plans", methods=["GET"])
 def get_plans():
     conn = db()
-    rows = conn.execute("SELECT * FROM plans ORDER BY plan_date DESC, id DESC").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM plans ORDER BY plan_date DESC, id DESC"
+    ).fetchall()
     conn.close()
     return jsonify(rows_to_dicts(rows))
 
@@ -266,9 +270,10 @@ def delete_plan(plan_id):
 @app.route("/api/options", methods=["GET"])
 def get_options():
     conn = db()
-    result = {}
 
-    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
+    # 프론트에서 지금 쓰는 것만 내려줌
+    result = {}
+    for t in ["weather", "crops", "tasks", "pests", "machines"]:
         rows = conn.execute(
             f"SELECT id, name FROM options_{t} ORDER BY name"
         ).fetchall()
@@ -280,21 +285,34 @@ def get_options():
 
 @app.route("/api/options/<option_type>", methods=["POST"])
 def create_option(option_type):
-    if option_type not in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
+    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
 
     data = request.get_json(force=True) or {}
-    name = normalize_option_name(data.get("name"))
-
+    name = normalize_name(data.get("name"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
+
     cur.execute(
         f"INSERT OR IGNORE INTO options_{option_type} (name) VALUES (?)",
         (name,)
     )
+
+    # materials 옵션을 직접 만들면 materials 테이블에도 최소 등록
+    if option_type == "materials":
+        row = cur.execute(
+            "SELECT id FROM materials WHERE name = ?",
+            (name,)
+        ).fetchone()
+        if not row:
+            cur.execute("""
+                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
+                VALUES (?, '', 0, 0, '')
+            """, (name,))
+
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -302,12 +320,11 @@ def create_option(option_type):
 
 @app.route("/api/options/<option_type>/<int:option_id>", methods=["PUT"])
 def update_option(option_type, option_id):
-    if option_type not in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
+    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
 
     data = request.get_json(force=True) or {}
-    new_name = normalize_option_name(data.get("name"))
-
+    new_name = normalize_name(data.get("name"))
     if not new_name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
@@ -324,7 +341,6 @@ def update_option(option_type, option_id):
         (new_name, option_id)
     )
 
-    # 사용자재 옵션 이름 수정 시 materials 테이블 이름도 같이 수정
     if option_type == "materials" and old_row:
         old_name = old_row["name"]
         cur.execute(
@@ -339,7 +355,7 @@ def update_option(option_type, option_id):
 
 @app.route("/api/options/<option_type>/<int:option_id>", methods=["DELETE"])
 def delete_option(option_type, option_id):
-    if option_type not in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
+    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
 
     conn = db()
@@ -355,9 +371,11 @@ def delete_option(option_type, option_id):
         (option_id,)
     )
 
-    # 사용자재 옵션 삭제 시 materials에서도 같은 이름 자재 삭제
     if option_type == "materials" and row:
-        cur.execute("DELETE FROM materials WHERE name = ?", (row["name"],))
+        cur.execute(
+            "DELETE FROM materials WHERE name = ?",
+            (row["name"],)
+        )
 
     conn.commit()
     conn.close()
@@ -385,11 +403,11 @@ def get_materials():
 def create_material():
     data = request.get_json(force=True) or {}
 
-    name = normalize_option_name(data.get("name"))
-    unit = (data.get("unit") or "").strip()
+    name = normalize_name(data.get("name"))
+    unit = normalize_name(data.get("unit"))
     stock_qty = float(data.get("stock_qty") or 0)
     unit_price = float(data.get("unit_price") or 0)
-    memo = (data.get("memo") or "").strip()
+    memo = normalize_name(data.get("memo"))
 
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
@@ -397,7 +415,6 @@ def create_material():
     conn = db()
     cur = conn.cursor()
 
-    # 같은 이름 있으면 갱신
     row = cur.execute(
         "SELECT id FROM materials WHERE name = ?",
         (name,)
@@ -415,7 +432,6 @@ def create_material():
             VALUES (?, ?, ?, ?, ?)
         """, (name, unit, stock_qty, unit_price, memo))
 
-    # 옵션관리 사용자재와 자동 연동
     sync_material_option(cur, name)
 
     conn.commit()
@@ -427,14 +443,14 @@ def create_material():
 def update_material(material_id):
     data = request.get_json(force=True) or {}
 
-    name = normalize_option_name(data.get("name"))
-    unit = (data.get("unit") or "").strip()
+    name = normalize_name(data.get("name"))
+    unit = normalize_name(data.get("unit"))
     stock_qty = float(data.get("stock_qty") or 0)
     unit_price = float(data.get("unit_price") or 0)
-    memo = (data.get("memo") or "").strip()
+    memo = normalize_name(data.get("memo"))
 
     if not name:
-        return jsonify({"ok": False, "error": "name required"}), 400
+      return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
@@ -450,7 +466,6 @@ def update_material(material_id):
         WHERE id = ?
     """, (name, unit, stock_qty, unit_price, memo, material_id))
 
-    # 자재명 바뀌면 옵션관리 사용자재 이름도 같이 변경
     if old_row:
         old_name = old_row["name"]
         opt_row = cur.execute(
@@ -484,7 +499,6 @@ def delete_material(material_id):
 
     cur.execute("DELETE FROM materials WHERE id = ?", (material_id,))
 
-    # 자재 삭제 시 옵션 사용자재도 같은 이름이면 삭제
     if row:
         cur.execute(
             "DELETE FROM options_materials WHERE name = ?",
@@ -502,7 +516,9 @@ def delete_material(material_id):
 @app.route("/api/money", methods=["GET"])
 def get_money():
     conn = db()
-    rows = conn.execute("SELECT * FROM works ORDER BY start_date DESC, id DESC").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM works ORDER BY start_date DESC, id DESC"
+    ).fetchall()
     conn.close()
 
     result = []

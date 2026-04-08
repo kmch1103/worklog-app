@@ -328,12 +328,32 @@
       const selectedClass = state.selectedDate === dateStr ? 'selected' : '';
 
       const titleItems = [];
-      plans.slice(0, 2).forEach(item => {
-        titleItems.push(`<div class="day-title-item plan" title="${escapeHtml(item.title || '')}">계획: ${escapeHtml(item.title || '')}</div>`);
-      });
-      works.slice(0, 2).forEach(item => {
-        titleItems.push(`<div class="day-title-item work" title="${escapeHtml(item.task_name || '')}">실적: ${escapeHtml(item.task_name || '')}</div>`);
-      });
+
+      if (plans.length) {
+        titleItems.push(`
+          <div class="day-title-group plan-group">
+            <div class="day-group-label">계획</div>
+            ${plans.slice(0, 2).map(item => `
+              <div class="day-title-item plan" title="${escapeHtml(item.title || '')}">
+                ${escapeHtml(item.title || '')}
+              </div>
+            `).join('')}
+          </div>
+        `);
+      }
+
+      if (works.length) {
+        titleItems.push(`
+          <div class="day-title-group work-group">
+            <div class="day-group-label">실적</div>
+            ${works.slice(0, 2).map(item => `
+              <div class="day-title-item work" title="${escapeHtml(item.task_name || '')}">
+                ${escapeHtml(item.task_name || '')}
+              </div>
+            `).join('')}
+          </div>
+        `);
+      }
 
       const moreCount = Math.max(0, plans.length + works.length - 4);
 

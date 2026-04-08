@@ -265,8 +265,22 @@
       <section id="page-backup" class="page">
         <div class="page-header"><h2>백업</h2></div>
         <div class="panel">
-          <p class="placeholder-title">준비중</p>
-          <p class="placeholder-text">백업/복원 기능은 다음 단계에서 연결할 예정입니다.</p>
+          <div class="field">
+            <span>기존 worklog.db 가져오기</span>
+            <input type="file" id="backup-file-input" accept=".db,.sqlite,.sqlite3,application/octet-stream">
+            <div class="inline-help">예전 PC에서 사용하던 worklog.db 파일을 선택하면 현재 작업일지 구조로 변환해서 가져옵니다.</div>
+          </div>
+
+          <div class="item-actions">
+            <button id="btn-import-old-db" class="btn primary">기존 DB 가져오기</button>
+          </div>
+
+          <div id="backup-import-status" class="inline-help" style="margin-top:12px;"></div>
+
+          <div class="panel" style="margin-top:16px; background:#f8fafc;">
+            <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
+            <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
+          </div>
         </div>
       </section>
     </main>

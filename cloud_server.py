@@ -63,6 +63,17 @@ def init_db():
     )
     """)
 
+    ensure_column(cur, "works", "end_date", "TEXT")
+    ensure_column(cur, "works", "weather", "TEXT")
+    ensure_column(cur, "works", "task_name", "TEXT")
+    ensure_column(cur, "works", "crops", "TEXT")
+    ensure_column(cur, "works", "pests", "TEXT")
+    ensure_column(cur, "works", "machines", "TEXT")
+    ensure_column(cur, "works", "work_hours", "REAL DEFAULT 0")
+    ensure_column(cur, "works", "memo", "TEXT DEFAULT ''")
+
+
+    
     # plans
     cur.execute("""
     CREATE TABLE IF NOT EXISTS plans (

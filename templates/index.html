@@ -96,6 +96,7 @@
       <button class="menu-btn" data-page="materials">자재관리</button>
       <button class="menu-btn" data-page="money">금전관리</button>
       <button class="menu-btn" data-page="options">옵션관리</button>
+      <button class="menu-btn" data-page="season">시즌관리</button>
       <button class="menu-btn" data-page="excel">엑셀다운</button>
       <button class="menu-btn" data-page="backup">백업</button>
     </aside>
@@ -135,8 +136,14 @@
 
       <section id="page-works" class="page">
         <div class="page-header">
-          <h2>작업일지</h2>
-          <button id="btn-new-work" class="btn primary">새 작업 입력</button>
+          <div>
+            <h2>작업일지</h2>
+            <div class="inline-help">기본은 현재 시즌 기준으로 표시됩니다.</div>
+          </div>
+          <div class="page-header-actions">
+            <select id="works-season-filter"></select>
+            <button id="btn-new-work" class="btn primary">새 작업 입력</button>
+          </div>
         </div>
         <div id="works-list" class="cards"></div>
       </section>
@@ -153,7 +160,13 @@
 
       <section id="page-money" class="page">
         <div class="page-header">
-          <h2>금전관리</h2>
+          <div>
+            <h2>금전관리</h2>
+            <div class="inline-help">기본은 현재 시즌 기준으로 표시됩니다.</div>
+          </div>
+          <div class="page-header-actions">
+            <select id="money-season-filter"></select>
+          </div>
         </div>
 
         <div class="panel">
@@ -250,6 +263,48 @@
               <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
             </div>
             <div id="options-machines" class="option-list"></div>
+          </div>
+        </div>
+      </section>
+
+      
+      <section id="page-season" class="page">
+        <div class="page-header">
+          <h2>시즌관리</h2>
+        </div>
+
+        <div class="grid three">
+          <div class="panel">
+            <h3 id="season-form-title">시즌 추가</h3>
+            <label class="field">
+              <span>시즌명</span>
+              <input type="text" id="season_name" placeholder="예: 2025시즌">
+            </label>
+            <label class="field">
+              <span>시작일</span>
+              <input type="date" id="season_start">
+            </label>
+            <label class="field">
+              <span>종료일</span>
+              <input type="date" id="season_end">
+            </label>
+            <label class="field">
+              <span>비고</span>
+              <input type="text" id="season_note" placeholder="선택 입력">
+            </label>
+            <label class="field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="season_is_current">
+              <span>현재 시즌으로 설정</span>
+            </label>
+            <div class="item-actions">
+              <button id="btn-save-season" class="btn primary">저장</button>
+              <button id="btn-cancel-season" class="btn">취소</button>
+            </div>
+          </div>
+
+          <div class="panel" style="grid-column: span 2;">
+            <h3>시즌 목록</h3>
+            <div id="season-list"></div>
           </div>
         </div>
       </section>

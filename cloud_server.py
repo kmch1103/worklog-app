@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify, render_template
 import sqlite3
 import json
+import os
+import tempfile
+import uuid
 
 app = Flask(__name__)
 DB = "worklog.db"
@@ -41,6 +44,250 @@ def sync_material_option(cur, material_name):
             "INSERT INTO options_materials (name) VALUES (?)",
             (name,)
         )
+
+
+def safe_float(value, default=0):
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def row_value(row, key, default=""):
+    try:
+        value = row[key]
+        return default if value is None else value
+    except Exception:
+        return default
+
+
+def parse_old_materials(raw_text, material_price_map):
+    raw = (raw_text or "").strip()
+    if not raw:
+        return []
+
+    parts = [p.strip() for p in raw.split(";") if p.strip()]
+    result = []
+
+    for part in parts:
+        tokens = [t.strip() for t in part.split("|")]
+        name = tokens[0] if len(tokens) >= 1 else ""
+        qty = safe_float(tokens[1], 0) if len(tokens) >= 2 else 0
+        unit = tokens[2] if len(tokens) >= 3 else ""
+        price = safe_float(material_price_map.get(name), 0)
+
+        if not name:
+            continue
+
+        result.append({
+            "id": "",
+            "name": name,
+            "unit": unit,
+            "price": price,
+            "qty": qty,
+            "method": ""
+        })
+
+    return result
+
+
+def parse_old_labor_rows(row):
+    raw = str(row_value(row, "인력내역", "") or "").strip()
+    rows = []
+
+    if raw:
+        for chunk in raw.split(";"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+
+            tokens = [t.strip() for t in chunk.split("|")]
+            labor_type = tokens[0] if len(tokens) >= 1 else ""
+            count = int(safe_float(tokens[1], 0)) if len(tokens) >= 2 else 0
+            price = safe_float(tokens[2], 0) if len(tokens) >= 3 else 0
+            note = tokens[3] if len(tokens) >= 4 else ""
+            amount = count * price
+
+            if count > 0 or price > 0 or note:
+                rows.append({
+                    "type": labor_type,
+                    "count": count,
+                    "price": price,
+                    "amount": amount,
+                    "method": "",
+                    "note": note
+                })
+
+    if rows:
+        return rows
+
+    legacy_map = [
+        ("남자", "남자수", "남자단가"),
+        ("여자", "여자수", "여자단가"),
+        ("기타", "기타수", "기타단가")
+    ]
+
+    for labor_type, count_key, price_key in legacy_map:
+        count = int(safe_float(row_value(row, count_key, 0), 0))
+        price = safe_float(row_value(row, price_key, 0), 0)
+        amount = count * price
+        if count > 0 or price > 0:
+            rows.append({
+                "type": labor_type,
+                "count": count,
+                "price": price,
+                "amount": amount,
+                "method": "",
+                "note": ""
+            })
+
+    return rows
+
+
+def build_import_money(materials, labor_rows, legacy_labor_cost):
+    material_total = sum(safe_float(item.get("qty"), 0) * safe_float(item.get("price"), 0) for item in materials)
+    labor_total = sum(safe_float(item.get("amount"), 0) for item in labor_rows)
+
+    if labor_total <= 0:
+        labor_total = safe_float(legacy_labor_cost, 0)
+
+    total_amount = labor_total + material_total
+    if total_amount <= 0:
+        return None
+
+    if labor_total > 0 and material_total > 0:
+        money_type = "인건비+자재비"
+    elif labor_total > 0:
+        money_type = "인건비"
+    elif material_total > 0:
+        money_type = "자재비"
+    else:
+        money_type = "기타"
+
+    return {
+        "type": money_type,
+        "total_amount": total_amount,
+        "labor_total": labor_total,
+        "material_total": material_total,
+        "other_total": 0,
+        "method": "",
+        "note": "기존 DB 가져오기"
+    }
+
+
+def clear_current_data(cur):
+    cur.execute("DELETE FROM works")
+    cur.execute("DELETE FROM materials")
+    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
+        cur.execute(f"DELETE FROM options_{t}")
+
+
+def import_old_options(old_conn, cur, old_table, new_table, old_column):
+    try:
+        rows = old_conn.execute(f"SELECT {old_column} FROM '{old_table}'").fetchall()
+        for row in rows:
+            name = normalize_name(row[0])
+            if name:
+                cur.execute(f"INSERT OR IGNORE INTO {new_table} (name) VALUES (?)", (name,))
+    except Exception:
+        pass
+
+
+def import_old_db_into_current(uploaded_db_path):
+    old_conn = sqlite3.connect(uploaded_db_path)
+    old_conn.row_factory = sqlite3.Row
+
+    conn = db()
+    cur = conn.cursor()
+
+    try:
+        material_rows = old_conn.execute("SELECT 자재명, 단위, 가격, 재고 FROM 자재").fetchall()
+        material_price_map = {}
+        for row in material_rows:
+            name = normalize_name(row_value(row, "자재명", ""))
+            if name:
+                material_price_map[name] = safe_float(row_value(row, "가격", 0), 0)
+
+        clear_current_data(cur)
+
+        for row in material_rows:
+            name = normalize_name(row_value(row, "자재명", ""))
+            unit = normalize_name(row_value(row, "단위", ""))
+            unit_price = safe_float(row_value(row, "가격", 0), 0)
+            stock_qty = safe_float(row_value(row, "재고", 0), 0)
+
+            if not name:
+                continue
+
+            cur.execute("""
+                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
+                VALUES (?, ?, ?, ?, '')
+            """, (name, unit, stock_qty, unit_price))
+            sync_material_option(cur, name)
+
+        import_old_options(old_conn, cur, "옵션_날씨", "options_weather", "항목")
+        import_old_options(old_conn, cur, "옵션_작물", "options_crops", "항목")
+        import_old_options(old_conn, cur, "옵션_작업내용", "options_tasks", "항목")
+        import_old_options(old_conn, cur, "옵션_기계", "options_machines", "항목")
+        import_old_options(old_conn, cur, "병충해", "options_pests", "이름")
+
+        work_rows = old_conn.execute("SELECT * FROM 작업일지 ORDER BY 날짜 ASC, 번호 ASC").fetchall()
+
+        for row in work_rows:
+            materials = parse_old_materials(row_value(row, "사용자재", ""), material_price_map)
+            labor_rows = parse_old_labor_rows(row)
+            money = build_import_money(materials, labor_rows, row_value(row, "인건비", 0))
+
+            memo_obj = {
+                "memo_text": str(row_value(row, "비고", "") or ""),
+                "repeat_days": 1,
+                "start_time": str(row_value(row, "시작시간", "") or ""),
+                "end_time": str(row_value(row, "종료시간", "") or ""),
+                "materials": materials,
+                "labor_rows": labor_rows,
+                "work_hours": safe_float(row_value(row, "작업시간", 0), 0),
+                "money": money,
+                "legacy": {
+                    "created_at": str(row_value(row, "생성시각", "") or ""),
+                    "updated_at": str(row_value(row, "수정시각", "") or ""),
+                    "work_list": str(row_value(row, "작업목록", "") or "")
+                }
+            }
+
+            cur.execute("""
+                INSERT INTO works (
+                    start_date, end_date, weather, task_name,
+                    crops, pests, machines, work_hours, memo
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                str(row_value(row, "날짜", "") or ""),
+                str(row_value(row, "종료날짜", "") or row_value(row, "날짜", "") or ""),
+                str(row_value(row, "날씨", "") or ""),
+                str(row_value(row, "작업내용", "") or ""),
+                str(row_value(row, "작물", "") or ""),
+                str(row_value(row, "적용병충해", "") or ""),
+                str(row_value(row, "사용기계", "") or ""),
+                safe_float(row_value(row, "작업시간", 0), 0),
+                json.dumps(memo_obj, ensure_ascii=False)
+            ))
+
+        conn.commit()
+        return {
+            "ok": True,
+            "imported": {
+                "works": len(work_rows),
+                "materials": len(material_rows)
+            }
+        }
+    except Exception as e:
+        conn.rollback()
+        return {"ok": False, "error": str(e)}
+    finally:
+        conn.close()
+        old_conn.close()
 
 
 def init_db():
@@ -519,6 +766,33 @@ def delete_material(material_id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+
+
+# =========================
+# IMPORT OLD DB
+# =========================
+@app.route("/api/import_old_db", methods=["POST"])
+def import_old_db():
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"ok": False, "error": "파일이 없습니다."}), 400
+
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, f"old_worklog_{uuid.uuid4().hex}.db")
+
+    try:
+        uploaded.save(temp_path)
+        result = import_old_db_into_current(temp_path)
+        status = 200 if result.get("ok") else 400
+        return jsonify(result), status
+    finally:
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except Exception:
+            pass
 
 
 # =========================

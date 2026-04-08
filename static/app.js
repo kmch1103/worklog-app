@@ -657,12 +657,12 @@
   }
 
   function getLaborTotal() {
-    let total = 0;
-    document.querySelectorAll('.labor-row .labor-amount').forEach(node => {
-      total += Number(node.value) || 0;
-    });
-    return total;
-  }
+  let total = 0;
+  document.querySelectorAll('.labor-row .labor-amount').forEach(node => {
+    total += Number(node.value) || 0;
+  });
+  return total;
+}
 
   function getMaterialTotal() {
     let total = 0;
@@ -718,13 +718,19 @@
     updateMoneySummary();
   };
 
+  window.updateMaterialMethod = function (idx, method) {
+  state.selectedMaterialsDetailed[idx].method = method;
+};
+  
   window.removeMaterial = function (idx) {
     state.selectedMaterialsDetailed.splice(idx, 1);
     renderSelectedMaterialsDetailed();
   };
 
-  function addLaborRow() {
+
+  function addLaborRow(row = null) {
   const wrap = el['labor-rows-wrap'];
+  if (!wrap) return;
 
   const div = document.createElement('div');
   div.className = 'labor-row';
@@ -736,10 +742,10 @@
       <option value="기타">기타</option>
     </select>
 
-    <input type="number" class="labor-count" placeholder="인원" value="1">
-    <input type="number" class="labor-price" placeholder="단가" value="0">
+    <input type="number" class="labor-count" placeholder="인원" value="${row?.count ?? 1}">
+    <input type="number" class="labor-price" placeholder="단가" value="${row?.price ?? 0}">
 
-    <input type="number" class="labor-amount" placeholder="금액" readonly>
+    <input type="number" class="labor-amount" placeholder="금액" readonly value="${row?.amount ?? 0}">
 
     <select class="labor-method">
       <option value="현금">현금</option>
@@ -748,16 +754,40 @@
       <option value="외상">외상</option>
     </select>
 
-    <input type="text" class="labor-note" placeholder="비고">
+    <input type="text" class="labor-note" placeholder="비고" value="${row?.note ?? ''}">
 
-    <button type="button" onclick="this.parentElement.remove(); updateMoneySummary()">삭제</button>
+    <button type="button" class="btn labor-delete-btn">삭제</button>
   `;
 
   wrap.appendChild(div);
 
-  const count = div.querySelector('.labor-count');
-  const price = div.querySelector('.labor-price');
-  const amount = div.querySelector('.labor-amount');
+  const typeEl = div.querySelector('.labor-type');
+  const countEl = div.querySelector('.labor-count');
+  const priceEl = div.querySelector('.labor-price');
+  const amountEl = div.querySelector('.labor-amount');
+  const methodEl = div.querySelector('.labor-method');
+  const deleteBtn = div.querySelector('.labor-delete-btn');
+
+  if (row?.type) typeEl.value = row.type;
+  if (row?.method) methodEl.value = row.method;
+
+  function calc() {
+    const count = Number(countEl.value) || 0;
+    const price = Number(priceEl.value) || 0;
+    amountEl.value = count * price;
+    updateMoneySummary();
+  }
+
+  countEl.addEventListener('input', calc);
+  priceEl.addEventListener('input', calc);
+
+  deleteBtn.addEventListener('click', () => {
+    div.remove();
+    updateMoneySummary();
+  });
+
+  calc();
+}
 
   function calc() {
     amount.value = (Number(count.value) || 0) * (Number(price.value) || 0);
@@ -776,14 +806,18 @@
 
   function getLaborRows() {
     return Array.from(document.querySelectorAll('.labor-row')).map(row => ({
-      type: row.querySelector('.labor-type').value,
-      count: Number(row.querySelector('.labor-count').value),
-      price: Number(row.querySelector('.labor-price').value),
-      amount: Number(row.querySelector('.labor-amount').value),
-      method: row.querySelector('.labor-method').value,
-      note: row.querySelector('.labor-note').value
-    }));
+      type: row.querySelector('.labor-type')?.value || '',
+      count: Number(row.querySelector('.labor-count')?.value || 0),
+      price: Number(row.querySelector('.labor-price')?.value || 0),
+      amount: Number(row.querySelector('.labor-amount')?.value || 0),
+      method: row.querySelector('.labor-method')?.value || '',
+      note: row.querySelector('.labor-note')?.value || ''
+    })).filter(row => row.amount > 0 || row.count > 0 || row.price > 0);
   }
+
+
+
+
 
 
 
@@ -936,29 +970,55 @@
   }
 
   function renderWorkCard(work) {
-    const meta = parseMemo(work.memo);
-    const money = meta.money || null;
-    const memoText = meta.memo_text || '';
-    const repeatDays = Number(meta.repeat_days || calcRepeatDays(work.start_date, work.end_date) || 1);
+  const meta = parseMemo(work.memo);
+  const money = meta.money || null;
+  const memoText = meta.memo_text || '';
+  const laborRows = Array.isArray(meta.labor_rows) ? meta.labor_rows : [];
+  const materials = Array.isArray(meta.materials) ? meta.materials : [];
 
-    return `
-      <div class="work-card">
-        <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
-        <div>기간: ${escapeHtml(work.start_date || '')}${work.end_date && work.end_date !== work.start_date ? ' ~ ' + escapeHtml(work.end_date) : ''}${repeatDays > 1 ? ` (${repeatDays}일)` : ''}</div>
-        <div>날씨: ${escapeHtml(work.weather || '')}</div>
-        <div>작물: ${escapeHtml(work.crops || '')}</div>
-        <div>병충해: ${escapeHtml(work.pests || '')}</div>
-        <div>사용기계: ${escapeHtml(work.machines || '')}</div>
-        <div>자재: ${escapeHtml(formatMaterials(meta.materials))}</div>
-        <div>메모: ${escapeHtml(memoText)}</div>
-        ${money ? `<div class="money-inline">총금액: ${formatNumber(money.total_amount || money.amount || 0)}원 / ${escapeHtml(money.method || '')}</div>` : ''}
-        <div class="item-actions">
-          <button class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
-          <button class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
-        </div>
+  const laborSummary = laborRows.map(row => {
+    const type = row.type || '';
+    const count = Number(row.count || 0);
+    const price = Number(row.price || 0);
+    return `${type} ${count}명 × ${formatNumber(price)}원`;
+  }).join(', ');
+
+  const laborCountText = laborRows.map(row => {
+    const type = row.type || '';
+    const count = Number(row.count || 0);
+    return `${type} ${count}명`;
+  }).join(', ');
+
+  const materialText = materials.map(m => {
+    const name = m.name || '';
+    const qty = Number(m.qty || 0);
+    const unit = m.unit || '';
+    return `${name} ${qty}${unit}`;
+  }).join(', ');
+
+  return `
+    <div class="work-card">
+      <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
+      <div>기간: ${escapeHtml(work.start_date || '')}${work.end_date && work.end_date !== work.start_date ? ' ~ ' + escapeHtml(work.end_date) : ''}</div>
+      <div>작물: ${escapeHtml(work.crops || '')}</div>
+      <div>병충해: ${escapeHtml(work.pests || '')}</div>
+      <div>사용기계: ${escapeHtml(work.machines || '')}</div>
+      <div>사용자재: ${escapeHtml(materialText)}</div>
+      <div>인부: ${escapeHtml(laborCountText)}</div>
+      <div>인건비 상세: ${escapeHtml(laborSummary)}</div>
+      <div>인건비: ${formatNumber(money?.labor_total || 0)}원</div>
+      <div>자재비: ${formatNumber(money?.material_total || 0)}원</div>
+      <div>기타비: ${formatNumber(money?.other_total || 0)}원</div>
+      <div><strong>총비용: ${formatNumber(money?.total_amount || 0)}원</strong></div>
+      <div>작업시간: ${escapeHtml(String(work.work_hours || 0))}시간</div>
+      <div>비고: ${escapeHtml(memoText)}</div>
+      <div class="item-actions">
+        <button class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
+        <button class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
       </div>
-    `;
-  }
+    </div>
+  `;
+}
 
   async function deleteWork(workId) {
     if (!confirm('삭제하시겠습니까?')) return;

@@ -632,7 +632,7 @@
 
   function openWorkModal() {
     state.editingWorkId = null;
-    el['work-modal-title'].textContent = '작업 입력';
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
 
     resetWorkForm();
 
@@ -649,7 +649,7 @@
     if (!work) return;
 
     state.editingWorkId = work.id;
-    el['work-modal-title'].textContent = '작업 수정';
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
     fillWorkForm(work);
     removeHidden(el['work-modal']);
   }
@@ -746,6 +746,19 @@
     }
   }
 
+  function toggleMoneyBox(show) {
+    if (!el['money-box']) return;
+    el['money-box'].classList.toggle('hidden', !show);
+  }
+
+  function resetMoneyFields() {
+    if (el['has_money']) el['has_money'].checked = false;
+    if (el['other_cost']) el['other_cost'].value = '0';
+    if (el['money_note']) el['money_note'].value = '';
+    updateMoneySummary();
+    toggleMoneyBox(false);
+  }
+
   function getLaborTotal() {
     let total = 0;
     document.querySelectorAll('.labor-row .labor-amount').forEach(node => {
@@ -784,16 +797,13 @@
       state.selectedMaterialsDetailed.map((m, idx) => `
         <div class="material-row">
           <span>${escapeHtml(m.name)}</span>
-
           <input type="number" value="${m.qty}" min="0" step="0.1" onchange="updateMaterialQty(${idx}, this.value)">
-
           <select onchange="updateMaterialMethod(${idx}, this.value)">
             <option value="현금" ${m.method === '현금' ? 'selected' : ''}>현금</option>
             <option value="계좌이체" ${m.method === '계좌이체' ? 'selected' : ''}>계좌이체</option>
             <option value="카드" ${m.method === '카드' ? 'selected' : ''}>카드</option>
             <option value="외상" ${m.method === '외상' ? 'selected' : ''}>외상</option>
           </select>
-
           <button type="button" class="btn" onclick="removeMaterial(${idx})">삭제</button>
         </div>
       `).join('');
@@ -828,7 +838,6 @@
         <option value="여자">여자</option>
         <option value="기타">기타</option>
       </select>
-
       <input type="number" class="labor-count" placeholder="인원" value="${row?.count ?? 1}">
       <input type="number" class="labor-price" placeholder="단가" value="${row?.price ?? 0}">
       <select class="labor-method">
@@ -839,7 +848,6 @@
       </select>
       <input type="text" class="labor-note" placeholder="비고" value="${escapeHtml(row?.note ?? '')}">
       <button type="button" class="btn labor-delete-btn">삭제</button>
-
       <input type="number" class="labor-amount" placeholder="금액" readonly value="${row?.amount ?? 0}" style="grid-column:1 / -1;">
     `;
 

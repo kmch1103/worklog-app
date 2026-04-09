@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import uuid
+from datetime import datetime
 
 app = Flask(__name__)
 DB = "worklog.db"
@@ -62,27 +63,6 @@ def row_value(row, key, default=""):
     except Exception:
         return default
 
-
-
-
-def normalize_date_text(value):
-    return str(value or '').strip()[:10]
-
-
-def get_season_row(conn, season_id=None, use_current_if_missing=True):
-    if season_id and str(season_id).lower() != 'current':
-        row = conn.execute("SELECT * FROM seasons WHERE id = ?", (season_id,)).fetchone()
-        if row:
-            return row
-    if use_current_if_missing:
-        return conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY start_date DESC, id DESC LIMIT 1").fetchone()
-    return None
-
-
-def season_condition_sql(prefix=''):
-    if prefix and not prefix.endswith('.'):
-        prefix = prefix + '.'
-    return f"{prefix}start_date <= ? AND COALESCE(NULLIF({prefix}end_date, ''), {prefix}start_date) >= ?"
 
 def parse_old_materials(raw_text, material_price_map):
     raw = (raw_text or "").strip()
@@ -311,6 +291,45 @@ def import_old_db_into_current(uploaded_db_path):
         old_conn.close()
 
 
+
+def current_timestamp():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def get_season_row(conn, season_id):
+    if season_id in (None, '', 'all'):
+        return None
+
+    if season_id == 'current':
+        return conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY id DESC LIMIT 1").fetchone()
+
+    try:
+        sid = int(season_id)
+    except Exception:
+        return None
+
+    return conn.execute("SELECT * FROM seasons WHERE id = ?", (sid,)).fetchone()
+
+
+def apply_season_filter_sql(base_sql, season_row, date_column='start_date'):
+    if not season_row:
+        return base_sql, ()
+    return f"{base_sql} WHERE {date_column} BETWEEN ? AND ?", (season_row['start_date'], season_row['end_date'])
+
+
+def season_payload(row):
+    if not row:
+        return None
+    return {
+        'id': row['id'],
+        'season_name': row['season_name'],
+        'start_date': row['start_date'],
+        'end_date': row['end_date'],
+        'is_current': row['is_current'],
+        'note': row['note'],
+        'created_at': row['created_at'],
+    }
+
 def init_db():
     conn = db()
     cur = conn.cursor()
@@ -388,12 +407,11 @@ def init_db():
         end_date TEXT NOT NULL,
         is_current INTEGER DEFAULT 0,
         note TEXT DEFAULT '',
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT ''
     )
     """)
-
     ensure_column(cur, "seasons", "note", "TEXT DEFAULT ''")
-    ensure_column(cur, "seasons", "created_at", "TEXT DEFAULT CURRENT_TIMESTAMP")
+    ensure_column(cur, "seasons", "created_at", "TEXT DEFAULT ''")
 
     conn.commit()
     conn.close()
@@ -408,115 +426,15 @@ def index():
 
 
 # =========================
-# SEASONS
-# =========================
-@app.route("/api/seasons", methods=["GET"])
-def get_seasons():
-    conn = db()
-    rows = conn.execute(
-        "SELECT id, season_name, start_date, end_date, is_current, note, created_at FROM seasons ORDER BY start_date DESC, id DESC"
-    ).fetchall()
-    conn.close()
-    return jsonify(rows_to_dicts(rows))
-
-
-@app.route("/api/seasons/current", methods=["GET"])
-def get_current_season():
-    conn = db()
-    row = get_season_row(conn, use_current_if_missing=True)
-    conn.close()
-    return jsonify(dict(row) if row else {})
-
-
-@app.route("/api/seasons", methods=["POST"])
-def create_season():
-    data = request.get_json(force=True) or {}
-    season_name = normalize_name(data.get("season_name"))
-    start_date = normalize_date_text(data.get("start_date"))
-    end_date = normalize_date_text(data.get("end_date"))
-    note = normalize_name(data.get("note"))
-    is_current = 1 if data.get("is_current") else 0
-
-    if not season_name or not start_date or not end_date:
-        return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-    if is_current:
-        cur.execute("UPDATE seasons SET is_current = 0")
-    cur.execute(
-        "INSERT INTO seasons (season_name, start_date, end_date, is_current, note) VALUES (?, ?, ?, ?, ?)",
-        (season_name, start_date, end_date, is_current, note)
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/<int:season_id>", methods=["PUT"])
-def update_season(season_id):
-    data = request.get_json(force=True) or {}
-    season_name = normalize_name(data.get("season_name"))
-    start_date = normalize_date_text(data.get("start_date"))
-    end_date = normalize_date_text(data.get("end_date"))
-    note = normalize_name(data.get("note"))
-    is_current = 1 if data.get("is_current") else 0
-
-    if not season_name or not start_date or not end_date:
-        return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-    if is_current:
-        cur.execute("UPDATE seasons SET is_current = 0")
-    cur.execute(
-        "UPDATE seasons SET season_name = ?, start_date = ?, end_date = ?, is_current = ?, note = ? WHERE id = ?",
-        (season_name, start_date, end_date, is_current, note, season_id)
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/<int:season_id>", methods=["DELETE"])
-def delete_season(season_id):
-    conn = db()
-    conn.execute("DELETE FROM seasons WHERE id = ?", (season_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/<int:season_id>/set_current", methods=["PUT"])
-def set_current_season(season_id):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("UPDATE seasons SET is_current = 0")
-    cur.execute("UPDATE seasons SET is_current = 1 WHERE id = ?", (season_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-# =========================
 # WORKS
 # =========================
 @app.route("/api/works", methods=["GET"])
 def get_works():
     conn = db()
-    season_id = request.args.get("season_id")
-    season = get_season_row(conn, season_id=season_id, use_current_if_missing=True)
-
-    if season:
-        rows = conn.execute(
-            f"SELECT * FROM works WHERE {season_condition_sql()} ORDER BY start_date DESC, id DESC",
-            (season["end_date"], season["start_date"])
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM works ORDER BY start_date DESC, id DESC"
-        ).fetchall()
-
+    season_id = (request.args.get("season_id") or "").strip()
+    season = get_season_row(conn, season_id)
+    sql, params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
+    rows = conn.execute(sql + " ORDER BY start_date DESC, id DESC", params).fetchall()
     conn.close()
     return jsonify(rows_to_dicts(rows))
 
@@ -908,6 +826,151 @@ def delete_material(material_id):
 
 
 
+
+# =========================
+# SEASONS
+# =========================
+@app.route("/api/seasons", methods=["GET"])
+def get_seasons():
+    conn = db()
+    rows = conn.execute("SELECT * FROM seasons ORDER BY start_date DESC, id DESC").fetchall()
+    conn.close()
+    return jsonify(rows_to_dicts(rows))
+
+
+@app.route("/api/seasons", methods=["POST"])
+def create_season():
+    data = request.get_json(force=True) or {}
+    season_name = normalize_name(data.get("season_name"))
+    start_date = normalize_name(data.get("start_date"))
+    end_date = normalize_name(data.get("end_date"))
+    note = (data.get("note") or "").strip()
+    is_current = 1 if data.get("is_current") else 0
+
+    if not season_name or not start_date or not end_date:
+        return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
+
+    conn = db()
+    cur = conn.cursor()
+    if is_current:
+        cur.execute("UPDATE seasons SET is_current = 0")
+    cur.execute("""
+        INSERT INTO seasons (season_name, start_date, end_date, is_current, note, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (season_name, start_date, end_date, is_current, note, current_timestamp()))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/seasons/<int:season_id>", methods=["PUT"])
+def update_season(season_id):
+    data = request.get_json(force=True) or {}
+    season_name = normalize_name(data.get("season_name"))
+    start_date = normalize_name(data.get("start_date"))
+    end_date = normalize_name(data.get("end_date"))
+    note = (data.get("note") or "").strip()
+    is_current = 1 if data.get("is_current") else 0
+
+    if not season_name or not start_date or not end_date:
+        return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
+
+    conn = db()
+    cur = conn.cursor()
+    if is_current:
+        cur.execute("UPDATE seasons SET is_current = 0")
+    cur.execute("""
+        UPDATE seasons
+        SET season_name = ?, start_date = ?, end_date = ?, is_current = ?, note = ?
+        WHERE id = ?
+    """, (season_name, start_date, end_date, is_current, note, season_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/seasons/<int:season_id>", methods=["DELETE"])
+def delete_season(season_id):
+    conn = db()
+    conn.execute("DELETE FROM seasons WHERE id = ?", (season_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/seasons/<int:season_id>/set_current", methods=["PUT"])
+def set_current_season(season_id):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("UPDATE seasons SET is_current = 0")
+    cur.execute("UPDATE seasons SET is_current = 1 WHERE id = ?", (season_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/seasons/current", methods=["GET"])
+def get_current_season():
+    conn = db()
+    row = get_season_row(conn, 'current')
+    conn.close()
+    return jsonify(season_payload(row) or {})
+
+
+@app.route("/api/seasons/<int:season_id>/backup", methods=["GET"])
+def backup_season(season_id):
+    conn = db()
+    season = get_season_row(conn, str(season_id))
+    if not season:
+        conn.close()
+        return jsonify({"ok": False, "error": "season not found"}), 404
+
+    works_sql, works_params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
+    work_rows = conn.execute(works_sql + " ORDER BY start_date ASC, id ASC", works_params).fetchall()
+
+    money_rows = []
+    for row in work_rows:
+        item = dict(row)
+        try:
+            memo = json.loads(item.get("memo") or "{}")
+        except Exception:
+            memo = {}
+        money = memo.get("money") or {}
+        if money:
+            money_rows.append({
+                "date": item.get("start_date", ""),
+                "task_name": item.get("task_name", ""),
+                "type": money.get("type", ""),
+                "total": float(money.get("total_amount") or money.get("amount") or 0),
+                "method": money.get("method", ""),
+                "note": money.get("note", "")
+            })
+
+    materials = rows_to_dicts(conn.execute("SELECT * FROM materials ORDER BY name").fetchall())
+    options = {}
+    for t in ["weather", "crops", "tasks", "pests", "machines"]:
+        options[t] = rows_to_dicts(conn.execute(f"SELECT id, name FROM options_{t} ORDER BY name").fetchall())
+    plans = rows_to_dicts(conn.execute("SELECT * FROM plans ORDER BY plan_date DESC, id DESC").fetchall())
+    conn.close()
+
+    payload = {
+        "ok": True,
+        "season": season_payload(season),
+        "exported_at": current_timestamp(),
+        "works": rows_to_dicts(work_rows),
+        "money": money_rows,
+        "materials": materials,
+        "options": options,
+        "plans": plans,
+        "summary": {
+            "works_count": len(work_rows),
+            "money_count": len(money_rows),
+            "money_total": sum(item["total"] for item in money_rows)
+        }
+    }
+    return jsonify(payload)
+
+
 # =========================
 # IMPORT OLD DB
 # =========================
@@ -939,18 +1002,10 @@ def import_old_db():
 @app.route("/api/money", methods=["GET"])
 def get_money():
     conn = db()
-    season_id = request.args.get("season_id")
-    season = get_season_row(conn, season_id=season_id, use_current_if_missing=True)
-
-    if season:
-        rows = conn.execute(
-            f"SELECT * FROM works WHERE {season_condition_sql()} ORDER BY start_date DESC, id DESC",
-            (season["end_date"], season["start_date"])
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM works ORDER BY start_date DESC, id DESC"
-        ).fetchall()
+    season_id = (request.args.get("season_id") or "").strip()
+    season = get_season_row(conn, season_id)
+    sql, params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
+    rows = conn.execute(sql + " ORDER BY start_date DESC, id DESC", params).fetchall()
     conn.close()
 
     result = []

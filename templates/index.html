@@ -82,15 +82,16 @@
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
-    .season-toolbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
-    .season-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
-    .season-card-current{padding:12px; border:1px solid #d7dbe3; border-radius:12px; background:#f8fafc; margin-bottom:12px;}
-    .compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
-    .compare-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
-    @media (max-width: 1100px){ .compare-wrap,.season-grid{grid-template-columns:1fr;} }
+    .app{display:flex; align-items:flex-start; min-height:100vh;}
+    .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
+    .content{flex:1; min-width:0;}
+    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;}
+    .calendar-panel-title{font-size:20px; font-weight:800; margin-bottom:10px;}
+
     @media (max-width: 900px){
       .grid.three{grid-template-columns:1fr;}
       .labor-row{grid-template-columns:1fr 1fr; }
+      .calendar-compare-wrap{grid-template-columns:1fr;}
     }
   </style>
 </head>
@@ -103,7 +104,6 @@
       <button class="menu-btn" data-page="materials">자재관리</button>
       <button class="menu-btn" data-page="money">금전관리</button>
       <button class="menu-btn" data-page="options">옵션관리</button>
-      <button class="menu-btn" data-page="season">시즌관리</button>
       <button class="menu-btn" data-page="excel">엑셀다운</button>
       <button class="menu-btn" data-page="backup">백업</button>
     </aside>
@@ -116,19 +116,28 @@
             <button id="btn-prev-month" class="btn">이전달</button>
             <div id="calendar-title" class="calendar-title"></div>
             <button id="btn-next-month" class="btn">다음달</button>
-            <button id="btn-toggle-compare" class="btn">전년도 비교</button>
           </div>
         </div>
 
-        <div class="calendar-layout">
+        <div class="calendar-compare-wrap">
           <div class="panel">
+            <div class="calendar-panel-title">현재</div>
             <div class="calendar-week-header">
               <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
             </div>
             <div id="calendar-grid" class="calendar-grid"></div>
           </div>
 
-          <!-- 기존 하단 상세패널은 유지하되 안내만 남김 -->
+          <div class="panel">
+            <div id="calendar-compare-title" class="calendar-panel-title">전년도 같은 달</div>
+            <div class="calendar-week-header">
+              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+            </div>
+            <div id="calendar-compare-grid" class="calendar-grid"></div>
+          </div>
+        </div>
+
+        <div class="calendar-layout">
           <div class="panel">
             <div class="date-panel-header">
               <h3>달력 상세</h3>
@@ -140,32 +149,12 @@
             <div class="empty-msg">날짜를 누르면 상세 팝업이 열립니다.</div>
           </div>
         </div>
-
-        <div id="calendar-compare-wrap" class="compare-wrap hidden">
-          <div class="panel">
-            <div id="calendar-current-title" class="compare-panel-title">현재</div>
-            <div class="calendar-week-header">
-              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
-            </div>
-            <div id="calendar-current-grid" class="calendar-grid"></div>
-          </div>
-          <div class="panel">
-            <div id="calendar-compare-title" class="compare-panel-title">전년도 같은 달</div>
-            <div class="calendar-week-header">
-              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
-            </div>
-            <div id="calendar-compare-grid" class="calendar-grid"></div>
-          </div>
-        </div>
       </section>
 
       <section id="page-works" class="page">
         <div class="page-header">
           <h2>작업일지</h2>
-          <div class="season-toolbar">
-            <select id="works-season-filter"></select>
-            <button id="btn-new-work" class="btn primary">새 작업 입력</button>
-          </div>
+          <button id="btn-new-work" class="btn primary">새 작업 입력</button>
         </div>
         <div id="works-list" class="cards"></div>
       </section>
@@ -183,9 +172,6 @@
       <section id="page-money" class="page">
         <div class="page-header">
           <h2>금전관리</h2>
-          <div class="season-toolbar">
-            <select id="money-season-filter"></select>
-          </div>
         </div>
 
         <div class="panel">
@@ -286,51 +272,6 @@
         </div>
       </section>
 
-
-      <section id="page-season" class="page">
-        <div class="page-header">
-          <h2>시즌관리</h2>
-        </div>
-
-        <div class="season-grid">
-          <div class="panel">
-            <h3 id="season-form-title">시즌 추가</h3>
-            <div class="field">
-              <span>시즌명</span>
-              <input type="text" id="season_name" placeholder="예: 2026 시즌">
-            </div>
-            <div class="grid two">
-              <label class="field">
-                <span>시작일</span>
-                <input type="date" id="season_start">
-              </label>
-              <label class="field">
-                <span>종료일</span>
-                <input type="date" id="season_end">
-              </label>
-            </div>
-            <label class="field">
-              <span>비고</span>
-              <input type="text" id="season_note" placeholder="예: 한라봉/천혜향 공통">
-            </label>
-            <label class="field">
-              <span><input type="checkbox" id="season_is_current"> 현재 시즌으로 설정</span>
-            </label>
-            <div class="item-actions">
-              <button id="btn-save-season" class="btn primary">저장</button>
-              <button id="btn-cancel-season" class="btn">초기화</button>
-            </div>
-          </div>
-
-          <div class="panel">
-            <h3>시즌 목록 / 백업</h3>
-            <div id="season-current-box" class="season-card-current">현재 시즌 없음</div>
-            <div id="season-list" class="option-list"></div>
-            <div id="season-backup-status" class="inline-help" style="margin-top:12px;"></div>
-          </div>
-        </div>
-      </section>
-
       <section id="page-excel" class="page">
         <div class="page-header"><h2>엑셀다운</h2></div>
         <div class="panel">
@@ -342,22 +283,8 @@
       <section id="page-backup" class="page">
         <div class="page-header"><h2>백업</h2></div>
         <div class="panel">
-          <div class="field">
-            <span>기존 worklog.db 가져오기</span>
-            <input type="file" id="backup-file-input" accept=".db,.sqlite,.sqlite3,application/octet-stream">
-            <div class="inline-help">예전 PC에서 사용하던 worklog.db 파일을 선택하면 현재 작업일지 구조로 변환해서 가져옵니다.</div>
-          </div>
-
-          <div class="item-actions">
-            <button id="btn-import-old-db" class="btn primary">기존 DB 가져오기</button>
-          </div>
-
-          <div id="backup-import-status" class="inline-help" style="margin-top:12px;"></div>
-
-          <div class="panel" style="margin-top:16px; background:#f8fafc;">
-            <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
-            <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
-          </div>
+          <p class="placeholder-title">준비중</p>
+          <p class="placeholder-text">백업/복원 기능은 다음 단계에서 연결할 예정입니다.</p>
         </div>
       </section>
     </main>

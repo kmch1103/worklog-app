@@ -81,6 +81,13 @@
     .calendar-detail-card{border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:12px; margin-bottom:8px;}
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
+
+    .season-toolbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+    .season-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+    .season-card-current{padding:12px; border:1px solid #d7dbe3; border-radius:12px; background:#f8fafc; margin-bottom:12px;}
+    .compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
+    .compare-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
+    @media (max-width: 1100px){ .compare-wrap,.season-grid{grid-template-columns:1fr;} }
     @media (max-width: 900px){
       .grid.three{grid-template-columns:1fr;}
       .labor-row{grid-template-columns:1fr 1fr; }
@@ -109,6 +116,7 @@
             <button id="btn-prev-month" class="btn">이전달</button>
             <div id="calendar-title" class="calendar-title"></div>
             <button id="btn-next-month" class="btn">다음달</button>
+            <button id="btn-toggle-compare" class="btn">전년도 비교</button>
           </div>
         </div>
 
@@ -132,15 +140,29 @@
             <div class="empty-msg">날짜를 누르면 상세 팝업이 열립니다.</div>
           </div>
         </div>
+
+        <div id="calendar-compare-wrap" class="compare-wrap hidden">
+          <div class="panel">
+            <div id="calendar-current-title" class="compare-panel-title">현재</div>
+            <div class="calendar-week-header">
+              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+            </div>
+            <div id="calendar-current-grid" class="calendar-grid"></div>
+          </div>
+          <div class="panel">
+            <div id="calendar-compare-title" class="compare-panel-title">전년도 같은 달</div>
+            <div class="calendar-week-header">
+              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+            </div>
+            <div id="calendar-compare-grid" class="calendar-grid"></div>
+          </div>
+        </div>
       </section>
 
       <section id="page-works" class="page">
         <div class="page-header">
-          <div>
-            <h2>작업일지</h2>
-            <div class="inline-help">기본은 현재 시즌 기준으로 표시됩니다.</div>
-          </div>
-          <div class="page-header-actions">
+          <h2>작업일지</h2>
+          <div class="season-toolbar">
             <select id="works-season-filter"></select>
             <button id="btn-new-work" class="btn primary">새 작업 입력</button>
           </div>
@@ -160,11 +182,8 @@
 
       <section id="page-money" class="page">
         <div class="page-header">
-          <div>
-            <h2>금전관리</h2>
-            <div class="inline-help">기본은 현재 시즌 기준으로 표시됩니다.</div>
-          </div>
-          <div class="page-header-actions">
+          <h2>금전관리</h2>
+          <div class="season-toolbar">
             <select id="money-season-filter"></select>
           </div>
         </div>
@@ -267,44 +286,47 @@
         </div>
       </section>
 
-      
+
       <section id="page-season" class="page">
         <div class="page-header">
           <h2>시즌관리</h2>
         </div>
 
-        <div class="grid three">
+        <div class="season-grid">
           <div class="panel">
             <h3 id="season-form-title">시즌 추가</h3>
-            <label class="field">
+            <div class="field">
               <span>시즌명</span>
-              <input type="text" id="season_name" placeholder="예: 2025시즌">
-            </label>
-            <label class="field">
-              <span>시작일</span>
-              <input type="date" id="season_start">
-            </label>
-            <label class="field">
-              <span>종료일</span>
-              <input type="date" id="season_end">
-            </label>
+              <input type="text" id="season_name" placeholder="예: 2026 시즌">
+            </div>
+            <div class="grid two">
+              <label class="field">
+                <span>시작일</span>
+                <input type="date" id="season_start">
+              </label>
+              <label class="field">
+                <span>종료일</span>
+                <input type="date" id="season_end">
+              </label>
+            </div>
             <label class="field">
               <span>비고</span>
-              <input type="text" id="season_note" placeholder="선택 입력">
+              <input type="text" id="season_note" placeholder="예: 한라봉/천혜향 공통">
             </label>
-            <label class="field" style="display:flex; align-items:center; gap:8px;">
-              <input type="checkbox" id="season_is_current">
-              <span>현재 시즌으로 설정</span>
+            <label class="field">
+              <span><input type="checkbox" id="season_is_current"> 현재 시즌으로 설정</span>
             </label>
             <div class="item-actions">
               <button id="btn-save-season" class="btn primary">저장</button>
-              <button id="btn-cancel-season" class="btn">취소</button>
+              <button id="btn-cancel-season" class="btn">초기화</button>
             </div>
           </div>
 
-          <div class="panel" style="grid-column: span 2;">
-            <h3>시즌 목록</h3>
-            <div id="season-list"></div>
+          <div class="panel">
+            <h3>시즌 목록 / 백업</h3>
+            <div id="season-current-box" class="season-card-current">현재 시즌 없음</div>
+            <div id="season-list" class="option-list"></div>
+            <div id="season-backup-status" class="inline-help" style="margin-top:12px;"></div>
           </div>
         </div>
       </section>

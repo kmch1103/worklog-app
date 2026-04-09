@@ -21,7 +21,8 @@
     },
     workSearchKeyword: '',
     selectedMaterialsDetailed: [],
-    materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M']
+    materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
+    mobileCalendarMode: 'current'
   };
 
   const el = {};
@@ -32,18 +33,21 @@
     cacheElements();
     bindMenu();
     bindCalendarButtons();
+    bindMobileCalendarButtons();
     bindWorkButtons();
     bindMaterialButtons();
     bindCalendarDetailModal();
     await loadAll();
     await loadMoney();
     renderAll();
+    updateMobileCalendarMode();
+    window.addEventListener('resize', updateMobileCalendarMode);
   }
 
   function cacheElements() {
     const ids = [
       'page-calendar', 'page-works', 'page-materials', 'page-money', 'page-options', 'page-excel', 'page-backup',
-      'btn-prev-month', 'btn-next-month', 'calendar-title', 'calendar-grid', 'calendar-compare-title', 'calendar-compare-grid',
+      'btn-prev-month', 'btn-next-month', 'btn-mobile-current', 'btn-mobile-previous', 'calendar-title', 'calendar-current-title', 'calendar-grid', 'calendar-compare-title', 'calendar-compare-grid', 'calendar-compare-wrap',
       'btn-open-work-from-calendar', 'btn-open-plan-form',
       'plan-modal', 'plan-modal-title', 'btn-close-plan-modal',
       'plan_date', 'plan_title', 'plan_details', 'plan_status', 'plan-search', 'plan-search-results',
@@ -108,6 +112,33 @@
         updateEndDateFromRepeatDays();
       }
     });
+  }
+
+  function bindMobileCalendarButtons() {
+    on(el['btn-mobile-current'], 'click', () => {
+      state.mobileCalendarMode = 'current';
+      updateMobileCalendarMode();
+    });
+
+    on(el['btn-mobile-previous'], 'click', () => {
+      state.mobileCalendarMode = 'previous';
+      updateMobileCalendarMode();
+    });
+  }
+
+  function updateMobileCalendarMode() {
+    const wrap = el['calendar-compare-wrap'];
+    if (!wrap) return;
+
+    const isMobile = window.innerWidth <= 900;
+    wrap.classList.remove('mobile-show-current', 'mobile-show-previous');
+
+    if (isMobile) {
+      wrap.classList.add(state.mobileCalendarMode === 'previous' ? 'mobile-show-previous' : 'mobile-show-current');
+    }
+
+    if (el['btn-mobile-current']) el['btn-mobile-current'].classList.toggle('active', state.mobileCalendarMode === 'current');
+    if (el['btn-mobile-previous']) el['btn-mobile-previous'].classList.toggle('active', state.mobileCalendarMode === 'previous');
   }
 
   function bindCalendarDetailModal() {
@@ -285,6 +316,7 @@
 
     if (page === 'calendar') {
       renderCalendar();
+      updateMobileCalendarMode();
     } else if (page === 'works') {
       renderWorks();
       ensureWorksSearchBar();
@@ -304,22 +336,25 @@
   }
 
   function renderCalendar() {
-    if (!el['calendar-grid']) return;
-
     const year = state.currentMonth.getFullYear();
     const month = state.currentMonth.getMonth();
 
     if (el['calendar-title']) {
       el['calendar-title'].textContent = `${year}년 ${month + 1}월`;
     }
+    if (el['calendar-current-title']) {
+      el['calendar-current-title'].textContent = '현재';
+    }
 
     renderCalendarGrid(el['calendar-grid'], year, month, false);
 
-    const compareDate = new Date(year - 1, month, 1);
+    const compareYear = year - 1;
     if (el['calendar-compare-title']) {
-      el['calendar-compare-title'].textContent = `${compareDate.getFullYear()}년 ${compareDate.getMonth() + 1}월`;
+      el['calendar-compare-title'].textContent = `${compareYear}년 ${month + 1}월`;
     }
-    renderCalendarGrid(el['calendar-compare-grid'], compareDate.getFullYear(), compareDate.getMonth(), true);
+    renderCalendarGrid(el['calendar-compare-grid'], compareYear, month, true);
+
+    updateMobileCalendarMode();
   }
 
   function renderCalendarGrid(targetEl, year, month, isCompare) {
@@ -338,9 +373,10 @@
       const dateStr = fmtDate(new Date(year, month, day));
       const plans = state.plans.filter(p => normalizePlanDate(p.plan_date) === dateStr);
       const works = state.works.filter(w => isDateInRange(dateStr, w.start_date, w.end_date));
-      const selectedClass = state.selectedDate === dateStr ? 'selected' : '';
+      const selectedClass = !isCompare && state.selectedDate === dateStr ? 'selected' : '';
 
       const titleItems = [];
+
       if (plans.length) {
         titleItems.push(`
           <div class="day-title-group plan-group">
@@ -353,6 +389,7 @@
           </div>
         `);
       }
+
       if (works.length) {
         titleItems.push(`
           <div class="day-title-group work-group">
@@ -367,8 +404,9 @@
       }
 
       const moreCount = Math.max(0, plans.length + works.length - 4);
+
       html.push(`
-        <div class="calendar-day ${selectedClass}" data-date="${escapeHtml(dateStr)}" data-compare="${isCompare ? '1' : '0'}">
+        <div class="calendar-day ${selectedClass}" ${isCompare ? '' : `data-date="${escapeHtml(dateStr)}"`}>
           <div class="day-num">${day}</div>
           <div class="day-title-list">
             ${titleItems.join('')}
@@ -379,13 +417,16 @@
     }
 
     targetEl.innerHTML = html.join('');
-    targetEl.querySelectorAll('[data-date]').forEach(node => {
-      node.addEventListener('click', () => {
-        state.selectedDate = node.dataset.date;
-        renderCalendar();
-        openCalendarDetailModal(node.dataset.date);
+
+    if (!isCompare) {
+      targetEl.querySelectorAll('[data-date]').forEach(node => {
+        node.addEventListener('click', () => {
+          state.selectedDate = node.dataset.date;
+          renderCalendar();
+          openCalendarDetailModal(node.dataset.date);
+        });
       });
-    });
+    }
   }
 
   function openCalendarDetailModal(dateStr) {

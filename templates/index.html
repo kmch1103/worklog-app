@@ -27,10 +27,10 @@
     .option-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #eef2f7;}
     .option-item:last-child{border-bottom:0;}
     .option-item span{flex:1;}
-    .option-item-main{display:flex; flex-direction:column; gap:4px; flex:1;}
-    .option-subtext{font-size:12px; color:#64748b;}
-    .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
-    .recommended-materials-empty{font-size:13px; color:#64748b;}
+    .options-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:start;}
+    .option-panel{min-width:0;}
+    .option-mobile-tabs{display:none; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+    .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
     .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .money-table{width:100%;}
@@ -127,6 +127,10 @@
       .labor-row{grid-template-columns:1fr 1fr;}
       .work-date-row{grid-template-columns:1fr;}
       .calendar-day{min-height:96px;}
+      .option-mobile-tabs{display:flex;}
+      .options-grid{display:block;}
+      .option-panel{display:none;}
+      .option-panel.mobile-active{display:block;}
     }
   </style>
 </head>
@@ -206,9 +210,6 @@
             <button id="btn-open-material-modal" class="btn primary">+ 자재 추가</button>
           </div>
         </div>
-        <div class="panel" style="margin-bottom:12px;">
-          <input type="text" id="material-list-search" placeholder="자재명 / 단위 / 메모 검색" style="width:100%; max-width:420px;">
-        </div>
         <div id="materials-list"></div>
       </section>
 
@@ -266,8 +267,16 @@
       <section id="page-options" class="page">
         <div class="page-header"><h2>옵션관리</h2></div>
 
+        <div class="option-mobile-tabs">
+          <button class="btn option-tab-btn active" data-option-tab="weather">날씨</button>
+          <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
+          <button class="btn option-tab-btn" data-option-tab="tasks">작업내용</button>
+          <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
+          <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
+        </div>
+
         <div class="options-grid">
-          <div class="panel">
+          <div class="panel option-panel mobile-active" data-option-panel="weather">
             <h3>날씨</h3>
             <div class="inline-form">
               <input type="text" id="new-weather" placeholder="새 날씨">
@@ -276,7 +285,7 @@
             <div id="options-weather" class="option-list"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel option-panel" data-option-panel="crops">
             <h3>작물</h3>
             <div class="inline-form">
               <input type="text" id="new-crops" placeholder="새 작물">
@@ -285,7 +294,7 @@
             <div id="options-crops" class="option-list"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel option-panel" data-option-panel="tasks">
             <h3>작업내용</h3>
             <div class="inline-form">
               <input type="text" id="new-tasks" placeholder="새 작업내용">
@@ -294,18 +303,17 @@
             <div id="options-tasks" class="option-list"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel option-panel" data-option-panel="pests">
             <h3>병충해</h3>
             <div class="inline-form">
               <input type="text" id="new-pests" placeholder="새 병충해">
-              <input type="text" id="new-pests-recommend" placeholder="추천약제 (쉼표로 구분)">
               <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
             </div>
             <div id="options-pests" class="option-list"></div>
           </div>
 
           <!-- 사용자재 패널 제거: 자재관리가 기준 -->
-          <div class="panel">
+          <div class="panel option-panel" data-option-panel="machines">
             <h3>사용기계</h3>
             <div class="inline-form">
               <input type="text" id="new-machines" placeholder="새 사용기계">
@@ -472,11 +480,6 @@
         <div class="field">
           <span>병충해</span>
           <div id="pests-box" class="checks"></div>
-        </div>
-
-        <div class="field" id="recommended-materials-wrap" style="display:none;">
-          <span>추천약제</span>
-          <div id="recommended-materials-box" class="recommended-materials-box"></div>
         </div>
 
         <div class="field">

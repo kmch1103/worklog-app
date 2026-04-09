@@ -397,6 +397,7 @@ def init_db():
             name TEXT NOT NULL UNIQUE
         )
         """)
+    ensure_column(cur, "options_pests", "recommended_materials", "TEXT DEFAULT ''")
 
     # seasons
     cur.execute("""
@@ -587,11 +588,18 @@ def get_options():
 
     # 프론트에서 지금 쓰는 것만 내려줌
     result = {}
-    for t in ["weather", "crops", "tasks", "pests", "machines"]:
+    for t in ["weather", "crops", "tasks", "machines"]:
         rows = conn.execute(
             f"SELECT id, name FROM options_{t} ORDER BY name"
         ).fetchall()
         result[t] = rows_to_dicts(rows)
+
+    pest_rows = conn.execute("""
+        SELECT id, name, COALESCE(recommended_materials, '') AS recommended_materials
+        FROM options_pests
+        ORDER BY name
+    """).fetchall()
+    result["pests"] = rows_to_dicts(pest_rows)
 
     conn.close()
     return jsonify(result)
@@ -604,16 +612,27 @@ def create_option(option_type):
 
     data = request.get_json(force=True) or {}
     name = normalize_name(data.get("name"))
+    recommended_materials = normalize_name(data.get("recommended_materials"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
 
-    cur.execute(
-        f"INSERT OR IGNORE INTO options_{option_type} (name) VALUES (?)",
-        (name,)
-    )
+    if option_type == "pests":
+        cur.execute(
+            "INSERT OR IGNORE INTO options_pests (name, recommended_materials) VALUES (?, ?)",
+            (name, recommended_materials)
+        )
+        cur.execute(
+            "UPDATE options_pests SET recommended_materials = ? WHERE name = ?",
+            (recommended_materials, name)
+        )
+    else:
+        cur.execute(
+            f"INSERT OR IGNORE INTO options_{option_type} (name) VALUES (?)",
+            (name,)
+        )
 
     # materials 옵션을 직접 만들면 materials 테이블에도 최소 등록
     if option_type == "materials":
@@ -639,6 +658,7 @@ def update_option(option_type, option_id):
 
     data = request.get_json(force=True) or {}
     new_name = normalize_name(data.get("name"))
+    recommended_materials = normalize_name(data.get("recommended_materials"))
     if not new_name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
@@ -650,10 +670,16 @@ def update_option(option_type, option_id):
         (option_id,)
     ).fetchone()
 
-    cur.execute(
-        f"UPDATE options_{option_type} SET name = ? WHERE id = ?",
-        (new_name, option_id)
-    )
+    if option_type == "pests":
+        cur.execute(
+            "UPDATE options_pests SET name = ?, recommended_materials = ? WHERE id = ?",
+            (new_name, recommended_materials, option_id)
+        )
+    else:
+        cur.execute(
+            f"UPDATE options_{option_type} SET name = ? WHERE id = ?",
+            (new_name, option_id)
+        )
 
     if option_type == "materials" and old_row:
         old_name = old_row["name"]
@@ -948,8 +974,13 @@ def backup_season(season_id):
 
     materials = rows_to_dicts(conn.execute("SELECT * FROM materials ORDER BY name").fetchall())
     options = {}
-    for t in ["weather", "crops", "tasks", "pests", "machines"]:
+    for t in ["weather", "crops", "tasks", "machines"]:
         options[t] = rows_to_dicts(conn.execute(f"SELECT id, name FROM options_{t} ORDER BY name").fetchall())
+    options["pests"] = rows_to_dicts(conn.execute("""
+        SELECT id, name, COALESCE(recommended_materials, '') AS recommended_materials
+        FROM options_pests
+        ORDER BY name
+    """).fetchall())
     plans = rows_to_dicts(conn.execute("SELECT * FROM plans ORDER BY plan_date DESC, id DESC").fetchall())
     conn.close()
 

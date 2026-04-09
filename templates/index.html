@@ -82,16 +82,19 @@
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
-    .app{display:flex; align-items:flex-start; min-height:100vh;}
     .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
-    .content{flex:1; min-width:0;}
-    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;}
-    .calendar-panel-title{font-size:20px; font-weight:800; margin-bottom:10px;}
-
+    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
+    .calendar-mobile-toggle{display:none; gap:8px; margin-bottom:12px;}
+    .calendar-mobile-toggle .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
+    .calendar-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
+    @media (max-width: 1100px){ .calendar-compare-wrap{grid-template-columns:1fr;} }
     @media (max-width: 900px){
+      .calendar-mobile-toggle{display:flex;}
+      .calendar-compare-wrap{grid-template-columns:1fr;}
+      .calendar-compare-wrap.mobile-show-current .calendar-previous-panel{display:none;}
+      .calendar-compare-wrap.mobile-show-previous .calendar-current-panel{display:none;}
       .grid.three{grid-template-columns:1fr;}
       .labor-row{grid-template-columns:1fr 1fr; }
-      .calendar-compare-wrap{grid-template-columns:1fr;}
     }
   </style>
 </head>
@@ -119,16 +122,21 @@
           </div>
         </div>
 
-        <div class="calendar-compare-wrap">
-          <div class="panel">
-            <div class="calendar-panel-title">현재</div>
+        <div class="calendar-mobile-toggle">
+          <button id="btn-mobile-current" class="btn active">현재</button>
+          <button id="btn-mobile-previous" class="btn">전년도 같은 달</button>
+        </div>
+
+        <div id="calendar-compare-wrap" class="calendar-compare-wrap mobile-show-current">
+          <div class="panel calendar-current-panel">
+            <div id="calendar-current-title" class="calendar-panel-title">현재</div>
             <div class="calendar-week-header">
               <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
             </div>
             <div id="calendar-grid" class="calendar-grid"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel calendar-previous-panel">
             <div id="calendar-compare-title" class="calendar-panel-title">전년도 같은 달</div>
             <div class="calendar-week-header">
               <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
@@ -283,8 +291,22 @@
       <section id="page-backup" class="page">
         <div class="page-header"><h2>백업</h2></div>
         <div class="panel">
-          <p class="placeholder-title">준비중</p>
-          <p class="placeholder-text">백업/복원 기능은 다음 단계에서 연결할 예정입니다.</p>
+          <div class="field">
+            <span>기존 worklog.db 가져오기</span>
+            <input type="file" id="backup-file-input" accept=".db,.sqlite,.sqlite3,application/octet-stream">
+            <div class="inline-help">예전 PC에서 사용하던 worklog.db 파일을 선택하면 현재 작업일지 구조로 변환해서 가져옵니다.</div>
+          </div>
+
+          <div class="item-actions">
+            <button id="btn-import-old-db" class="btn primary">기존 DB 가져오기</button>
+          </div>
+
+          <div id="backup-import-status" class="inline-help" style="margin-top:12px;"></div>
+
+          <div class="panel" style="margin-top:16px; background:#f8fafc;">
+            <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
+            <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
+          </div>
         </div>
       </section>
     </main>

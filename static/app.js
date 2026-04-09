@@ -33,7 +33,8 @@
     state.currentSeason = null;
     state.selectedSeasonId = 'current';
     state.editingSeasonId = null;
-    state.compareCalendarOn = false;
+    state.calendarDataCurrent = { works: [], plans: [] };
+    state.calendarDataPrevious = { works: [], plans: [] };
 
     cacheElements();
     bindMenu();
@@ -51,7 +52,7 @@
   function cacheElements() {
     const ids = [
       'page-calendar', 'page-works', 'page-materials', 'page-money', 'page-options', 'page-season', 'page-excel', 'page-backup',
-      'btn-prev-month', 'btn-next-month', 'btn-toggle-compare', 'calendar-title', 'calendar-grid', 'calendar-current-title', 'calendar-current-grid', 'calendar-compare-title', 'calendar-compare-grid', 'calendar-compare-wrap',
+      'btn-prev-month', 'btn-next-month', 'calendar-title', 'calendar-current-title', 'calendar-current-grid', 'calendar-compare-title', 'calendar-compare-grid', 'calendar-compare-wrap',
       'btn-open-work-from-calendar', 'btn-open-plan-form',
       'plan-modal', 'plan-modal-title', 'btn-close-plan-modal',
       'plan_date', 'plan_title', 'plan_details', 'plan_status', 'plan-search', 'plan-search-results',
@@ -62,7 +63,7 @@
       'btn-new-work',
       'start_date', 'repeat_days', 'end_date', 'start_time', 'end_time',
       'weather', 'task_name', 'crops-box', 'pests-box', 'machines-box',
-      'labor_cost', 'work_hours', 'memo', 'btn-save-work', 'btn-cancel-work', 'works-list', 'works-season-filter',
+      'labor_cost', 'work_hours', 'memo', 'btn-save-work', 'btn-cancel-work', 'works-list',
       'material_name', 'material_unit', 'material_stock', 'material_price', 'material_memo',
       'btn-save-material', 'btn-open-material-modal', 'btn-close-material-modal', 'btn-cancel-material',
       'material-modal', 'material-modal-title', 'material-search-box', 'material-search-keyword', 'materials-list',
@@ -74,7 +75,7 @@
       'money-start', 'money-end', 'money-type-filter', 'money-method-filter', 'money-season-filter',
       'btn-money-filter', 'money-list', 'money-total', 'money-cash', 'money-card',
       'backup-file-input', 'btn-import-old-db', 'backup-import-status',
-      'season-form-title', 'season_name', 'season_start', 'season_end', 'season_note', 'season_is_current', 'btn-save-season', 'btn-cancel-season', 'season-list', 'season-current-box', 'season-backup-status'
+      'works-season-filter', 'season-form-title', 'season_name', 'season_start', 'season_end', 'season_note', 'season_is_current', 'btn-save-season', 'btn-cancel-season', 'season-list', 'season-current-box', 'season-backup-status'
     ];
 
     ids.forEach(id => {
@@ -91,21 +92,15 @@
   }
 
   function bindCalendarButtons() {
-    on(el['btn-prev-month'], 'click', () => {
+    on(el['btn-prev-month'], 'click', async () => {
       state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
+      await refreshCalendarData();
       renderCalendar();
     });
 
-    on(el['btn-next-month'], 'click', () => {
+    on(el['btn-next-month'], 'click', async () => {
       state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 1);
-      renderCalendar();
-    });
-
-    on(el['btn-toggle-compare'], 'click', () => {
-      state.compareCalendarOn = !state.compareCalendarOn;
-      if (el['btn-toggle-compare']) {
-        el['btn-toggle-compare'].textContent = state.compareCalendarOn ? '전년도 비교 끄기' : '전년도 비교';
-      }
+      await refreshCalendarData();
       renderCalendar();
     });
 
@@ -194,7 +189,6 @@
       state.selectedSeasonId = e.target.value || 'current';
       await loadWorks();
       renderWorks();
-      renderCalendar();
     });
     on(el['money-season-filter'], 'change', async (e) => {
       state.selectedSeasonId = e.target.value || 'current';
@@ -268,6 +262,7 @@
       loadOptions()
     ]);
     await loadWorks();
+    await refreshCalendarData();
   }
 
   async function loadSeasons() {
@@ -337,6 +332,28 @@
     } catch (e) {
       console.error(e);
       state.moneyRows = [];
+    }
+  }
+
+  async function refreshCalendarData() {
+    const currentMonth = state.currentMonth;
+    const previousMonth = new Date(currentMonth.getFullYear() - 1, currentMonth.getMonth(), 1);
+    const [currentData, previousData] = await Promise.all([
+      loadCalendarDataForMonth(currentMonth),
+      loadCalendarDataForMonth(previousMonth)
+    ]);
+    state.calendarDataCurrent = currentData;
+    state.calendarDataPrevious = previousData;
+  }
+
+  async function loadCalendarDataForMonth(monthDate) {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth() + 1;
+    try {
+      return await apiGet(`/api/calendar_items?year=${year}&month=${month}`);
+    } catch (e) {
+      console.error(e);
+      return { works: [], plans: [] };
     }
   }
 
@@ -500,6 +517,7 @@
       if (payload.is_current) state.selectedSeasonId = 'current';
       await loadWorks();
       await loadMoney();
+      await refreshCalendarData();
       renderSeasonSelectors();
       renderCurrentSeasonBox();
       renderSeasonList();
@@ -520,6 +538,7 @@
       await loadSeasons();
       await loadWorks();
       await loadMoney();
+      await refreshCalendarData();
       renderSeasonSelectors();
       renderCurrentSeasonBox();
       renderSeasonList();
@@ -579,20 +598,15 @@
   }
 
   function renderCalendar() {
-    if (!el['calendar-grid']) return;
-    renderCalendarGrid(el['calendar-grid'], state.currentMonth, el['calendar-title'], false);
-
-    const compareWrap = el['calendar-compare-wrap'];
-    if (!compareWrap) return;
-    compareWrap.classList.toggle('hidden', !state.compareCalendarOn);
-    if (!state.compareCalendarOn) return;
-
-    renderCalendarGrid(el['calendar-current-grid'], state.currentMonth, el['calendar-current-title'], true);
+    if (el['calendar-title']) {
+      el['calendar-title'].textContent = `${state.currentMonth.getFullYear()}년 ${state.currentMonth.getMonth() + 1}월`;
+    }
+    renderCalendarGridFromData(el['calendar-current-grid'], state.currentMonth, el['calendar-current-title'], state.calendarDataCurrent, false);
     const compareMonth = new Date(state.currentMonth.getFullYear() - 1, state.currentMonth.getMonth(), 1);
-    renderCalendarGrid(el['calendar-compare-grid'], compareMonth, el['calendar-compare-title'], true);
+    renderCalendarGridFromData(el['calendar-compare-grid'], compareMonth, el['calendar-compare-title'], state.calendarDataPrevious, true);
   }
 
-  function renderCalendarGrid(targetNode, monthDate, titleNode, readOnly) {
+  function renderCalendarGridFromData(targetNode, monthDate, titleNode, monthData, readOnly) {
     if (!targetNode || !monthDate) return;
     const year = monthDate.getFullYear();
     const month = monthDate.getMonth();
@@ -602,13 +616,15 @@
 
     if (titleNode) titleNode.textContent = `${year}년 ${month + 1}월`;
 
+    const worksList = Array.isArray(monthData?.works) ? monthData.works : [];
+    const plansList = Array.isArray(monthData?.plans) ? monthData.plans : [];
     const html = [];
     for (let i = 0; i < startWeekday; i++) html.push(`<div class="calendar-day empty"></div>`);
 
     for (let day = 1; day <= lastDate; day++) {
       const dateStr = fmtDate(new Date(year, month, day));
-      const plans = state.plans.filter(p => normalizePlanDate(p.plan_date) === dateStr);
-      const works = state.works.filter(w => isDateInRange(dateStr, w.start_date, w.end_date));
+      const plans = plansList.filter(p => normalizePlanDate(p.plan_date) === dateStr);
+      const works = worksList.filter(w => isDateInRange(dateStr, w.start_date, w.end_date));
       const selectedClass = !readOnly && state.selectedDate === dateStr ? 'selected' : '';
       const titleItems = [];
 
@@ -639,7 +655,6 @@
     }
 
     targetNode.innerHTML = html.join('');
-
     if (!readOnly) {
       targetNode.querySelectorAll('[data-date]').forEach(node => {
         node.addEventListener('click', () => {
@@ -659,8 +674,8 @@
       el['calendar-detail-title'].textContent = `${dateStr} 상세`;
     }
 
-    const plans = state.plans.filter(p => normalizePlanDate(p.plan_date) === dateStr);
-    const works = state.works.filter(w => isDateInRange(dateStr, w.start_date, w.end_date));
+    const plans = (state.calendarDataCurrent?.plans || []).filter(p => normalizePlanDate(p.plan_date) === dateStr);
+    const works = (state.calendarDataCurrent?.works || []).filter(w => isDateInRange(dateStr, w.start_date, w.end_date));
 
     const plansHtml = plans.length
       ? plans.map(plan => `
@@ -846,22 +861,15 @@
   }
 
   async function savePlan() {
-    const title = (el.plan_title?.value || '').trim();
-    if (!el.plan_date?.value) {
-      alert('날짜를 선택하세요.');
-      return;
-    }
-    if (!title) {
-      alert('계획 제목을 선택하세요.');
-      return;
-    }
-
     const payload = {
       plan_date: el.plan_date.value,
-      title,
-      details: el.plan_details?.value || '',
-      status: el.plan_status?.value || 'planned'
+      title: (el.plan_title.value || '').trim(),
+      details: (el.plan_details.value || '').trim(),
+      status: el.plan_status.value || 'planned'
     };
+
+    if (!payload.plan_date) return alert('계획일을 입력하세요.');
+    if (!payload.title) return alert('계획 제목을 선택하세요.');
 
     try {
       if (state.editingPlanId) {
@@ -869,32 +877,21 @@
       } else {
         await apiPost('/api/plans', payload);
       }
-
       await loadPlans();
+      await refreshCalendarData();
       closePlanModal();
       renderCalendar();
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
     } catch (e) {
       console.error(e);
-      alert('계획 저장 실패');
+      alert('작업계획 저장 중 오류가 발생했습니다.');
     }
   }
 
-  async function editPlan(planId) {
-    openPlanModal(planId);
-  }
-
-  async function deletePlan(planId) {
-    if (!confirm('계획을 삭제할까요?')) return;
-    try {
-      await apiDelete(`/api/plans/${planId}`);
-      await loadPlans();
-      renderCalendar();
-      if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
-    } catch (e) {
-      console.error(e);
-      alert('삭제 실패');
-    }
+  function editPlan(planId) {
+    const plan = state.plans.find(p => String(p.id) === String(planId));
+    if (!plan) return;
+    openPlanModal(plan);
   }
 
   async function markPlanDone(planId) {
@@ -903,12 +900,13 @@
 
     try {
       await apiPut(`/api/plans/${planId}`, {
-        plan_date: normalizePlanDate(plan.plan_date),
-        title: plan.title || '',
-        details: plan.details || '',
+        plan_date: plan.plan_date,
+        title: plan.title,
+        details: plan.details,
         status: 'done'
       });
       await loadPlans();
+      await refreshCalendarData();
       renderCalendar();
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
     } catch (e) {
@@ -917,18 +915,19 @@
     }
   }
 
-  function convertPlanToWork(planId) {
-    const plan = state.plans.find(p => String(p.id) === String(planId));
-    openWorkModal();
-    if (!plan) return;
+  async function deletePlan(planId) {
+    if (!confirm('삭제하시겠습니까?')) return;
 
-    if (el.start_date) el.start_date.value = normalizePlanDate(plan.plan_date) || fmtDate(new Date());
-    if (el.repeat_days) el.repeat_days.value = 1;
-    if (el.end_date) el.end_date.value = normalizePlanDate(plan.plan_date) || fmtDate(new Date());
-    if (el.task_name) el.task_name.value = plan.title || '';
-    if (el.memo) el.memo.value = plan.details || '';
-    updateEndDateFromRepeatDays();
-    updateWorkHoursFromTime();
+    try {
+      await apiDelete(`/api/plans/${planId}`);
+      await loadPlans();
+      await refreshCalendarData();
+      renderCalendar();
+      if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
+    } catch (err) {
+      console.error(err);
+      alert('삭제 실패');
+    }
   }
 
   function openWorkModal() {
@@ -1040,7 +1039,6 @@
 
   async function saveWork() {
     const hasMoney = !!el.has_money.checked;
-
     const labor = getLaborTotal();
     const material = getMaterialTotal();
     const other = getOtherTotal();
@@ -1093,6 +1091,7 @@
 
       await loadWorks();
       await loadMoney();
+      await refreshCalendarData();
       closeWorkModal();
       renderWorks();
       renderCalendar();
@@ -1190,6 +1189,7 @@
     try {
       await apiDelete(`/api/works/${workId}`);
       await loadWorks();
+      await refreshCalendarData();
       renderWorks();
       renderCalendar();
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
@@ -1608,7 +1608,7 @@
   }
 
   function resetLaborRows() {
-    if (el['labor-rows-wrap']) el['labor-rows-wrap'].innerHTML = '';
+    if (!el['labor-rows-wrap']) el['labor-rows-wrap'].innerHTML = '';
   }
 
   function addLaborRow(data = null) {

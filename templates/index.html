@@ -123,23 +123,27 @@
     .calendar-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
     @media (max-width: 1100px){ .calendar-compare-wrap{grid-template-columns:1fr;} }
     @media (max-width: 900px){
+      body{padding-top:112px;}
       .app{display:block; width:100%; overflow-x:hidden;}
       .sidebar{
-        position:sticky;
+        position:fixed;
         top:0;
-        z-index:50;
+        left:0;
+        right:0;
+        z-index:200;
         width:100%;
         min-width:0;
         height:auto;
         overflow:visible;
         border-right:none;
-        padding:12px 12px 10px;
+        padding:10px 12px 8px;
         background:#1e293b;
+        box-shadow:0 2px 10px rgba(0,0,0,.12);
       }
       .sidebar h1{
-        margin:0 0 10px;
-        font-size:24px;
-        line-height:1.2;
+        margin:0 0 8px;
+        font-size:22px;
+        line-height:1.15;
       }
       .mobile-menu-row{
         display:grid;
@@ -152,9 +156,9 @@
         width:100%;
         min-width:0;
         margin:0;
-        padding:10px 6px;
-        font-size:14px;
-        line-height:1.2;
+        padding:9px 6px;
+        font-size:13px;
+        line-height:1.15;
         white-space:normal;
         word-break:keep-all;
         border-radius:12px;
@@ -210,6 +214,9 @@
       #material-search-input{min-width:0 !important; width:100%;}
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
+    @media (max-width: 420px){
+      body{padding-top:124px;}
+      .mobile-menu-row .menu-btn{font-size:12px; padding:8px 4px;}
     }
   </style>
 </head>

@@ -42,42 +42,67 @@
     bindMaterialButtons();
     bindOptionButtons();
     bindCalendarDetailModal();
+
+    // ✅ 모바일 뒤로가기 제어 (추가)
     bindHistoryNavigation();
+
     await loadAll();
     await loadMoney();
     renderAll();
     updateMobileCalendarMode();
     initializeHistoryState();
+
     window.addEventListener('resize', updateMobileCalendarMode);
   }
 
   function cacheElements() {
     const ids = [
-      'page-calendar', 'page-works', 'page-materials', 'page-money', 'page-options', 'page-excel', 'page-backup',
-      'btn-prev-month', 'btn-next-month', 'btn-mobile-current', 'btn-mobile-previous', 'calendar-title', 'calendar-current-title', 'calendar-grid', 'calendar-compare-title', 'calendar-compare-grid', 'calendar-compare-wrap',
-      'btn-open-work-from-calendar', 'btn-open-plan-form',
-      'plan-modal', 'plan-modal-title', 'btn-close-plan-modal',
-      'plan_date', 'plan_title', 'plan_details', 'plan_status', 'plan-search', 'plan-search-results',
-      'btn-save-plan', 'btn-cancel-plan',
-      'calendar-detail-modal', 'calendar-detail-title', 'calendar-detail-body',
-      'btn-close-calendar-detail', 'btn-calendar-add-plan', 'btn-calendar-add-work',
-      'work-modal', 'work-modal-title', 'btn-close-work-modal',
+      'page-calendar','page-works','page-materials','page-money','page-options','page-excel','page-backup',
+      'btn-prev-month','btn-next-month','btn-mobile-current','btn-mobile-previous',
+      'calendar-title','calendar-current-title','calendar-grid',
+      'calendar-compare-title','calendar-compare-grid','calendar-compare-wrap',
+
+      'btn-open-work-from-calendar','btn-open-plan-form',
+
+      'plan-modal','plan-modal-title','btn-close-plan-modal',
+      'plan_date','plan_title','plan_details','plan_status',
+      'plan-search','plan-search-results',
+
+      'btn-save-plan','btn-cancel-plan',
+
+      'calendar-detail-modal','calendar-detail-title','calendar-detail-body',
+      'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
+
+      'work-modal','work-modal-title','btn-close-work-modal',
       'btn-new-work',
-      'start_date', 'repeat_days', 'end_date', 'start_time', 'end_time',
-      'weather', 'task_name', 'crops-box', 'pests-box', 'machines-box',
-      'labor_cost', 'work_hours', 'memo', 'btn-save-work', 'btn-cancel-work', 'works-list',
-      'material_name', 'material_unit', 'material_stock', 'material_price', 'material_memo',
-      'btn-save-material', 'btn-open-material-modal', 'btn-close-material-modal', 'btn-cancel-material',
-      'material-modal', 'material-modal-title', 'material-search-box', 'material-search-keyword', 'materials-list',
-      'new-weather', 'new-crops', 'new-tasks', 'new-pests', 'new-pests-recommend', 'new-machines',
-      'options-weather', 'options-crops', 'options-tasks', 'options-pests', 'options-machines',
-      'material-search-input', 'material-search-results', 'selected-materials-detailed',
-      'recommended-materials-wrap', 'recommended-materials-box', 'material-list-search',
-      'season_name', 'season_start_date', 'season_end_date', 'season_note', 'season_is_current', 'btn-save-season', 'btn-reset-season', 'season-list',
-      'labor-rows-wrap', 'btn-add-labor-row',
-      'has_money', 'money-box', 'money_note', 'other_cost', 'money_labor_total', 'money_material_total', 'money_total_amount',
-      'money-start', 'money-end', 'money-type-filter', 'money-method-filter',
-      'btn-money-filter', 'money-list', 'money-total', 'money-cash', 'money-card'
+
+      'start_date','repeat_days','end_date','start_time','end_time',
+      'weather','task_name','crops-box','pests-box','machines-box',
+
+      'labor_cost','work_hours','memo',
+      'btn-save-work','btn-cancel-work','works-list',
+
+      'material_name','material_unit','material_stock','material_price','material_memo',
+      'btn-save-material','btn-open-material-modal','btn-close-material-modal','btn-cancel-material',
+      'material-modal','material-modal-title','material-search-box','material-search-keyword','materials-list',
+
+      'new-weather','new-crops','new-tasks','new-pests','new-pests-recommend','new-machines',
+      'options-weather','options-crops','options-tasks','options-pests','options-machines',
+
+      'material-search-input','material-search-results','selected-materials-detailed',
+
+      'recommended-materials-wrap','recommended-materials-box','material-list-search',
+
+      'season_name','season_start_date','season_end_date','season_note','season_is_current',
+      'btn-save-season','btn-reset-season','season-list',
+
+      'labor-rows-wrap','btn-add-labor-row',
+
+      'has_money','money-box','money_note','other_cost',
+      'money_labor_total','money_material_total','money_total_amount',
+
+      'money-start','money-end','money-type-filter','money-method-filter',
+      'btn-money-filter','money-list','money-total','money-cash','money-card'
     ];
 
     ids.forEach(id => {
@@ -96,6 +121,7 @@
   }
 
   function bindCalendarButtons() {
+
     on(el['btn-prev-month'], 'click', () => {
       state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
       renderCalendar();
@@ -107,14 +133,20 @@
     });
 
     on(el['btn-open-plan-form'], 'click', () => openPlanModal());
-    on(el['plan-search'], 'input', renderPlanSearchResults);
+
+    // ✅ 검색 → 제목 자동 입력 (추가)
+    on(el['plan-search'], 'input', (e) => {
+      renderPlanSearchResults();
+      if (el.plan_title) {
+        el.plan_title.value = (e.target.value || '').trim();
+      }
+    });
+
     on(el['btn-close-plan-modal'], 'click', closePlanModal);
     on(el['btn-cancel-plan'], 'click', closePlanModal);
     on(el['btn-save-plan'], 'click', savePlan);
 
-    on(el['plan-modal'], 'click', (e) => {
-      if (e.target === el['plan-modal']) closePlanModal();
-    });
+    // ❌ 기존: 바깥 클릭 닫힘 제거됨
 
     on(el['btn-open-work-from-calendar'], 'click', () => {
       openWorkModal();
@@ -124,58 +156,6 @@
       }
     });
   }
-
-  function bindMobileCalendarButtons() {
-    on(el['btn-mobile-current'], 'click', () => {
-      state.mobileCalendarMode = 'current';
-      updateMobileCalendarMode();
-    });
-
-    on(el['btn-mobile-previous'], 'click', () => {
-      state.mobileCalendarMode = 'previous';
-      updateMobileCalendarMode();
-    });
-  }
-
-  function updateMobileCalendarMode() {
-    const wrap = el['calendar-compare-wrap'];
-    if (!wrap) return;
-
-    const isMobile = window.innerWidth <= 900;
-    wrap.classList.remove('mobile-show-current', 'mobile-show-previous');
-
-    if (isMobile) {
-      wrap.classList.add(state.mobileCalendarMode === 'previous' ? 'mobile-show-previous' : 'mobile-show-current');
-    }
-
-    if (el['btn-mobile-current']) el['btn-mobile-current'].classList.toggle('active', state.mobileCalendarMode === 'current');
-    if (el['btn-mobile-previous']) el['btn-mobile-previous'].classList.toggle('active', state.mobileCalendarMode === 'previous');
-    renderOptions();
-  }
-
-  function bindCalendarDetailModal() {
-    on(el['btn-close-calendar-detail'], 'click', closeCalendarDetailModal);
-
-    on(el['calendar-detail-modal'], 'click', (e) => {
-      if (e.target === el['calendar-detail-modal']) closeCalendarDetailModal();
-    });
-
-    on(el['btn-calendar-add-plan'], 'click', () => {
-      closeCalendarDetailModal();
-      openPlanModal();
-    });
-
-    on(el['btn-calendar-add-work'], 'click', () => {
-      closeCalendarDetailModal();
-      openWorkModal();
-      if (state.selectedDate) {
-        el.start_date.value = state.selectedDate;
-        if (el.repeat_days) el.repeat_days.value = 1;
-        updateEndDateFromRepeatDays();
-      }
-    });
-  }
-
   function bindWorkButtons() {
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
@@ -220,9 +200,7 @@
     on(el['btn-cancel-material'], 'click', closeMaterialModal);
     on(el['btn-save-material'], 'click', saveMaterial);
 
-    on(el['material-modal'], 'click', (e) => {
-      if (e.target === el['material-modal']) closeMaterialModal();
-    });
+    // ❌ 기존 바깥 클릭 닫힘 제거
 
     on(el['material-search-keyword'], 'input', (e) => {
       const keyword = e.target.value || '';
@@ -295,6 +273,13 @@
   async function loadOptions() {
     try {
       const data = await apiGet('/api/options');
+      state.optionsRaw = {
+        weather: data.weather || [],
+        crops: data.crops || [],
+        tasks: data.tasks || [],
+        pests: data.pests || [],
+        machines: data.machines || []
+      };
       state.options.weather = normalizeOptions(data.weather || []);
       state.options.crops = normalizeOptions(data.crops || []);
       state.options.tasks = normalizeOptions(data.tasks || []);
@@ -304,6 +289,7 @@
     } catch (e) {
       console.error(e);
       state.options = { weather: [], crops: [], tasks: [], pests: [], machines: [], pestsRaw: [] };
+      state.optionsRaw = { weather: [], crops: [], tasks: [], pests: [], machines: [] };
     }
   }
 
@@ -636,7 +622,9 @@
 
     el['plan-search-results'].querySelectorAll('[data-plan-pick]').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (el.plan_title) el.plan_title.value = btn.dataset.planPick || '';
+        const picked = btn.dataset.planPick || '';
+        if (el.plan_title) el.plan_title.value = picked;
+        if (el['plan-search']) el['plan-search'].value = picked;
       });
     });
   }
@@ -975,12 +963,14 @@
     syncAmount();
   }
 
-  function getLaborRowsFromForm() {
-    return Array.from(document.querySelectorAll('.labor-row')).map(row => {
+  function getLaborRows() {
+    const wrap = el['labor-rows-wrap'];
+    if (!wrap) return [];
+    return Array.from(wrap.querySelectorAll('.labor-row')).map(row => {
       const type = row.querySelector('.labor-type')?.value || '';
       const count = Number(row.querySelector('.labor-count')?.value || 0);
       const price = Number(row.querySelector('.labor-price')?.value || 0);
-      const amount = Number(row.querySelector('.labor-amount')?.value || (count * price));
+      const amount = Number(row.querySelector('.labor-amount')?.value || 0);
       const note = row.querySelector('.labor-note')?.value || '';
       return { type, count, price, amount, method: '', note };
     }).filter(item => item.count > 0 || item.price > 0 || item.note);
@@ -1084,7 +1074,7 @@
     const box = el['recommended-materials-box'];
     if (!wrap || !box) return;
 
-    const selectedPests = getCheckedValues('pests-box');
+    const selectedPests = getSelectedChipValues('pests');
     const recommends = new Set();
 
     selectedPests.forEach(pestName => {
@@ -1116,8 +1106,8 @@
     });
   }
 
-  function getCheckedValues(boxId) {
-    const box = el[boxId];
+  function getSelectedChipValues(type) {
+    const box = el[`${type}-box`];
     if (!box) return [];
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
   }
@@ -1155,7 +1145,7 @@
     const box = el[`${type}-box`];
     if (!box) return;
 
-    const selected = new Set(getCheckedValues(`${type}-box`));
+    const selected = new Set(getSelectedChipValues(type));
 
     box.innerHTML = (items || []).map(item => {
       const name = optionName(item);
@@ -1232,7 +1222,6 @@
   function optionName(item) {
     return typeof item === 'string' ? item : (item?.name || '');
   }
-
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
@@ -1259,33 +1248,39 @@
   function renderOptionList(type, items, listEl, inputEl, extraInputEl = null) {
     if (!listEl) return;
 
-    listEl.innerHTML = items.map(name => `
-      <div class="option-item">
-        <div class="option-item-main">
-          <span>${escapeHtml(name)}</span>
-          ${type === 'pests' ? `<div class="option-subtext">${escapeHtml(getPestRecommend(name))}</div>` : ''}
+    const rawItems = state.optionsRaw?.[type] || (items || []).map(name => ({ name }));
+
+    listEl.innerHTML = rawItems.map(item => {
+      const name = optionName(item);
+      const itemId = item?.id ?? name;
+      return `
+        <div class="option-item">
+          <div class="option-item-main">
+            <span>${escapeHtml(name)}</span>
+            ${type === 'pests' ? `<div class="option-subtext">${escapeHtml(getPestRecommend(name))}</div>` : ''}
+          </div>
+          <div class="item-actions">
+            <button type="button" class="btn" data-option-edit="${escapeHtml(type)}|${escapeHtml(String(itemId))}|${escapeHtml(name)}">수정</button>
+            <button type="button" class="btn" data-option-delete="${escapeHtml(type)}|${escapeHtml(String(itemId))}">삭제</button>
+          </div>
         </div>
-        <div class="item-actions">
-          <button type="button" class="btn" data-option-edit="${escapeHtml(type)}|${escapeHtml(name)}">수정</button>
-          <button type="button" class="btn" data-option-delete="${escapeHtml(type)}|${escapeHtml(name)}">삭제</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     listEl.querySelectorAll('[data-option-edit]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const [optType, oldName] = btn.dataset.optionEdit.split('|');
+        const [optType, optionId, oldName] = btn.dataset.optionEdit.split('|');
         const newName = prompt('수정할 이름', oldName);
         if (!newName || newName.trim() === oldName) return;
 
-        const payload = { old_name: oldName, name: newName.trim() };
-        if (optType === 'pests' && extraInputEl) {
+        const payload = { name: newName.trim() };
+        if (optType === 'pests') {
           const recommend = prompt('추천 자재', getPestRecommend(oldName));
-          if (recommend !== null) payload.recommend = recommend;
+          if (recommend !== null) payload.recommended_materials = recommend;
         }
 
         try {
-          await apiPut(`/api/options/${optType}`, payload);
+          await apiPut(`/api/options/${optType}/${optionId}`, payload);
           await loadOptions();
           renderOptions();
           renderWorkFormOptions();
@@ -1298,10 +1293,10 @@
 
     listEl.querySelectorAll('[data-option-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const [optType, name] = btn.dataset.optionDelete.split('|');
+        const [optType, optionId] = btn.dataset.optionDelete.split('|');
         if (!confirm('삭제하시겠습니까?')) return;
         try {
-          await apiDelete(`/api/options/${optType}/${encodeURIComponent(name)}`);
+          await apiDelete(`/api/options/${optType}/${optionId}`);
           await loadOptions();
           renderOptions();
           renderWorkFormOptions();
@@ -1312,38 +1307,58 @@
       });
     });
 
-    if (inputEl && !inputEl.dataset.bound) {
-      inputEl.dataset.bound = '1';
-      inputEl.addEventListener('keydown', async (e) => {
+    const bindOptionInput = (node) => {
+      if (!node || node.dataset.bound) return;
+      node.dataset.bound = '1';
+      node.addEventListener('keydown', async (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-
-        const name = inputEl.value.trim();
-        if (!name) return;
-
-        const payload = { name };
-        if (type === 'pests' && extraInputEl) {
-          payload.recommend = (extraInputEl.value || '').trim();
-        }
-
-        try {
-          await apiPost(`/api/options/${type}`, payload);
-          inputEl.value = '';
-          if (extraInputEl) extraInputEl.value = '';
-          await loadOptions();
-          renderOptions();
-          renderWorkFormOptions();
-        } catch (err) {
-          console.error(err);
-          alert('추가 실패');
-        }
+        await saveOption(type, inputEl?.id, extraInputEl?.id || null);
       });
+    };
+
+    bindOptionInput(inputEl);
+    bindOptionInput(extraInputEl);
+  }
+
+  async function saveOption(type, inputId, extraInputId = null) {
+    const inputNode = document.getElementById(inputId);
+    const extraNode = extraInputId ? document.getElementById(extraInputId) : null;
+    if (!inputNode) return;
+
+    const name = (inputNode.value || '').trim();
+    if (!name) {
+      alert('항목명을 입력하세요.');
+      inputNode.focus();
+      return;
+    }
+
+    const payload = { name };
+    if (type === 'pests') {
+      payload.recommended_materials = (extraNode?.value || '').trim();
+    }
+
+    try {
+      await apiPost(`/api/options/${type}`, payload);
+      inputNode.value = '';
+      if (extraNode) extraNode.value = '';
+      await loadOptions();
+      renderOptions();
+      renderWorkFormOptions();
+    } catch (e) {
+      console.error(e);
+      alert('추가 실패');
     }
   }
 
+  window.saveOption = function(type, inputId) {
+    const extraId = type === 'pests' ? 'new-pests-recommend' : null;
+    return saveOption(type, inputId, extraId);
+  };
+
   function getPestRecommend(name) {
     const item = (state.options.pestsRaw || []).find(p => optionName(p) === name);
-    return item?.recommend || '';
+    return item?.recommended_materials || item?.recommend || '';
   }
 
   async function saveSeason() {
@@ -1946,11 +1961,11 @@
       syncWorkTimeFields('time');
     }
 
-    const crops = getCheckedValues('crops-box').join(', ');
-    const pests = getCheckedValues('pests-box').join(', ');
-    const machines = getCheckedValues('machines-box').join(', ');
+    const crops = getSelectedChipValues('crops').join(', ');
+    const pests = getSelectedChipValues('pests').join(', ');
+    const machines = getSelectedChipValues('machines').join(', ');
 
-    const laborRows = getLaborRowsFromForm();
+    const laborRows = getLaborRows();
     const money = el.has_money?.checked ? {
       type: buildMoneyType(),
       total_amount: getLaborTotal() + getMaterialTotal() + getOtherTotal(),

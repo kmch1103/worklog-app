@@ -7,6 +7,11 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
   <style>
+    *, *::before, *::after{box-sizing:border-box;}
+    html, body{max-width:100%; overflow-x:hidden;}
+    body{margin:0;}
+    .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
+    input, select, textarea, button{max-width:100%;}
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
     .readonly-money.total{font-size:18px; color:#0f172a;}
     .work-date-group{margin-bottom:24px;}
@@ -108,27 +113,51 @@
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
     .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
+    .sidebar h1{margin:0 0 18px;}
+    .mobile-menu-row{display:flex; flex-direction:column; gap:12px;}
+    .mobile-menu-row::-webkit-scrollbar{height:6px;}
+    .mobile-menu-row::-webkit-scrollbar-thumb{background:#94a3b8; border-radius:999px;}
     .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
     .calendar-mobile-toggle{display:none; gap:8px; margin-bottom:12px;}
     .calendar-mobile-toggle .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .calendar-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
     @media (max-width: 1100px){ .calendar-compare-wrap{grid-template-columns:1fr;} }
     @media (max-width: 900px){
-      .app{display:block;}
+      .app{display:block; width:100%; overflow-x:hidden;}
       .sidebar{
-        position:static;
-        top:auto;
-        width:auto;
+        position:sticky;
+        top:0;
+        z-index:50;
+        width:100%;
         min-width:0;
         height:auto;
         overflow:visible;
         border-right:none;
-        padding:20px 16px 12px;
+        padding:12px 12px 10px;
+        background:#1e293b;
+      }
+      .sidebar h1{
+        margin:0 0 10px;
+        font-size:24px;
+        line-height:1.2;
+      }
+      .mobile-menu-row{
+        flex-direction:row;
+        gap:8px;
+        overflow-x:auto;
+        overflow-y:hidden;
+        -webkit-overflow-scrolling:touch;
+        padding-bottom:2px;
+      }
+      .mobile-menu-row .menu-btn{
+        flex:0 0 auto;
+        white-space:nowrap;
+        margin:0;
       }
       .content{
         min-width:0;
         width:100%;
-        padding:12px 16px 24px;
+        padding:12px 12px 24px;
       }
       .page-header{
         flex-direction:column;
@@ -139,21 +168,43 @@
         width:100%;
         justify-content:space-between;
       }
-      .calendar-mobile-toggle{display:flex;}
+      .calendar-mobile-toggle{
+        display:flex;
+        flex-wrap:wrap;
+      }
       .calendar-compare-wrap{grid-template-columns:1fr;}
       .calendar-compare-wrap.mobile-show-current .calendar-previous-panel{display:none;}
       .calendar-compare-wrap.mobile-show-previous .calendar-current-panel{display:none;}
       .grid.three{grid-template-columns:1fr;}
+      .grid.two{grid-template-columns:1fr;}
       .materials-split{grid-template-columns:1fr;}
       .labor-row{grid-template-columns:1fr 1fr;}
-      .work-date-row{grid-template-columns:1fr;}
+      .work-date-row{display:grid; grid-template-columns:1fr;}
+      .work-card{min-width:0;}
       .calendar-day{min-height:96px;}
-      .option-mobile-tabs{display:flex;}
+      .option-mobile-tabs{
+        display:flex;
+        overflow-x:auto;
+        overflow-y:hidden;
+        flex-wrap:nowrap;
+        -webkit-overflow-scrolling:touch;
+        padding-bottom:2px;
+      }
+      .option-mobile-tabs .btn{
+        flex:0 0 auto;
+        white-space:nowrap;
+      }
       .options-grid{display:block;}
       .option-panel{display:none;}
       .option-panel.mobile-active{display:block;}
       .season-form-grid{grid-template-columns:1fr;}
       .season-list{grid-template-columns:1fr;}
+      .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+      .money-filter .btn{width:100%;}
+      .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+      #material-search-input{min-width:0 !important; width:100%;}
+      .modal-body{padding:14px;}
+      .modal-header,.modal-footer{padding:14px;}
     }
   </style>
 </head>
@@ -161,13 +212,15 @@
   <div class="app">
     <aside class="sidebar">
       <h1>작업일지 v2</h1>
-      <button class="menu-btn active" data-page="calendar">작업달력</button>
-      <button class="menu-btn" data-page="works">작업일지</button>
-      <button class="menu-btn" data-page="materials">자재관리</button>
-      <button class="menu-btn" data-page="money">금전관리</button>
-      <button class="menu-btn" data-page="options">옵션관리</button>
-      <button class="menu-btn" data-page="excel">엑셀다운</button>
-      <button class="menu-btn" data-page="backup">백업</button>
+      <div class="mobile-menu-row">
+        <button class="menu-btn active" data-page="calendar">작업달력</button>
+        <button class="menu-btn" data-page="works">작업일지</button>
+        <button class="menu-btn" data-page="materials">자재관리</button>
+        <button class="menu-btn" data-page="money">금전관리</button>
+        <button class="menu-btn" data-page="options">옵션관리</button>
+        <button class="menu-btn" data-page="excel">엑셀다운</button>
+        <button class="menu-btn" data-page="backup">백업</button>
+      </div>
     </aside>
 
     <main class="content">

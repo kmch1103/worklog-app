@@ -444,63 +444,91 @@ def get_works():
 def create_work():
     data = request.get_json(force=True) or {}
 
+    start_date = (data.get("start_date") or "").strip()
+    end_date = (data.get("end_date") or start_date).strip()
+    task_name = (data.get("task_name") or "").strip()
+
+    if not start_date:
+        return jsonify({"ok": False, "error": "시작일이 없습니다."}), 400
+    if not task_name:
+        return jsonify({"ok": False, "error": "작업내용이 없습니다."}), 400
+
     conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO works (
-            start_date, end_date, weather, task_name,
-            crops, pests, machines, work_hours, memo
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data.get("start_date", ""),
-        data.get("end_date", ""),
-        data.get("weather", ""),
-        data.get("task_name", ""),
-        data.get("crops", ""),
-        data.get("pests", ""),
-        data.get("machines", ""),
-        float(data.get("work_hours") or 0),
-        data.get("memo", "")
-    ))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO works (
+                start_date, end_date, weather, task_name,
+                crops, pests, machines, work_hours, memo
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            start_date,
+            end_date,
+            data.get("weather", ""),
+            task_name,
+            data.get("crops", ""),
+            data.get("pests", ""),
+            data.get("machines", ""),
+            float(data.get("work_hours") or 0),
+            data.get("memo", "")
+        ))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"작업 저장 오류: {e}"}), 500
+    finally:
+        conn.close()
 
 
 @app.route("/api/works/<int:work_id>", methods=["PUT"])
 def update_work(work_id):
     data = request.get_json(force=True) or {}
 
+    start_date = (data.get("start_date") or "").strip()
+    end_date = (data.get("end_date") or start_date).strip()
+    task_name = (data.get("task_name") or "").strip()
+
+    if not start_date:
+        return jsonify({"ok": False, "error": "시작일이 없습니다."}), 400
+    if not task_name:
+        return jsonify({"ok": False, "error": "작업내용이 없습니다."}), 400
+
     conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE works
-        SET start_date = ?,
-            end_date = ?,
-            weather = ?,
-            task_name = ?,
-            crops = ?,
-            pests = ?,
-            machines = ?,
-            work_hours = ?,
-            memo = ?
-        WHERE id = ?
-    """, (
-        data.get("start_date", ""),
-        data.get("end_date", ""),
-        data.get("weather", ""),
-        data.get("task_name", ""),
-        data.get("crops", ""),
-        data.get("pests", ""),
-        data.get("machines", ""),
-        float(data.get("work_hours") or 0),
-        data.get("memo", ""),
-        work_id
-    ))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE works
+            SET start_date = ?,
+                end_date = ?,
+                weather = ?,
+                task_name = ?,
+                crops = ?,
+                pests = ?,
+                machines = ?,
+                work_hours = ?,
+                memo = ?
+            WHERE id = ?
+        """, (
+            start_date,
+            end_date,
+            data.get("weather", ""),
+            task_name,
+            data.get("crops", ""),
+            data.get("pests", ""),
+            data.get("machines", ""),
+            float(data.get("work_hours") or 0),
+            data.get("memo", ""),
+            work_id
+        ))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"작업 수정 오류: {e}"}), 500
+    finally:
+        conn.close()
 
 
 @app.route("/api/works/<int:work_id>", methods=["DELETE"])

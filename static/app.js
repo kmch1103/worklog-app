@@ -43,7 +43,6 @@
     bindOptionButtons();
     bindCalendarDetailModal();
 
-    // ✅ 모바일 뒤로가기 제어 (추가)
     bindHistoryNavigation();
 
     await loadAll();
@@ -121,7 +120,6 @@
   }
 
   function bindCalendarButtons() {
-
     on(el['btn-prev-month'], 'click', () => {
       state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
       renderCalendar();
@@ -134,7 +132,6 @@
 
     on(el['btn-open-plan-form'], 'click', () => openPlanModal());
 
-    // ✅ 검색 → 제목 자동 입력 (추가)
     on(el['plan-search'], 'input', (e) => {
       renderPlanSearchResults();
       if (el.plan_title) {
@@ -145,8 +142,6 @@
     on(el['btn-close-plan-modal'], 'click', closePlanModal);
     on(el['btn-cancel-plan'], 'click', closePlanModal);
     on(el['btn-save-plan'], 'click', savePlan);
-
-    // ❌ 기존: 바깥 클릭 닫힘 제거됨
 
     on(el['btn-open-work-from-calendar'], 'click', () => {
       openWorkModal();
@@ -174,6 +169,7 @@
       }
     });
   }
+
   function bindWorkButtons() {
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
@@ -214,8 +210,6 @@
     on(el['btn-close-material-modal'], 'click', closeMaterialModal);
     on(el['btn-cancel-material'], 'click', closeMaterialModal);
     on(el['btn-save-material'], 'click', saveMaterial);
-
-    // ❌ 기존 바깥 클릭 닫힘 제거
 
     on(el['material-search-keyword'], 'input', (e) => {
       const keyword = e.target.value || '';
@@ -1156,6 +1150,22 @@
     if (el['material-search-results']) el['material-search-results'].innerHTML = '';
   }
 
+  function findMaterialByRecommendedName(name) {
+    const target = String(name || '').trim().toLowerCase();
+    if (!target) return null;
+
+    let found = state.materials.find(item => String(item.name || '').trim().toLowerCase() === target);
+    if (found) return found;
+
+    found = state.materials.find(item => String(item.name || '').trim().toLowerCase().includes(target));
+    if (found) return found;
+
+    found = state.materials.find(item => target.includes(String(item.name || '').trim().toLowerCase()));
+    if (found) return found;
+
+    return null;
+  }
+
   function renderSelectedMaterialsDetailed() {
     const box = el['selected-materials-detailed'];
     if (!box) return;
@@ -1227,7 +1237,8 @@
     box.querySelectorAll('[data-recommend-material]').forEach(btn => {
       btn.addEventListener('click', () => {
         const name = btn.dataset.recommendMaterial || '';
-        const item = state.materials.find(m => (m.name || '') === name);
+        const item = findMaterialByRecommendedName(name);
+
         if (item) {
           addSelectedMaterial(item.id);
           return;
@@ -2104,7 +2115,7 @@
       renderMoney();
     } catch (e) {
       console.error(e);
-      alert('저장 실패');
+      alert(`저장 실패\n${e.message || e}`);
     }
   }
 
@@ -2129,13 +2140,29 @@
     return res.json();
   }
 
+  async function parseApiError(res) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const data = await res.json();
+      if (data && (data.error || data.message)) {
+        message = data.error || data.message;
+      }
+    } catch (e) {
+      try {
+        const text = await res.text();
+        if (text) message = text;
+      } catch (ignore) {}
+    }
+    return message;
+  }
+
   async function apiPost(url, body) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {})
     });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    if (!res.ok) throw new Error(await parseApiError(res));
     return res.json().catch(() => ({}));
   }
 
@@ -2145,7 +2172,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {})
     });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    if (!res.ok) throw new Error(await parseApiError(res));
     return res.json().catch(() => ({}));
   }
 

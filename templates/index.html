@@ -10,6 +10,8 @@
     *, *::before, *::after{box-sizing:border-box;}
     html, body{max-width:100%; overflow-x:hidden;}
     body{margin:0;}
+    .app{display:flex; align-items:flex-start; width:100%;}
+    .content{min-width:0; width:calc(100% - 240px); margin-left:240px; padding:18px 18px 24px;}
     .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
     input, select, textarea, button{max-width:100%;}
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
@@ -113,7 +115,7 @@
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
-    .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
+    .sidebar{position:fixed; top:0; left:0; width:240px; height:100vh; overflow:auto; z-index:120;}
     .sidebar h1{margin:0 0 18px;}
     .mobile-menu-row{display:flex; flex-direction:column; gap:12px;}
     .mobile-menu-row::-webkit-scrollbar{height:6px;}
@@ -167,6 +169,7 @@
       .content{
         min-width:0;
         width:100%;
+        margin-left:0;
         padding:12px 12px 24px;
       }
       .page-header{

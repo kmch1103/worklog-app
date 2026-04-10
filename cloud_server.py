@@ -867,11 +867,12 @@ def get_seasons():
 @app.route("/api/seasons", methods=["POST"])
 def create_season():
     data = request.get_json(force=True) or {}
-    season_name = normalize_name(data.get("season_name"))
+    season_name = normalize_name(data.get("season_name") or data.get("name"))
     start_date = normalize_name(data.get("start_date"))
     end_date = normalize_name(data.get("end_date"))
     note = (data.get("note") or "").strip()
-    is_current = 1 if data.get("is_current") else 0
+    is_current_raw = data.get("is_current")
+    is_current = 1 if str(is_current_raw).lower() in ["1", "true", "yes", "y", "on"] else 0
 
     if not season_name or not start_date or not end_date:
         return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
@@ -892,11 +893,12 @@ def create_season():
 @app.route("/api/seasons/<int:season_id>", methods=["PUT"])
 def update_season(season_id):
     data = request.get_json(force=True) or {}
-    season_name = normalize_name(data.get("season_name"))
+    season_name = normalize_name(data.get("season_name") or data.get("name"))
     start_date = normalize_name(data.get("start_date"))
     end_date = normalize_name(data.get("end_date"))
     note = (data.get("note") or "").strip()
-    is_current = 1 if data.get("is_current") else 0
+    is_current_raw = data.get("is_current")
+    is_current = 1 if str(is_current_raw).lower() in ["1", "true", "yes", "y", "on"] else 0
 
     if not season_name or not start_date or not end_date:
         return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
@@ -1052,12 +1054,27 @@ def get_money():
         if not money:
             continue
 
+        total_amount = float(money.get("total_amount") or money.get("amount") or 0)
+        labor_total = float(money.get("labor_total") or 0)
+        material_total = float(money.get("material_total") or 0)
+        other_total = float(money.get("other_total") or 0)
+        method = money.get("method", "")
+
+        cash_amount = total_amount if method == "현금" else 0
+        card_amount = total_amount if method in ["카드", "일시불", "할부"] else 0
+
         result.append({
             "date": item.get("start_date", ""),
             "task_name": item.get("task_name", ""),
             "type": money.get("type", ""),
-            "total": float(money.get("total_amount") or money.get("amount") or 0),
-            "method": money.get("method", ""),
+            "total": total_amount,
+            "total_amount": total_amount,
+            "labor_total": labor_total,
+            "material_total": material_total,
+            "other_total": other_total,
+            "method": method,
+            "cash_amount": cash_amount,
+            "card_amount": card_amount,
             "note": money.get("note", "")
         })
 

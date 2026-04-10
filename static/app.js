@@ -46,7 +46,6 @@
     await loadMoney();
     renderAll();
     updateMobileCalendarMode();
-    setupBrowserBackHandling();
     window.addEventListener('resize', updateMobileCalendarMode);
   }
 
@@ -106,12 +105,7 @@
     });
 
     on(el['btn-open-plan-form'], 'click', () => openPlanModal());
-    on(el['plan-search'], 'input', () => {
-      renderPlanSearchResults();
-      if (el['plan_title'] && !String(el['plan_title'].value || '').trim()) {
-        el['plan_title'].value = (el['plan-search']?.value || '').trim();
-      }
-    });
+    on(el['plan-search'], 'input', renderPlanSearchResults);
     on(el['btn-close-plan-modal'], 'click', closePlanModal);
     on(el['btn-cancel-plan'], 'click', closePlanModal);
     on(el['btn-save-plan'], 'click', savePlan);
@@ -155,75 +149,6 @@
     if (el['btn-mobile-current']) el['btn-mobile-current'].classList.toggle('active', state.mobileCalendarMode === 'current');
     if (el['btn-mobile-previous']) el['btn-mobile-previous'].classList.toggle('active', state.mobileCalendarMode === 'previous');
     renderOptions();
-  }
-
-  function setupBrowserBackHandling() {
-    try {
-      if (!window.history.state || !window.history.state.worklog_app) {
-        window.history.replaceState({ worklog_app: true, step: 'root' }, '');
-        window.history.pushState({ worklog_app: true, step: 'ready' }, '');
-      }
-      window.addEventListener('popstate', handleBrowserBackNavigation);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  function pushBrowserStep(step) {
-    try {
-      window.history.pushState({ worklog_app: true, step: step || 'step' }, '');
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  function getOpenModalId() {
-    const ids = ['material-modal', 'work-modal', 'plan-modal', 'calendar-detail-modal'];
-    for (const id of ids) {
-      const node = el[id];
-      if (node && !node.classList.contains('hidden')) return id;
-    }
-    return '';
-  }
-
-  function handleBrowserBackNavigation() {
-    const openModalId = getOpenModalId();
-
-    if (openModalId === 'material-modal') {
-      closeMaterialModal();
-      pushBrowserStep('material-closed');
-      return;
-    }
-    if (openModalId === 'work-modal') {
-      closeWorkModal();
-      pushBrowserStep('work-closed');
-      return;
-    }
-    if (openModalId === 'plan-modal') {
-      closePlanModal();
-      pushBrowserStep('plan-closed');
-      return;
-    }
-    if (openModalId === 'calendar-detail-modal') {
-      closeCalendarDetailModal();
-      pushBrowserStep('calendar-detail-closed');
-      return;
-    }
-
-    if (state.currentPage !== 'calendar') {
-      switchPage('calendar');
-      pushBrowserStep('page-calendar');
-      return;
-    }
-
-    if (window.innerWidth <= 900 && state.mobileCalendarMode === 'previous') {
-      state.mobileCalendarMode = 'current';
-      updateMobileCalendarMode();
-      pushBrowserStep('mobile-current');
-      return;
-    }
-
-    pushBrowserStep('stay-app');
   }
 
   function bindCalendarDetailModal() {
@@ -409,9 +334,7 @@
   }
 
   function switchPage(page) {
-    const prevPage = state.currentPage;
     state.currentPage = page;
-    if (prevPage !== page) pushBrowserStep(`page-${page}`);
     renderMenuState();
 
     const pageMap = {
@@ -614,7 +537,6 @@
 
     bindCalendarDetailActions();
     removeHidden(el['calendar-detail-modal']);
-    pushBrowserStep('calendar-detail-open');
   }
 
   function bindCalendarDetailActions() {
@@ -656,7 +578,6 @@
     if (state.selectedDate && el.plan_date) el.plan_date.value = state.selectedDate;
     renderPlanSearchResults();
     removeHidden(el['plan-modal']);
-    pushBrowserStep('plan-open');
   }
 
   function openPlanModalById(id) {
@@ -668,7 +589,6 @@
     fillPlanForm(plan);
     renderPlanSearchResults();
     removeHidden(el['plan-modal']);
-    pushBrowserStep('plan-open');
   }
 
   function closePlanModal() {
@@ -678,8 +598,6 @@
 
   function resetPlanForm() {
     if (el.plan_date) el.plan_date.value = '';
-    if (el['plan-search']) el['plan-search'].value = '';
-    if (el['plan-search-results']) el['plan-search-results'].innerHTML = '';
     if (el.plan_title) el.plan_title.value = '';
     if (el.plan_details) el.plan_details.value = '';
     if (el.plan_status) el.plan_status.value = 'planned';
@@ -687,7 +605,6 @@
 
   function fillPlanForm(plan) {
     if (el.plan_date) el.plan_date.value = normalizePlanDate(plan.plan_date);
-    if (el['plan-search']) el['plan-search'].value = plan.title || '';
     if (el.plan_title) el.plan_title.value = plan.title || '';
     if (el.plan_details) el.plan_details.value = plan.details || '';
     if (el.plan_status) el.plan_status.value = plan.status || 'planned';
@@ -695,8 +612,8 @@
 
   function renderPlanSearchResults() {
     if (!el['plan-search-results']) return;
-    const keyword = (el.plan_search?.value || el['plan-search']?.value || '').trim().toLowerCase();
-    const items = (state.options.tasks || []).filter(item => optionName(item).toLowerCase().includes(keyword));
+    const keyword = (el.plan_search?.value || el['plan-search']?.value || '').trim();
+    const items = (state.options.tasks || []).filter(item => optionName(item).includes(keyword));
     el['plan-search-results'].innerHTML = items.map(item => {
       const name = optionName(item);
       return `<button type="button" class="search-result-item" data-plan-pick="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
@@ -712,7 +629,7 @@
   async function savePlan() {
     const payload = {
       plan_date: el.plan_date?.value || '',
-      title: ((el.plan_title?.value || '').trim() || (el['plan-search']?.value || '').trim()),
+      title: (el.plan_title?.value || '').trim(),
       details: (el.plan_details?.value || '').trim(),
       status: el.plan_status?.value || 'planned'
     };
@@ -795,7 +712,6 @@
     updateEndDateFromRepeatDays();
 
     removeHidden(el['work-modal']);
-    pushBrowserStep('work-open');
   }
 
   function openWorkModalById(id) {
@@ -806,7 +722,6 @@
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
     fillWorkForm(work);
     removeHidden(el['work-modal']);
-    pushBrowserStep('work-open');
   }
 
   function closeWorkModal() {
@@ -1353,7 +1268,7 @@
     if (hours > 0) {
       return `총 ${formatHourValue(hours)}시간`;
     }
-    return '-';
+    return '';
   }
 
   function formatHourValue(value) {
@@ -1397,7 +1312,7 @@
       };
     } catch (e) {
       return {
-        memo_text: String(raw || ''),
+        memo_text: '',
         repeat_days: 1,
         start_time: '',
         end_time: '',
@@ -1409,213 +1324,230 @@
     }
   }
 
-  function normalizeOptions(items) {
-    return (items || []).map(item => {
-      if (typeof item === 'string') {
-        return { id: item, name: item };
-      }
-      return item || {};
+  function formatNumber(num) {
+    return Number(num || 0).toLocaleString();
+  }
+
+  function getSelectedChipValues(type) {
+    const box = el[`${type}-box`];
+    if (!box) return [];
+    return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+  }
+
+  function renderWorkFormOptions() {
+    renderSelectOptions(el.weather, state.options.weather, '날씨 선택');
+    renderSelectOptions(el.task_name, state.options.tasks, '작업내용 선택');
+    renderChipOptions('crops', state.options.crops);
+    renderChipOptions('pests', state.options.pests);
+    renderChipOptions('machines', state.options.machines);
+  }
+
+  function renderSelectOptions(select, items, placeholder) {
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = `
+      <option value="">${escapeHtml(placeholder || '선택')}</option>
+      ${items.map(item => {
+        const name = optionName(item);
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+      }).join('')}
+    `;
+    if (current) select.value = current;
+  }
+
+  function renderChipOptions(type, items) {
+    const box = el[`${type}-box`];
+    if (!box) return;
+
+    const selected = new Set(getSelectedChipValues(type));
+
+    box.innerHTML = items.map(item => {
+      const name = optionName(item);
+      const checked = selected.has(name);
+      return `
+        <label class="chip ${checked ? 'active' : ''}">
+          <input type="checkbox" value="${escapeHtml(name)}" ${checked ? 'checked' : ''}>
+          <span>${escapeHtml(name)}</span>
+        </label>
+      `;
+    }).join('');
+
+    box.querySelectorAll('.chip').forEach(chip => {
+      const input = chip.querySelector('input[type="checkbox"]');
+      chip.addEventListener('click', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        e.preventDefault();
+        input.checked = !input.checked;
+        chip.classList.toggle('active', input.checked);
+        if (type === 'pests') renderRecommendedMaterials();
+      });
+      input.addEventListener('change', () => {
+        chip.classList.toggle('active', input.checked);
+        if (type === 'pests') renderRecommendedMaterials();
+      });
     });
   }
 
-  function optionId(item) {
-    return item?.id ?? item?.name ?? '';
+  function setChipSelections(type, values) {
+    const box = el[`${type}-box`];
+    if (!box) return;
+    const set = new Set(values || []);
+    box.querySelectorAll('.chip').forEach(chip => {
+      const input = chip.querySelector('input[type="checkbox"]');
+      input.checked = set.has(input.value);
+      chip.classList.toggle('active', input.checked);
+    });
+  }
+
+  function clearChipSelections(type) {
+    setChipSelections(type, []);
+  }
+
+  function splitCsv(text) {
+    return String(text || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+  }
+
+  function calcRepeatDays(startDate, endDate) {
+    if (!startDate || !endDate) return 1;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diff = Math.round((end - start) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff + 1 : 1;
+  }
+
+  function updateEndDateFromRepeatDays() {
+    if (!el.start_date || !el.repeat_days || !el.end_date) return;
+    const start = el.start_date.value;
+    const days = Math.max(1, Number(el.repeat_days.value) || 1);
+    if (!start) return;
+
+    const d = new Date(start);
+    d.setDate(d.getDate() + days - 1);
+    el.end_date.value = fmtDate(d);
+  }
+
+  function normalizeOptions(items) {
+    return (items || []).map(item => optionName(item)).filter(Boolean);
   }
 
   function optionName(item) {
-    return item?.name ?? '';
-  }
-
-  function renderMaterials() {
-    if (!el['materials-list']) return;
-
-    let materials = [...(state.materials || [])];
-    const keyword = (state.materialListSearchKeyword || '').trim();
-    if (keyword) {
-      materials = materials.filter(item =>
-        String(item.name || '').includes(keyword) ||
-        String(item.memo || '').includes(keyword) ||
-        String(item.unit || '').includes(keyword)
-      );
-    }
-
-    const withStock = materials.filter(item => Number(item.stock_qty || 0) > 0);
-    const withoutStock = materials.filter(item => Number(item.stock_qty || 0) <= 0);
-
-    el['materials-list'].innerHTML = `
-      <div class="grid two materials-split">
-        <div class="panel">
-          <h3>재고 있음</h3>
-          ${withStock.length ? withStock.map(item => renderMaterialItem(item)).join('') : `<div class="empty-msg">없음</div>`}
-        </div>
-        <div class="panel">
-          <h3>재고 없음</h3>
-          ${withoutStock.length ? withoutStock.map(item => renderMaterialItem(item)).join('') : `<div class="empty-msg">없음</div>`}
-        </div>
-      </div>
-    `;
-
-    el['materials-list'].querySelectorAll('[data-material-edit]').forEach(btn => {
-      btn.addEventListener('click', () => openMaterialModalById(btn.dataset.materialEdit));
-    });
-    el['materials-list'].querySelectorAll('[data-material-delete]').forEach(btn => {
-      btn.addEventListener('click', () => deleteMaterial(btn.dataset.materialDelete));
-    });
-  }
-
-  function renderMaterialItem(item) {
-    return `
-      <div class="day-item">
-        <div><strong>${escapeHtml(item.name || '')}</strong></div>
-        <div>재고: ${formatNumber(item.stock_qty || 0)} ${escapeHtml(item.unit || '')}</div>
-        <div>단가: ${formatNumber(item.unit_price || 0)}원</div>
-        <div>비고: ${escapeHtml(item.memo || '')}</div>
-        <div class="item-actions">
-          <button type="button" class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
-          <button type="button" class="btn" data-material-delete="${escapeHtml(String(item.id))}">삭제</button>
-        </div>
-      </div>
-    `;
-  }
-
-  async function deleteMaterial(id) {
-    if (!confirm('삭제하시겠습니까?')) return;
-    try {
-      await apiDelete(`/api/materials/${id}`);
-      await loadMaterials();
-      renderMaterials();
-    } catch (e) {
-      console.error(e);
-      alert('삭제 실패');
-    }
-  }
-
-  function renderMaterialPickerResults(keyword) {
-    const box = el['material-search-box'];
-    if (!box) return;
-
-    const key = String(keyword || '').trim();
-    const rows = (state.materials || []).filter(item => (item.name || '').includes(key));
-
-    box.innerHTML = rows.map(item => `
-      <div class="search-result-item">${escapeHtml(item.name || '')}</div>
-    `).join('');
+    return typeof item === 'string' ? item : (item?.name || '');
   }
 
   function renderOptions() {
-    const renderList = (type, listElId, inputElId, recommendElId = null) => {
-      const listEl = el[listElId];
-      const inputEl = el[inputElId];
-      const recommendEl = recommendElId ? el[recommendElId] : null;
-      if (!listEl) return;
-
-      const items = state.options[type] || [];
-      listEl.innerHTML = items.map(item => {
-        const id = optionId(item);
-        const name = optionName(item);
-        const recommend = item?.recommend || '';
-        return `
-          <div class="option-item">
-            <div class="option-item-main">
-              <span>${escapeHtml(name)}</span>
-              ${recommend ? `<div class="option-subtext">추천약제: ${escapeHtml(recommend)}</div>` : ''}
-            </div>
-            <div class="item-actions">
-              <button type="button" class="btn" data-option-edit="${escapeHtml(type)}|${escapeHtml(String(id))}">수정</button>
-              <button type="button" class="btn" data-option-delete="${escapeHtml(type)}|${escapeHtml(String(id))}">삭제</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      listEl.querySelectorAll('[data-option-edit]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const [optType, id] = btn.dataset.optionEdit.split('|');
-          const target = (state.options[optType] || []).find(item => String(optionId(item)) === String(id));
-          if (!target) return;
-
-          const newName = prompt('이름 수정', optionName(target));
-          if (newName === null) return;
-
-          const payload = { name: newName.trim() };
-          if (recommendEl) {
-            const recommendValue = prompt('추천약제 수정', target.recommend || '');
-            if (recommendValue === null) return;
-            payload.recommend = recommendValue.trim();
-          }
-
-          try {
-            await apiPut(`/api/options/${optType}/${encodeURIComponent(id)}`, payload);
-            await loadOptions();
-            renderOptions();
-            renderWorkFormOptions();
-          } catch (e) {
-            console.error(e);
-            alert('수정 실패');
-          }
-        });
-      });
-
-      listEl.querySelectorAll('[data-option-delete]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const [optType, id] = btn.dataset.optionDelete.split('|');
-          if (!confirm('삭제하시겠습니까?')) return;
-          try {
-            await apiDelete(`/api/options/${optType}/${encodeURIComponent(id)}`);
-            await loadOptions();
-            renderOptions();
-            renderWorkFormOptions();
-          } catch (e) {
-            console.error(e);
-            alert('삭제 실패');
-          }
-        });
-      });
-
-      const addBtn = inputEl?.parentElement?.querySelector('.btn.primary');
-      if (addBtn && !addBtn.dataset.bound) {
-        addBtn.dataset.bound = '1';
-        addBtn.addEventListener('click', async () => {
-          const name = (inputEl.value || '').trim();
-          if (!name) return;
-
-          const payload = { name };
-          if (recommendEl) payload.recommend = (recommendEl.value || '').trim();
-
-          try {
-            await apiPost(`/api/options/${type}`, payload);
-            inputEl.value = '';
-            if (recommendEl) recommendEl.value = '';
-            await loadOptions();
-            renderOptions();
-            renderWorkFormOptions();
-          } catch (e) {
-            console.error(e);
-            alert('추가 실패');
-          }
-        });
-      }
-    };
-
-    renderList('weather', 'options-weather', 'new-weather');
-    renderList('crops', 'options-crops', 'new-crops');
-    renderList('tasks', 'options-tasks', 'new-tasks');
-    renderList('pests', 'options-pests', 'new-pests', 'new-pests-recommend');
-    renderList('machines', 'options-machines', 'new-machines');
-
-    (el.optionTabButtons || []).forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.optionTab === state.optionTab);
-    });
+    renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
+    renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
+    renderOptionList('tasks', state.options.tasks, el['options-tasks'], el['new-tasks']);
+    renderOptionList('pests', state.options.pests, el['options-pests'], el['new-pests'], el['new-pests-recommend']);
+    renderOptionList('machines', state.options.machines, el['options-machines'], el['new-machines']);
 
     (el.optionPanels || []).forEach(panel => {
+      const tab = panel.dataset.optionPanel;
       if (window.innerWidth <= 900) {
-        panel.style.display = panel.dataset.optionPanel === state.optionTab ? '' : 'none';
+        panel.style.display = tab === state.optionTab ? '' : 'none';
       } else {
         panel.style.display = '';
       }
     });
 
+    (el.optionTabButtons || []).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.optionTab === state.optionTab);
+    });
+
     renderSeasonList();
+  }
+
+  function renderOptionList(type, items, listEl, inputEl, extraInputEl = null) {
+    if (!listEl) return;
+
+    listEl.innerHTML = items.map(name => `
+      <div class="option-item">
+        <div class="option-item-main">
+          <span>${escapeHtml(name)}</span>
+          ${type === 'pests' ? `<div class="option-subtext">${escapeHtml(getPestRecommend(name))}</div>` : ''}
+        </div>
+        <div class="item-actions">
+          <button type="button" class="btn" data-option-edit="${escapeHtml(type)}|${escapeHtml(name)}">수정</button>
+          <button type="button" class="btn" data-option-delete="${escapeHtml(type)}|${escapeHtml(name)}">삭제</button>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('[data-option-edit]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const [optType, oldName] = btn.dataset.optionEdit.split('|');
+        const newName = prompt('수정할 이름', oldName);
+        if (!newName || newName.trim() === oldName) return;
+
+        const payload = { old_name: oldName, name: newName.trim() };
+        if (optType === 'pests' && extraInputEl) {
+          const recommend = prompt('추천 자재', getPestRecommend(oldName));
+          if (recommend !== null) payload.recommend = recommend;
+        }
+
+        try {
+          await apiPut(`/api/options/${optType}`, payload);
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (e) {
+          console.error(e);
+          alert('수정 실패');
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-option-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const [optType, name] = btn.dataset.optionDelete.split('|');
+        if (!confirm('삭제하시겠습니까?')) return;
+        try {
+          await apiDelete(`/api/options/${optType}/${encodeURIComponent(name)}`);
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (e) {
+          console.error(e);
+          alert('삭제 실패');
+        }
+      });
+    });
+
+    if (inputEl && !inputEl.dataset.bound) {
+      inputEl.dataset.bound = '1';
+      inputEl.addEventListener('keydown', async (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+
+        const name = inputEl.value.trim();
+        if (!name) return;
+
+        const payload = { name };
+        if (type === 'pests' && extraInputEl) {
+          payload.recommend = (extraInputEl.value || '').trim();
+        }
+
+        try {
+          await apiPost(`/api/options/${type}`, payload);
+          inputEl.value = '';
+          if (extraInputEl) extraInputEl.value = '';
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (err) {
+          console.error(err);
+          alert('추가 실패');
+        }
+      });
+    }
+  }
+
+  function getPestRecommend(name) {
+    const item = (state.options.pestsRaw || []).find(p => optionName(p) === name);
+    return item?.recommend || '';
   }
 
   async function saveSeason() {
@@ -1624,7 +1556,7 @@
       start_date: el.season_start_date?.value || '',
       end_date: el.season_end_date?.value || '',
       note: (el.season_note?.value || '').trim(),
-      is_current: String(el.season_is_current?.value || '0') === '1'
+      is_current: !!el.season_is_current?.checked
     };
 
     if (!payload.name) {
@@ -1653,7 +1585,7 @@
     if (el.season_start_date) el.season_start_date.value = '';
     if (el.season_end_date) el.season_end_date.value = '';
     if (el.season_note) el.season_note.value = '';
-    if (el.season_is_current) el.season_is_current.value = '0';
+    if (el.season_is_current) el.season_is_current.checked = false;
   }
 
   function renderSeasonList() {
@@ -1661,7 +1593,7 @@
     if (!box) return;
 
     if (!state.seasons.length) {
-      box.innerHTML = `<div class="empty-msg">시즌이 없습니다.</div>`;
+      box.innerHTML = `<div class="empty-msg">시즌 없음</div>`;
       return;
     }
 
@@ -1679,14 +1611,14 @@
 
     box.querySelectorAll('[data-season-edit]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const season = state.seasons.find(item => String(item.id) === String(btn.dataset.seasonEdit));
+        const season = state.seasons.find(s => String(s.id) === String(btn.dataset.seasonEdit));
         if (!season) return;
         state.editingSeasonId = season.id;
         el.season_name.value = season.name || '';
         el.season_start_date.value = season.start_date || '';
         el.season_end_date.value = season.end_date || '';
         el.season_note.value = season.note || '';
-        el.season_is_current.value = season.is_current ? '1' : '0';
+        el.season_is_current.checked = !!season.is_current;
       });
     });
 
@@ -1713,7 +1645,6 @@
       `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`
     ).join('');
     removeHidden(el['material-modal']);
-    pushBrowserStep('material-open');
   }
 
   function openMaterialModalById(id) {
@@ -1734,7 +1665,6 @@
     el.material_memo.value = item.memo || '';
 
     removeHidden(el['material-modal']);
-    pushBrowserStep('material-open');
   }
 
   function closeMaterialModal() {
@@ -1756,12 +1686,33 @@
     const box = el['material-search-box'];
     if (!box) return;
 
-    const key = String(keyword || '').trim();
-    const rows = (state.materials || []).filter(item => (item.name || '').includes(key));
+    const q = (keyword || '').trim().toLowerCase();
+    if (!q) {
+      box.innerHTML = '';
+      return;
+    }
 
-    box.innerHTML = rows.map(item => `
-      <div class="search-result-item">${escapeHtml(item.name || '')}</div>
-    `).join('');
+    const matched = state.materials.filter(item =>
+      (item.name || '').toLowerCase().includes(q)
+    ).slice(0, 20);
+
+    box.innerHTML = matched.length
+      ? matched.map(item => `
+          <button type="button" class="search-result-item" data-material-pick="${escapeHtml(String(item.id))}">
+            ${escapeHtml(item.name || '')} / ${escapeHtml(item.unit || '')}
+          </button>
+        `).join('')
+      : `<div class="empty-msg">검색 결과 없음</div>`;
+
+    box.querySelectorAll('[data-material-pick]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = state.materials.find(m => String(m.id) === String(btn.dataset.materialPick));
+        if (!item) return;
+        el.material_name.value = item.name || '';
+        el.material_unit.value = item.unit || '';
+        el.material_price.value = item.unit_price || item.price || 0;
+      });
+    });
   }
 
   async function saveMaterial() {
@@ -1808,6 +1759,71 @@
       console.error(e);
       alert('삭제 실패');
     }
+  }
+
+  async function deleteMaterial(id) {
+    if (!confirm('삭제하시겠습니까?')) return;
+    try {
+      await apiDelete(`/api/materials/${id}`);
+      await loadMaterials();
+      renderMaterials();
+    } catch (e) {
+      console.error(e);
+      alert('삭제 실패');
+    }
+  }
+
+  function renderMaterials() {
+    const wrap = el['materials-list'];
+    if (!wrap) return;
+
+    const q = (state.materialListSearchKeyword || '').trim().toLowerCase();
+
+    const filtered = state.materials.filter(item => {
+      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''}`.toLowerCase();
+      return text.includes(q);
+    });
+
+    const inStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) > 0);
+    const outStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) <= 0);
+
+    wrap.innerHTML = `
+      <div class="materials-two-col">
+        <div>
+          <h3>재고 있음</h3>
+          ${renderMaterialSection(inStock)}
+        </div>
+        <div>
+          <h3>재고 없음</h3>
+          ${renderMaterialSection(outStock)}
+        </div>
+      </div>
+    `;
+
+    wrap.querySelectorAll('[data-material-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openMaterialModalById(btn.dataset.materialEdit));
+    });
+
+    wrap.querySelectorAll('[data-material-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteMaterial(btn.dataset.materialDelete));
+    });
+  }
+
+  function renderMaterialSection(items) {
+    if (!items.length) return `<div class="empty-msg">없음</div>`;
+
+    return items.map(item => `
+      <div class="day-item">
+        <div><strong>${escapeHtml(item.name || '')}</strong></div>
+        <div>재고: ${formatNumber(item.stock_qty || item.stock || 0)} ${escapeHtml(item.unit || '')}</div>
+        <div>단가: ${formatNumber(item.unit_price || item.price || 0)}원</div>
+        <div>메모: ${escapeHtml(item.memo || '')}</div>
+        <div class="item-actions">
+          <button type="button" class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
+          <button type="button" class="btn" data-material-delete="${escapeHtml(String(item.id))}">삭제</button>
+        </div>
+      </div>
+    `).join('');
   }
 
   async function renderMoney() {

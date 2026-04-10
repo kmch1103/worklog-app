@@ -42,10 +42,12 @@
     bindMaterialButtons();
     bindOptionButtons();
     bindCalendarDetailModal();
+    bindHistoryNavigation();
     await loadAll();
     await loadMoney();
     renderAll();
     updateMobileCalendarMode();
+    initializeHistoryState();
     window.addEventListener('resize', updateMobileCalendarMode);
   }
 
@@ -298,9 +300,10 @@
       state.options.tasks = normalizeOptions(data.tasks || []);
       state.options.pests = normalizeOptions(data.pests || []);
       state.options.machines = normalizeOptions(data.machines || []);
+      state.options.pestsRaw = data.pests || [];
     } catch (e) {
       console.error(e);
-      state.options = { weather: [], crops: [], tasks: [], pests: [], machines: [] };
+      state.options = { weather: [], crops: [], tasks: [], pests: [], machines: [], pestsRaw: [] };
     }
   }
 
@@ -333,8 +336,11 @@
     ensureWorksSearchBar();
   }
 
-  function switchPage(page) {
+  function switchPage(page, options = {}) {
     state.currentPage = page;
+    if (!options.skipHistory) {
+      pushHistoryState(page, '');
+    }
     renderMenuState();
 
     const pageMap = {
@@ -466,7 +472,7 @@
     });
   }
 
-  function openCalendarDetailModal(dateStr) {
+  function openCalendarDetailModal(dateStr, options = {}) {
     if (!el['calendar-detail-modal']) return;
 
     state.selectedDate = dateStr;
@@ -537,6 +543,9 @@
 
     bindCalendarDetailActions();
     removeHidden(el['calendar-detail-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'calendar-detail');
+    }
   }
 
   function bindCalendarDetailActions() {
@@ -571,16 +580,19 @@
     addHidden(el['calendar-detail-modal']);
   }
 
-  function openPlanModal() {
+  function openPlanModal(options = {}) {
     state.editingPlanId = null;
     if (el['plan-modal-title']) el['plan-modal-title'].textContent = '작업계획 입력';
     resetPlanForm();
     if (state.selectedDate && el.plan_date) el.plan_date.value = state.selectedDate;
     renderPlanSearchResults();
     removeHidden(el['plan-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'plan');
+    }
   }
 
-  function openPlanModalById(id) {
+  function openPlanModalById(id, options = {}) {
     const plan = state.plans.find(p => String(p.id) === String(id));
     if (!plan) return;
 
@@ -589,6 +601,9 @@
     fillPlanForm(plan);
     renderPlanSearchResults();
     removeHidden(el['plan-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'plan');
+    }
   }
 
   function closePlanModal() {
@@ -633,6 +648,11 @@
       details: (el.plan_details?.value || '').trim(),
       status: el.plan_status?.value || 'planned'
     };
+
+    if (!payload.title) {
+      alert('작업 제목을 입력하세요.');
+      return;
+    }
 
     try {
       if (state.editingPlanId) {
@@ -700,7 +720,7 @@
     }
   }
 
-  function openWorkModal() {
+  function openWorkModal(options = {}) {
     state.editingWorkId = null;
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
 
@@ -712,9 +732,12 @@
     updateEndDateFromRepeatDays();
 
     removeHidden(el['work-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'work');
+    }
   }
 
-  function openWorkModalById(id) {
+  function openWorkModalById(id, options = {}) {
     const work = state.works.find(w => String(w.id) === String(id));
     if (!work) return;
 
@@ -722,6 +745,9 @@
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
     fillWorkForm(work);
     removeHidden(el['work-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'work');
+    }
   }
 
   function closeWorkModal() {
@@ -945,55 +971,19 @@
       div.remove();
       updateMoneySummary();
     });
+
+    syncAmount();
   }
 
-  function getLaborRows() {
+  function getLaborRowsFromForm() {
     return Array.from(document.querySelectorAll('.labor-row')).map(row => {
       const type = row.querySelector('.labor-type')?.value || '';
       const count = Number(row.querySelector('.labor-count')?.value || 0);
       const price = Number(row.querySelector('.labor-price')?.value || 0);
-      const amount = Number(row.querySelector('.labor-amount')?.value || 0);
+      const amount = Number(row.querySelector('.labor-amount')?.value || (count * price));
       const note = row.querySelector('.labor-note')?.value || '';
       return { type, count, price, amount, method: '', note };
-    }).filter(row => row.count > 0 || row.price > 0 || row.note);
-  }
-
-  function renderSelectedMaterialsDetailed() {
-    const box = el['selected-materials-detailed'];
-    if (!box) return;
-
-    if (!state.selectedMaterialsDetailed.length) {
-      box.innerHTML = `<div class="empty-msg">선택된 자재 없음</div>`;
-      return;
-    }
-
-    box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
-      <div class="material-row" data-material-row="${idx}">
-        <strong>${escapeHtml(item.name || '')}</strong>
-        <input type="number" class="material-qty" value="${escapeHtml(String(item.qty || 0))}" min="0" step="0.1">
-        <span>${escapeHtml(item.unit || '')}</span>
-        <span>${formatNumber((item.price || 0) * (item.qty || 0))}원</span>
-        <button type="button" class="btn material-remove">삭제</button>
-      </div>
-    `).join('');
-
-    box.querySelectorAll('.material-row').forEach(row => {
-      const idx = Number(row.dataset.materialRow);
-      const qtyEl = row.querySelector('.material-qty');
-      const removeBtn = row.querySelector('.material-remove');
-
-      qtyEl.addEventListener('input', () => {
-        state.selectedMaterialsDetailed[idx].qty = Number(qtyEl.value || 0);
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
-      });
-
-      removeBtn.addEventListener('click', () => {
-        state.selectedMaterialsDetailed.splice(idx, 1);
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
-      });
-    });
+    }).filter(item => item.count > 0 || item.price > 0 || item.note);
   }
 
   function renderMaterialSearchResults(keyword) {
@@ -1006,41 +996,85 @@
       return;
     }
 
-    const matched = state.materials.filter(item =>
-      (item.name || '').toLowerCase().includes(q)
-    ).slice(0, 20);
+    const matched = state.materials.filter(item => {
+      const text = `${item.name || ''} ${item.unit || ''}`.toLowerCase();
+      return text.includes(q);
+    }).slice(0, 30);
 
     box.innerHTML = matched.length
       ? matched.map(item => `
-          <button type="button" class="search-result-item" data-material-add="${escapeHtml(String(item.id))}">
-            ${escapeHtml(item.name || '')} / ${escapeHtml(item.unit || '')} / ${formatNumber(item.unit_price || item.price || 0)}원
+          <button type="button" class="search-result-item" data-add-material="${escapeHtml(String(item.id))}">
+            ${escapeHtml(item.name || '')} / ${escapeHtml(item.unit || '')} / 단가 ${formatNumber(item.unit_price || item.price || 0)}
           </button>
         `).join('')
       : `<div class="empty-msg">검색 결과 없음</div>`;
 
-    box.querySelectorAll('[data-material-add]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const item = state.materials.find(m => String(m.id) === String(btn.dataset.materialAdd));
-        if (!item) return;
+    box.querySelectorAll('[data-add-material]').forEach(btn => {
+      btn.addEventListener('click', () => addSelectedMaterial(btn.dataset.addMaterial));
+    });
+  }
 
-        const found = state.selectedMaterialsDetailed.find(m => String(m.id) === String(item.id));
-        if (found) {
-          found.qty = Number(found.qty || 0) + 1;
-        } else {
-          state.selectedMaterialsDetailed.push({
-            id: item.id,
-            name: item.name || '',
-            unit: item.unit || '',
-            price: Number(item.unit_price || item.price || 0),
-            qty: 1,
-            method: ''
-          });
-        }
+  function addSelectedMaterial(id) {
+    const source = state.materials.find(item => String(item.id) === String(id));
+    if (!source) return;
 
+    const exists = state.selectedMaterialsDetailed.find(item => String(item.id) === String(id));
+    if (exists) {
+      exists.qty = Number(exists.qty || 0) + 1;
+    } else {
+      state.selectedMaterialsDetailed.push({
+        id: source.id,
+        name: source.name || '',
+        unit: source.unit || '',
+        price: Number(source.unit_price || source.price || 0),
+        qty: 1,
+        method: ''
+      });
+    }
+
+    renderSelectedMaterialsDetailed();
+    updateMoneySummary();
+    if (el['material-search-input']) el['material-search-input'].value = '';
+    if (el['material-search-results']) el['material-search-results'].innerHTML = '';
+  }
+
+  function renderSelectedMaterialsDetailed() {
+    const box = el['selected-materials-detailed'];
+    if (!box) return;
+
+    if (!state.selectedMaterialsDetailed.length) {
+      box.innerHTML = `<div class="empty-msg">선택된 자재 없음</div>`;
+      return;
+    }
+
+    box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
+      <div class="material-row">
+        <span style="min-width:140px;"><strong>${escapeHtml(item.name || '')}</strong></span>
+        <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
+        <span>${escapeHtml(item.unit || '')}</span>
+        <span>단가 ${formatNumber(item.price || 0)}</span>
+        <span>합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
+        <button type="button" class="btn" data-material-remove="${idx}">삭제</button>
+      </div>
+    `).join('');
+
+    box.querySelectorAll('[data-material-qty]').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = Number(input.dataset.materialQty);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         renderSelectedMaterialsDetailed();
         updateMoneySummary();
-        el['material-search-input'].value = '';
-        box.innerHTML = '';
+      });
+    });
+
+    box.querySelectorAll('[data-material-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.materialRemove);
+        if (Number.isNaN(idx)) return;
+        state.selectedMaterialsDetailed.splice(idx, 1);
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
       });
     });
   }
@@ -1050,318 +1084,80 @@
     const box = el['recommended-materials-box'];
     if (!wrap || !box) return;
 
-    const selectedTasks = (el.task_name?.value || '').trim();
-    if (!selectedTasks) {
+    const selectedPests = getCheckedValues('pests-box');
+    const recommends = new Set();
+
+    selectedPests.forEach(pestName => {
+      const rec = getPestRecommend(pestName);
+      splitCsv(rec).forEach(name => {
+        if (name) recommends.add(name);
+      });
+    });
+
+    const names = Array.from(recommends);
+    if (!names.length) {
       wrap.classList.add('hidden');
-      box.innerHTML = '';
-      return;
-    }
-
-    wrap.classList.remove('hidden');
-
-    const matched = state.materials.filter(item => {
-      const text = `${item.name || ''} ${item.memo || ''}`.toLowerCase();
-      return text.includes(selectedTasks.toLowerCase());
-    }).slice(0, 10);
-
-    if (!matched.length) {
       box.innerHTML = `<div class="recommended-materials-empty">추천 자재 없음</div>`;
       return;
     }
 
-    box.innerHTML = matched.map(item => `
-      <button type="button" class="btn" data-recommend-material="${escapeHtml(String(item.id))}">
-        ${escapeHtml(item.name || '')}
-      </button>
+    wrap.classList.remove('hidden');
+    box.innerHTML = names.map(name => `
+      <button type="button" class="search-result-item" data-recommend-material="${escapeHtml(name)}">${escapeHtml(name)}</button>
     `).join('');
 
     box.querySelectorAll('[data-recommend-material]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const item = state.materials.find(m => String(m.id) === String(btn.dataset.recommendMaterial));
-        if (!item) return;
-
-        const found = state.selectedMaterialsDetailed.find(m => String(m.id) === String(item.id));
-        if (found) {
-          found.qty = Number(found.qty || 0) + 1;
-        } else {
-          state.selectedMaterialsDetailed.push({
-            id: item.id,
-            name: item.name || '',
-            unit: item.unit || '',
-            price: Number(item.unit_price || item.price || 0),
-            qty: 1,
-            method: ''
-          });
+        const item = state.materials.find(m => (m.name || '') === btn.dataset.recommendMaterial);
+        if (item) {
+          addSelectedMaterial(item.id);
         }
-
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
       });
     });
   }
 
-  async function saveWork() {
-    const hasMoney = !!el.has_money.checked;
-
-    const labor = getLaborTotal();
-    const material = getMaterialTotal();
-    const other = getOtherTotal();
-    const total = labor + material + other;
-
-    const money = hasMoney
-      ? {
-          type:
-            labor > 0 && material > 0 ? '인건비+자재비' :
-            labor > 0 ? '인건비' :
-            material > 0 ? '자재비' : '기타',
-          total_amount: total,
-          labor_total: labor,
-          material_total: material,
-          other_total: other,
-          note: el.money_note.value
-        }
-      : null;
-
-    updateEndDateFromRepeatDays();
-    syncWorkTimeFields('time');
-    if ((!el.end_time?.value || '').trim() === '' && Number(el.work_hours?.value || 0) > 0) {
-      syncWorkTimeFields('hours');
-    }
-
-    const payload = {
-      start_date: el.start_date.value,
-      end_date: el.end_date.value,
-      weather: el.weather.value,
-      crops: getSelectedChipValues('crops').join(','),
-      task_name: el.task_name.value,
-      pests: getSelectedChipValues('pests').join(','),
-      machines: getSelectedChipValues('machines').join(','),
-      work_hours: Number(el.work_hours?.value || 0),
-      memo: JSON.stringify({
-        memo_text: (el.memo.value || '').trim(),
-        repeat_days: Math.max(1, Number(el.repeat_days?.value) || 1),
-        start_time: el.start_time?.value || '',
-        end_time: el.end_time?.value || '',
-        materials: state.selectedMaterialsDetailed,
-        labor_rows: getLaborRows(),
-        work_hours: Number(el.work_hours?.value || 0),
-        money: money
-      })
-    };
-
-    try {
-      if (state.editingWorkId) {
-        await apiPut(`/api/works/${state.editingWorkId}`, payload);
-      } else {
-        await apiPost('/api/works', payload);
-      }
-
-      await loadWorks();
-      await loadMoney();
-      closeWorkModal();
-      renderWorks();
-      renderCalendar();
-      if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
-      renderMoney();
-    } catch (e) {
-      console.error(e);
-      alert('저장 실패');
-    }
-  }
-
-  function renderWorks() {
-    const wrap = el['works-list'];
-    if (!wrap) return;
-
-    const q = (state.workSearchKeyword || '').trim().toLowerCase();
-
-    const items = state.works.filter(work => {
-      if (!q) return true;
-      const meta = parseMemo(work.memo);
-      const text = [
-        work.start_date,
-        work.end_date,
-        work.weather,
-        work.crops,
-        work.task_name,
-        work.pests,
-        work.machines,
-        meta.memo_text,
-        (meta.materials || []).map(m => `${m.name || ''} ${m.qty || 0}${m.unit || ''}`).join(' '),
-        (meta.labor_rows || []).map(r => `${r.type || ''} ${r.count || 0} ${r.price || 0} ${r.note || ''}`).join(' ')
-      ].join(' ').toLowerCase();
-      return text.includes(q);
-    });
-
-    const grouped = {};
-    items.forEach(work => {
-      const key = work.start_date || '';
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(work);
-    });
-
-    const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
-
-    if (!dates.length) {
-      wrap.innerHTML = `<div class="empty-msg">등록된 작업이 없습니다.</div>`;
-      return;
-    }
-
-    wrap.innerHTML = dates.map(date => {
-      const list = grouped[date];
-      return `
-        <div class="work-date-group">
-          <div class="work-date-title">${escapeHtml(date)}</div>
-          <div class="work-date-row ${list.length === 1 ? 'single-card' : ''}">
-            ${list.map(renderWorkCard).join('')}
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    wrap.querySelectorAll('[data-work-edit]').forEach(btn => {
-      btn.addEventListener('click', () => openWorkModalById(btn.dataset.workEdit));
-    });
-
-    wrap.querySelectorAll('[data-work-delete]').forEach(btn => {
-      btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
-    });
-  }
-
-  function renderWorkCard(work) {
-    const meta = parseMemo(work.memo);
-    const materialsText = (meta.materials || []).map(m => `${m.name || ''} ${m.qty || 0}${m.unit || ''}`).join(', ');
-    const timeText = formatWorkTimeText(meta, work);
-    return `
-      <div class="work-card">
-        <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
-        <div><strong>기간</strong> ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
-        <div><strong>시간</strong> ${escapeHtml(timeText)}</div>
-        <div><strong>날씨</strong> ${escapeHtml(work.weather || '')}</div>
-        <div><strong>작물</strong> ${escapeHtml(work.crops || '')}</div>
-        <div><strong>병충해</strong> ${escapeHtml(work.pests || '')}</div>
-        <div><strong>사용기계</strong> ${escapeHtml(work.machines || '')}</div>
-        <div><strong>자재</strong> ${escapeHtml(materialsText)}</div>
-        <div><strong>메모</strong> ${escapeHtml(meta.memo_text || '')}</div>
-        <div class="item-actions">
-          <button class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
-          <button class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
-        </div>
-      </div>
-    `;
-  }
-
-  function formatWorkTimeText(meta, work) {
-    const startTime = (meta.start_time || '').trim();
-    const endTime = (meta.end_time || '').trim();
-    const hours = Number(meta.work_hours || work.work_hours || 0);
-
-    if (startTime && endTime && hours > 0) {
-      return `${startTime} ~ ${endTime} (총 ${formatHourValue(hours)}시간)`;
-    }
-    if (startTime && endTime) {
-      return `${startTime} ~ ${endTime}`;
-    }
-    if (startTime && hours > 0) {
-      return `${startTime} 시작 / 총 ${formatHourValue(hours)}시간`;
-    }
-    if (hours > 0) {
-      return `총 ${formatHourValue(hours)}시간`;
-    }
-    return '';
-  }
-
-  function formatHourValue(value) {
-    const num = Number(value || 0);
-    return Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10);
-  }
-
-  function ensureWorksSearchBar() {
-    const page = el['page-works'];
-    if (!page || page.querySelector('.works-search-bar')) return;
-
-    const bar = document.createElement('div');
-    bar.className = 'works-search-bar';
-    bar.style.margin = '0 0 12px 0';
-    bar.innerHTML = `
-      <input type="text" id="works-search-input" placeholder="작업내용 / 작물 / 병충해 / 메모 검색" style="width:100%; max-width:420px;">
-    `;
-    const header = page.querySelector('.page-header');
-    if (header && header.nextSibling) page.insertBefore(bar, header.nextSibling);
-
-    const input = bar.querySelector('#works-search-input');
-    input.value = state.workSearchKeyword || '';
-    input.addEventListener('input', () => {
-      state.workSearchKeyword = input.value || '';
-      renderWorks();
-    });
-  }
-
-  function parseMemo(raw) {
-    try {
-      const obj = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {});
-      return {
-        memo_text: obj.memo_text || '',
-        repeat_days: Number(obj.repeat_days || 1),
-        start_time: obj.start_time || '',
-        end_time: obj.end_time || '',
-        materials: Array.isArray(obj.materials) ? obj.materials : [],
-        labor_rows: Array.isArray(obj.labor_rows) ? obj.labor_rows : [],
-        work_hours: Number(obj.work_hours || 0),
-        money: obj.money || null
-      };
-    } catch (e) {
-      return {
-        memo_text: '',
-        repeat_days: 1,
-        start_time: '',
-        end_time: '',
-        materials: [],
-        labor_rows: [],
-        work_hours: 0,
-        money: null
-      };
-    }
-  }
-
-  function formatNumber(num) {
-    return Number(num || 0).toLocaleString();
-  }
-
-  function getSelectedChipValues(type) {
-    const box = el[`${type}-box`];
+  function getCheckedValues(boxId) {
+    const box = el[boxId];
     if (!box) return [];
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
   }
 
   function renderWorkFormOptions() {
-    renderSelectOptions(el.weather, state.options.weather, '날씨 선택');
-    renderSelectOptions(el.task_name, state.options.tasks, '작업내용 선택');
+    setSelectOptions(el.weather, state.options.weather, true);
+    setSelectOptions(el.task_name, state.options.tasks, true);
     renderChipOptions('crops', state.options.crops);
     renderChipOptions('pests', state.options.pests);
     renderChipOptions('machines', state.options.machines);
+    renderRecommendedMaterials();
   }
 
-  function renderSelectOptions(select, items, placeholder) {
-    if (!select) return;
-    const current = select.value;
-    select.innerHTML = `
-      <option value="">${escapeHtml(placeholder || '선택')}</option>
-      ${items.map(item => {
-        const name = optionName(item);
-        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-      }).join('')}
-    `;
-    if (current) select.value = current;
+  function setSelectOptions(selectEl, items, allowEmpty = false) {
+    if (!selectEl) return;
+    const current = selectEl.value || '';
+    const options = [];
+
+    if (allowEmpty) {
+      options.push(`<option value="">선택</option>`);
+    }
+
+    (items || []).forEach(item => {
+      const name = optionName(item);
+      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+
+    selectEl.innerHTML = options.join('');
+    if ((items || []).some(item => optionName(item) === current)) {
+      selectEl.value = current;
+    }
   }
 
   function renderChipOptions(type, items) {
     const box = el[`${type}-box`];
     if (!box) return;
 
-    const selected = new Set(getSelectedChipValues(type));
+    const selected = new Set(getCheckedValues(`${type}-box`));
 
-    box.innerHTML = items.map(item => {
+    box.innerHTML = (items || []).map(item => {
       const name = optionName(item);
       const checked = selected.has(name);
       return `
@@ -1637,7 +1433,7 @@
     });
   }
 
-  function openMaterialModal() {
+  function openMaterialModal(options = {}) {
     state.editingMaterialId = null;
     if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 추가';
     resetMaterialForm();
@@ -1645,9 +1441,12 @@
       `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`
     ).join('');
     removeHidden(el['material-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'material');
+    }
   }
 
-  function openMaterialModalById(id) {
+  function openMaterialModalById(id, options = {}) {
     const item = state.materials.find(m => String(m.id) === String(id));
     if (!item) return;
 
@@ -1665,6 +1464,9 @@
     el.material_memo.value = item.memo || '';
 
     removeHidden(el['material-modal']);
+    if (!options.skipHistory) {
+      pushHistoryState(state.currentPage, 'material');
+    }
   }
 
   function closeMaterialModal() {
@@ -1886,6 +1688,48 @@
     `;
   }
 
+  function bindHistoryNavigation() {
+    window.addEventListener('popstate', (event) => {
+      const page = event.state?.page || state.currentPage || 'calendar';
+      const modal = event.state?.modal || '';
+
+      closeAllModals();
+
+      switchPage(page, { skipHistory: true });
+
+      if (modal === 'calendar-detail' && state.selectedDate) {
+        openCalendarDetailModal(state.selectedDate, { skipHistory: true });
+      } else if (modal === 'plan') {
+        openPlanModal({ skipHistory: true });
+      } else if (modal === 'work') {
+        openWorkModal({ skipHistory: true });
+      } else if (modal === 'material') {
+        openMaterialModal({ skipHistory: true });
+      }
+    });
+  }
+
+  function initializeHistoryState() {
+    const initialState = { page: state.currentPage || 'calendar', modal: '' };
+    history.replaceState(initialState, '', location.href);
+  }
+
+  function pushHistoryState(page, modal) {
+    const nextState = { page: page || state.currentPage || 'calendar', modal: modal || '' };
+    const currentState = history.state || {};
+    if (currentState.page === nextState.page && currentState.modal === nextState.modal) {
+      return;
+    }
+    history.pushState(nextState, '', location.href);
+  }
+
+  function closeAllModals() {
+    closeCalendarDetailModal();
+    closePlanModal();
+    closeWorkModal();
+    closeMaterialModal();
+  }
+
   function normalizePlanDate(value) {
     return String(value || '').slice(0, 10);
   }
@@ -1918,6 +1762,23 @@
     return `${y}-${m}-${d}`;
   }
 
+  function formatNumber(value) {
+    return Number(value || 0).toLocaleString('ko-KR');
+  }
+
+  function formatWorkTimeText(meta, work) {
+    const start = meta.start_time || '';
+    const end = meta.end_time || '';
+    const hours = Number(meta.work_hours || work.work_hours || 0);
+
+    const parts = [];
+    if (start) parts.push(`시작 ${start}`);
+    if (end) parts.push(`종료 ${end}`);
+    if (hours > 0) parts.push(`총 ${hours}시간`);
+
+    return parts.join(' / ');
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -1925,6 +1786,251 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function parseMemo(raw) {
+    if (!raw) {
+      return {
+        memo_text: '',
+        repeat_days: 1,
+        start_time: '',
+        end_time: '',
+        materials: [],
+        labor_rows: [],
+        work_hours: 0,
+        money: null
+      };
+    }
+
+    try {
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return {
+        memo_text: obj.memo_text || '',
+        repeat_days: Number(obj.repeat_days || 1),
+        start_time: obj.start_time || '',
+        end_time: obj.end_time || '',
+        materials: Array.isArray(obj.materials) ? obj.materials : [],
+        labor_rows: Array.isArray(obj.labor_rows) ? obj.labor_rows : [],
+        work_hours: Number(obj.work_hours || 0),
+        money: obj.money || null
+      };
+    } catch (e) {
+      return {
+        memo_text: String(raw || ''),
+        repeat_days: 1,
+        start_time: '',
+        end_time: '',
+        materials: [],
+        labor_rows: [],
+        work_hours: 0,
+        money: null
+      };
+    }
+  }
+
+  function ensureWorksSearchBar() {
+    const page = el['page-works'];
+    if (!page) return;
+
+    let box = page.querySelector('.works-search-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'works-search-box';
+      box.style.marginBottom = '12px';
+      box.innerHTML = `
+        <input type="text" id="works-search-input" placeholder="검색어 입력" style="width:100%; max-width:420px;">
+      `;
+      const target = page.querySelector('.page-header-actions') || page.firstElementChild || page;
+      if (target && target.parentNode === page) {
+        page.insertBefore(box, target.nextSibling);
+      } else {
+        page.insertBefore(box, page.firstChild);
+      }
+
+      const input = box.querySelector('#works-search-input');
+      input.addEventListener('input', (e) => {
+        state.workSearchKeyword = (e.target.value || '').trim();
+        renderWorks();
+      });
+    }
+  }
+
+  function renderWorks() {
+    const wrap = el['works-list'];
+    if (!wrap) return;
+
+    const q = (state.workSearchKeyword || '').trim().toLowerCase();
+    const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
+
+    const filtered = works.filter(work => {
+      const meta = parseMemo(work.memo);
+      const text = [
+        work.start_date,
+        work.end_date,
+        work.weather,
+        work.task_name,
+        work.crops,
+        work.pests,
+        work.machines,
+        meta.memo_text,
+        (meta.materials || []).map(m => `${m.name || ''} ${m.qty || ''} ${m.unit || ''}`).join(' ')
+      ].join(' ').toLowerCase();
+
+      return text.includes(q);
+    });
+
+    if (!filtered.length) {
+      wrap.innerHTML = `<div class="empty-msg">작업 내역 없음</div>`;
+      return;
+    }
+
+    const grouped = {};
+    filtered.forEach(work => {
+      const date = work.start_date || '';
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(work);
+    });
+
+    const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+    wrap.innerHTML = dates.map(date => {
+      const items = grouped[date];
+      return `
+        <div class="work-date-group">
+          <div class="work-date-title">${escapeHtml(date)}</div>
+          <div class="work-date-row ${items.length === 1 ? 'single-card' : ''}">
+            ${items.map(work => renderWorkCard(work)).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    wrap.querySelectorAll('[data-work-edit]').forEach(btn => {
+      btn.addEventListener('click', () => openWorkModalById(btn.dataset.workEdit));
+    });
+
+    wrap.querySelectorAll('[data-work-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
+    });
+  }
+
+  function renderWorkCard(work) {
+    const meta = parseMemo(work.memo);
+    const materialsText = (meta.materials || []).map(m => `${m.name || ''} ${m.qty || 0}${m.unit || ''}`).join(', ');
+    const laborText = (meta.labor_rows || []).map(r => `${r.type || ''} ${r.count || 0}명`).join(', ');
+
+    return `
+      <div class="work-card">
+        <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
+        <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
+        <div>날씨: ${escapeHtml(work.weather || '')}</div>
+        <div>작물: ${escapeHtml(work.crops || '')}</div>
+        <div>병충해: ${escapeHtml(work.pests || '')}</div>
+        <div>기계: ${escapeHtml(work.machines || '')}</div>
+        <div>시간: ${escapeHtml(formatWorkTimeText(meta, work) || '')}</div>
+        <div>자재: ${escapeHtml(materialsText || '')}</div>
+        <div>인력: ${escapeHtml(laborText || '')}</div>
+        <div>메모: ${escapeHtml(meta.memo_text || '')}</div>
+        <div class="item-actions">
+          <button type="button" class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
+          <button type="button" class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function saveWork() {
+    if ((!el.end_time?.value || '').trim() === '' && Number(el.work_hours?.value || 0) > 0) {
+      syncWorkTimeFields('hours');
+    } else if ((el.start_time?.value || '').trim() !== '' && (el.end_time?.value || '').trim() !== '') {
+      syncWorkTimeFields('time');
+    }
+
+    const crops = getCheckedValues('crops-box').join(', ');
+    const pests = getCheckedValues('pests-box').join(', ');
+    const machines = getCheckedValues('machines-box').join(', ');
+
+    const laborRows = getLaborRowsFromForm();
+    const money = el.has_money?.checked ? {
+      type: buildMoneyType(),
+      total_amount: getLaborTotal() + getMaterialTotal() + getOtherTotal(),
+      labor_total: getLaborTotal(),
+      material_total: getMaterialTotal(),
+      other_total: getOtherTotal(),
+      method: '',
+      note: (el.money_note?.value || '').trim()
+    } : null;
+
+    const payload = {
+      start_date: el.start_date?.value || '',
+      end_date: el.end_date?.value || el.start_date?.value || '',
+      weather: el.weather?.value || '',
+      task_name: el.task_name?.value || '',
+      crops,
+      pests,
+      machines,
+      work_hours: Number(el.work_hours?.value || 0),
+      memo: JSON.stringify({
+        memo_text: (el.memo?.value || '').trim(),
+        repeat_days: Number(el.repeat_days?.value || 1),
+        start_time: el.start_time?.value || '',
+        end_time: el.end_time?.value || '',
+        materials: state.selectedMaterialsDetailed.map(item => ({
+          id: item.id || '',
+          name: item.name || '',
+          unit: item.unit || '',
+          price: Number(item.price || 0),
+          qty: Number(item.qty || 0),
+          method: item.method || ''
+        })),
+        labor_rows: laborRows,
+        work_hours: Number(el.work_hours?.value || 0),
+        money
+      }, null, 0)
+    };
+
+    if (!payload.start_date) {
+      alert('시작일을 입력하세요.');
+      return;
+    }
+
+    if (!payload.task_name) {
+      alert('작업내용을 선택하세요.');
+      return;
+    }
+
+    try {
+      if (state.editingWorkId) {
+        await apiPut(`/api/works/${state.editingWorkId}`, payload);
+      } else {
+        await apiPost('/api/works', payload);
+      }
+      await loadWorks();
+      await loadMoney();
+      closeWorkModal();
+      renderWorks();
+      renderCalendar();
+      if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
+      renderMoney();
+    } catch (e) {
+      console.error(e);
+      alert('저장 실패');
+    }
+  }
+
+  function buildMoneyType() {
+    const labor = getLaborTotal();
+    const material = getMaterialTotal();
+    const other = getOtherTotal();
+
+    if (labor > 0 && material > 0 && other > 0) return '인건비+자재비+기타';
+    if (labor > 0 && material > 0) return '인건비+자재비';
+    if (labor > 0 && other > 0) return '인건비+기타';
+    if (material > 0 && other > 0) return '자재비+기타';
+    if (labor > 0) return '인건비';
+    if (material > 0) return '자재비';
+    if (other > 0) return '기타';
+    return '';
   }
 
   async function apiGet(url) {

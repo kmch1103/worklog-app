@@ -156,6 +156,24 @@
       }
     });
   }
+
+  function bindCalendarDetailModal() {
+    on(el['btn-close-calendar-detail'], 'click', closeCalendarDetailModal);
+
+    on(el['btn-calendar-add-plan'], 'click', () => {
+      closeCalendarDetailModal();
+      openPlanModal();
+    });
+
+    on(el['btn-calendar-add-work'], 'click', () => {
+      closeCalendarDetailModal();
+      openWorkModal();
+      if (state.selectedDate && el.start_date) {
+        el.start_date.value = state.selectedDate;
+        updateEndDateFromRepeatDays();
+      }
+    });
+  }
   function bindWorkButtons() {
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
@@ -164,10 +182,7 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        closeWorkModal();
-        closePlanModal();
-        closeCalendarDetailModal();
-        closeMaterialModal();
+        e.preventDefault();
       }
     });
 
@@ -546,7 +561,7 @@
     });
 
     el['calendar-detail-body'].querySelectorAll('[data-plan-work]').forEach(btn => {
-      btn.addEventListener('click', () => convertPlanToWork(btn.dataset.planWork));
+      btn.addEventListener('click', () => createWorkFromPlan(btn.dataset.planWork));
     });
 
     el['calendar-detail-body'].querySelectorAll('[data-plan-delete]').forEach(btn => {
@@ -659,40 +674,35 @@
   }
 
   async function markPlanDone(id) {
+    const plan = state.plans.find(p => String(p.id) === String(id));
+    if (!plan) return;
+
     try {
-      await apiPut(`/api/plans/${id}`, { status: 'done' });
+      await apiPut(`/api/plans/${id}`, {
+        plan_date: plan.plan_date || '',
+        title: plan.title || '',
+        details: plan.details || '',
+        status: 'done'
+      });
       await loadPlans();
       renderCalendar();
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
     } catch (e) {
       console.error(e);
-      alert('완료 처리 실패');
+      alert('상태 변경 실패');
     }
   }
 
-  async function convertPlanToWork(id) {
+  function createWorkFromPlan(id) {
     const plan = state.plans.find(p => String(p.id) === String(id));
     if (!plan) return;
 
     closeCalendarDetailModal();
     openWorkModal();
     if (el.start_date) el.start_date.value = normalizePlanDate(plan.plan_date);
-    if (el.repeat_days) el.repeat_days.value = 1;
+    if (el.task_name) el.task_name.value = plan.title || '';
+    if (el.memo && plan.details) el.memo.value = plan.details || '';
     updateEndDateFromRepeatDays();
-    if (el.task_name) {
-      const taskExists = (state.options.tasks || []).some(item => optionName(item) === (plan.title || ''));
-      if (!taskExists) {
-        try {
-          await apiPost('/api/options/tasks', { name: plan.title || '' });
-          await loadOptions();
-          renderWorkFormOptions();
-        } catch (e) {
-          console.error(e);
-        }
-      }
-      setSelectValue(el.task_name, plan.title || '');
-    }
-    if (el.memo) el.memo.value = plan.details || '';
   }
 
   async function deletePlan(id) {
@@ -829,58 +839,174 @@
     const endMin = eh * 60 + em;
     const diff = endMin - startMin;
     if (diff >= 0) {
-      el.work_hours.value = Math.round((diff / 60) * 10) / 10;
+      el.work_hours.value = (diff / 60).toFixed(1).replace('.0', '');
     }
   }
 
-  function syncWorkTimeFields(mode) {
+  function updateEndTimeFromHours() {
     if (!el.start_time || !el.end_time || !el.work_hours) return;
-
-    const start = (el.start_time.value || '').trim();
-    const end = (el.end_time.value || '').trim();
+    const start = el.start_time.value;
     const hours = Number(el.work_hours.value || 0);
+    if (!start || hours <= 0) return;
 
-    if (mode === 'time') {
-      if (start && end) {
-        updateWorkHoursFromTime();
-      }
+    const [sh, sm] = start.split(':').map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = startMin + Math.round(hours * 60);
+    const eh = Math.floor(endMin / 60) % 24;
+    const em = endMin % 60;
+    el.end_time.value = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+  }
+
+  function syncWorkTimeFields(source) {
+    if (source === 'time') {
+      updateWorkHoursFromTime();
+    } else if (source === 'hours') {
+      updateEndTimeFromHours();
+    }
+  }
+
+  function updateEndDateFromRepeatDays() {
+    if (!el.start_date || !el.end_date || !el.repeat_days) return;
+
+    const start = el.start_date.value;
+    const repeatDays = Number(el.repeat_days.value || 1);
+
+    if (!start) {
+      el.end_date.value = '';
       return;
     }
 
-    if (mode === 'hours') {
-      if (!start || !(hours > 0)) return;
+    const date = new Date(start);
+    if (Number.isNaN(date.getTime())) {
+      el.end_date.value = start;
+      return;
+    }
 
-      const [sh, sm] = start.split(':').map(Number);
-      if (Number.isNaN(sh) || Number.isNaN(sm)) return;
+    date.setDate(date.getDate() + Math.max(1, repeatDays) - 1);
+    el.end_date.value = fmtDate(date);
+  }
 
-      const totalMinutes = sh * 60 + sm + Math.round(hours * 60);
-      const endHour = Math.floor(totalMinutes / 60) % 24;
-      const endMinute = totalMinutes % 60;
+  function calcRepeatDays(startDate, endDate) {
+    if (!startDate || !endDate) return 1;
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff + 1 : 1;
+  }
 
-      el.end_time.value = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-      updateWorkHoursFromTime();
+  function splitCsv(value) {
+    return String(value || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+  }
+
+  function optionName(item) {
+    if (item == null) return '';
+    return typeof item === 'string' ? item : (item.name || item.항목 || '');
+  }
+
+  function normalizeOptions(items) {
+    return (items || [])
+      .map(item => optionName(item))
+      .filter(Boolean);
+  }
+
+  function renderWorkFormOptions() {
+    setSelectOptions(el.weather, state.options.weather, true);
+    setSelectOptions(el.task_name, state.options.tasks, true);
+    renderChipOptions('crops', state.options.crops);
+    renderChipOptions('pests', state.options.pests);
+    renderChipOptions('machines', state.options.machines);
+    renderRecommendedMaterials();
+  }
+
+  function setSelectOptions(selectEl, items, allowEmpty = false) {
+    if (!selectEl) return;
+    const current = selectEl.value || '';
+    const options = [];
+
+    if (allowEmpty) {
+      options.push(`<option value="">선택</option>`);
+    }
+
+    (items || []).forEach(item => {
+      const name = optionName(item);
+      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+
+    selectEl.innerHTML = options.join('');
+    if ((items || []).some(item => optionName(item) === current)) {
+      selectEl.value = current;
     }
   }
 
-  function toggleMoneyBox(show) {
-    if (!el['money-box']) return;
-    el['money-box'].classList.toggle('hidden', !show);
+  function renderChipOptions(type, items) {
+    const box = el[`${type}-box`];
+    if (!box) return;
+
+    const selected = new Set(getSelectedChipValues(type));
+
+    box.innerHTML = (items || []).map(item => {
+      const name = optionName(item);
+      const checked = selected.has(name);
+      return `
+        <label class="chip ${checked ? 'active' : ''}">
+          <input type="checkbox" value="${escapeHtml(name)}" ${checked ? 'checked' : ''}>
+          <span>${escapeHtml(name)}</span>
+        </label>
+      `;
+    }).join('');
+
+    box.querySelectorAll('.chip').forEach(chip => {
+      const input = chip.querySelector('input[type="checkbox"]');
+      chip.addEventListener('click', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        e.preventDefault();
+        input.checked = !input.checked;
+        chip.classList.toggle('active', input.checked);
+
+        if (type === 'pests') {
+          renderRecommendedMaterials();
+        }
+      });
+    });
+
+    box.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.addEventListener('change', () => {
+        input.closest('.chip')?.classList.toggle('active', input.checked);
+        if (type === 'pests') {
+          renderRecommendedMaterials();
+        }
+      });
+    });
   }
 
-  function resetMoneyFields() {
-    if (el['has_money']) el['has_money'].checked = false;
-    if (el['other_cost']) el['other_cost'].value = '0';
-    if (el['money_note']) el['money_note'].value = '';
-    updateMoneySummary();
-    toggleMoneyBox(false);
+  function clearChipSelections(type) {
+    const box = el[`${type}-box`];
+    if (!box) return;
+    box.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.checked = false;
+    });
+    box.querySelectorAll('.chip').forEach(chip => {
+      chip.classList.remove('active');
+    });
+  }
+
+  function setChipSelections(type, values) {
+    const box = el[`${type}-box`];
+    if (!box) return;
+
+    const valueSet = new Set(values || []);
+    box.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.checked = valueSet.has(input.value);
+      input.closest('.chip')?.classList.toggle('active', input.checked);
+    });
   }
 
   function getLaborTotal() {
-    let total = 0;
-    document.querySelectorAll('.labor-row .labor-amount').forEach(node => {
-      total += Number(node.value) || 0;
-    });
-    return total;
+    const rows = getLaborRows();
+    return rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   }
 
   function getMaterialTotal() {
@@ -944,23 +1070,25 @@
     const countEl = div.querySelector('.labor-count');
     const priceEl = div.querySelector('.labor-price');
     const amountEl = div.querySelector('.labor-amount');
-    const removeBtn = div.querySelector('.labor-remove');
+    const noteEl = div.querySelector('.labor-note');
 
-    const syncAmount = () => {
-      const count = Number(countEl.value) || 0;
-      const price = Number(priceEl.value) || 0;
+    function recalc() {
+      const count = Number(countEl.value || 0);
+      const price = Number(priceEl.value || 0);
       amountEl.value = String(count * price);
       updateMoneySummary();
-    };
+    }
 
-    countEl.addEventListener('input', syncAmount);
-    priceEl.addEventListener('input', syncAmount);
-    removeBtn.addEventListener('click', () => {
+    countEl.addEventListener('input', recalc);
+    priceEl.addEventListener('input', recalc);
+    noteEl.addEventListener('input', updateMoneySummary);
+
+    div.querySelector('.labor-remove').addEventListener('click', () => {
       div.remove();
       updateMoneySummary();
     });
 
-    syncAmount();
+    recalc();
   }
 
   function getLaborRows() {
@@ -1098,10 +1226,29 @@
 
     box.querySelectorAll('[data-recommend-material]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const item = state.materials.find(m => (m.name || '') === btn.dataset.recommendMaterial);
+        const name = btn.dataset.recommendMaterial || '';
+        const item = state.materials.find(m => (m.name || '') === name);
         if (item) {
           addSelectedMaterial(item.id);
+          return;
         }
+
+        const exists = state.selectedMaterialsDetailed.find(m => (m.name || '') === name);
+        if (exists) {
+          exists.qty = Number(exists.qty || 0) + 1;
+        } else {
+          state.selectedMaterialsDetailed.push({
+            id: '',
+            name,
+            unit: '',
+            price: 0,
+            qty: 1,
+            method: ''
+          });
+        }
+
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
       });
     });
   }
@@ -1112,116 +1259,6 @@
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
   }
 
-  function renderWorkFormOptions() {
-    setSelectOptions(el.weather, state.options.weather, true);
-    setSelectOptions(el.task_name, state.options.tasks, true);
-    renderChipOptions('crops', state.options.crops);
-    renderChipOptions('pests', state.options.pests);
-    renderChipOptions('machines', state.options.machines);
-    renderRecommendedMaterials();
-  }
-
-  function setSelectOptions(selectEl, items, allowEmpty = false) {
-    if (!selectEl) return;
-    const current = selectEl.value || '';
-    const options = [];
-
-    if (allowEmpty) {
-      options.push(`<option value="">선택</option>`);
-    }
-
-    (items || []).forEach(item => {
-      const name = optionName(item);
-      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
-    });
-
-    selectEl.innerHTML = options.join('');
-    if ((items || []).some(item => optionName(item) === current)) {
-      selectEl.value = current;
-    }
-  }
-
-  function renderChipOptions(type, items) {
-    const box = el[`${type}-box`];
-    if (!box) return;
-
-    const selected = new Set(getSelectedChipValues(type));
-
-    box.innerHTML = (items || []).map(item => {
-      const name = optionName(item);
-      const checked = selected.has(name);
-      return `
-        <label class="chip ${checked ? 'active' : ''}">
-          <input type="checkbox" value="${escapeHtml(name)}" ${checked ? 'checked' : ''}>
-          <span>${escapeHtml(name)}</span>
-        </label>
-      `;
-    }).join('');
-
-    box.querySelectorAll('.chip').forEach(chip => {
-      const input = chip.querySelector('input[type="checkbox"]');
-      chip.addEventListener('click', (e) => {
-        if (e.target.tagName === 'INPUT') return;
-        e.preventDefault();
-        input.checked = !input.checked;
-        chip.classList.toggle('active', input.checked);
-        if (type === 'pests') renderRecommendedMaterials();
-      });
-      input.addEventListener('change', () => {
-        chip.classList.toggle('active', input.checked);
-        if (type === 'pests') renderRecommendedMaterials();
-      });
-    });
-  }
-
-  function setChipSelections(type, values) {
-    const box = el[`${type}-box`];
-    if (!box) return;
-    const set = new Set(values || []);
-    box.querySelectorAll('.chip').forEach(chip => {
-      const input = chip.querySelector('input[type="checkbox"]');
-      input.checked = set.has(input.value);
-      chip.classList.toggle('active', input.checked);
-    });
-  }
-
-  function clearChipSelections(type) {
-    setChipSelections(type, []);
-  }
-
-  function splitCsv(text) {
-    return String(text || '')
-      .split(',')
-      .map(v => v.trim())
-      .filter(Boolean);
-  }
-
-  function calcRepeatDays(startDate, endDate) {
-    if (!startDate || !endDate) return 1;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diff = Math.round((end - start) / (1000 * 60 * 60 * 24));
-    return diff >= 0 ? diff + 1 : 1;
-  }
-
-  function updateEndDateFromRepeatDays() {
-    if (!el.start_date || !el.repeat_days || !el.end_date) return;
-    const start = el.start_date.value;
-    const days = Math.max(1, Number(el.repeat_days.value) || 1);
-    if (!start) return;
-
-    const d = new Date(start);
-    d.setDate(d.getDate() + days - 1);
-    el.end_date.value = fmtDate(d);
-  }
-
-  function normalizeOptions(items) {
-    return (items || []).map(item => optionName(item)).filter(Boolean);
-  }
-
-  function optionName(item) {
-    return typeof item === 'string' ? item : (item?.name || '');
-  }
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
@@ -1269,18 +1306,22 @@
 
     listEl.querySelectorAll('[data-option-edit]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const [optType, optionId, oldName] = btn.dataset.optionEdit.split('|');
-        const newName = prompt('수정할 이름', oldName);
-        if (!newName || newName.trim() === oldName) return;
+        const [optionType, optionId, currentName] = String(btn.dataset.optionEdit || '').split('|');
+        const newName = prompt('수정할 이름', currentName || '');
+        if (newName == null) return;
+        const trimmed = newName.trim();
+        if (!trimmed) return;
 
-        const payload = { name: newName.trim() };
-        if (optType === 'pests') {
-          const recommend = prompt('추천 자재', getPestRecommend(oldName));
-          if (recommend !== null) payload.recommended_materials = recommend;
+        let recommended = '';
+        if (optionType === 'pests') {
+          recommended = prompt('추천약제 (쉼표로 구분)', getPestRecommend(currentName || '')) || '';
         }
 
         try {
-          await apiPut(`/api/options/${optType}/${optionId}`, payload);
+          await apiPut(`/api/options/${optionType}/${optionId}`, {
+            name: trimmed,
+            recommended_materials: recommended.trim()
+          });
           await loadOptions();
           renderOptions();
           renderWorkFormOptions();
@@ -1293,10 +1334,10 @@
 
     listEl.querySelectorAll('[data-option-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const [optType, optionId] = btn.dataset.optionDelete.split('|');
+        const [optionType, optionId] = String(btn.dataset.optionDelete || '').split('|');
         if (!confirm('삭제하시겠습니까?')) return;
         try {
-          await apiDelete(`/api/options/${optType}/${optionId}`);
+          await apiDelete(`/api/options/${optionType}/${optionId}`);
           await loadOptions();
           renderOptions();
           renderWorkFormOptions();
@@ -1306,19 +1347,6 @@
         }
       });
     });
-
-    const bindOptionInput = (node) => {
-      if (!node || node.dataset.bound) return;
-      node.dataset.bound = '1';
-      node.addEventListener('keydown', async (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        await saveOption(type, inputEl?.id, extraInputEl?.id || null);
-      });
-    };
-
-    bindOptionInput(inputEl);
-    bindOptionInput(extraInputEl);
   }
 
   async function saveOption(type, inputId, extraInputId = null) {
@@ -1363,14 +1391,14 @@
 
   async function saveSeason() {
     const payload = {
-      name: (el.season_name?.value || '').trim(),
+      season_name: (el.season_name?.value || '').trim(),
       start_date: el.season_start_date?.value || '',
       end_date: el.season_end_date?.value || '',
       note: (el.season_note?.value || '').trim(),
-      is_current: !!el.season_is_current?.checked
+      is_current: String(el.season_is_current?.value || '0') === '1'
     };
 
-    if (!payload.name) {
+    if (!payload.season_name) {
       alert('시즌명을 입력하세요.');
       return;
     }
@@ -1396,44 +1424,46 @@
     if (el.season_start_date) el.season_start_date.value = '';
     if (el.season_end_date) el.season_end_date.value = '';
     if (el.season_note) el.season_note.value = '';
-    if (el.season_is_current) el.season_is_current.checked = false;
+    if (el.season_is_current) el.season_is_current.value = '0';
   }
 
   function renderSeasonList() {
-    const box = el['season-list'];
-    if (!box) return;
+    const wrap = el['season-list'];
+    if (!wrap) return;
 
     if (!state.seasons.length) {
-      box.innerHTML = `<div class="empty-msg">시즌 없음</div>`;
+      wrap.innerHTML = `<div class="empty-msg">시즌 없음</div>`;
       return;
     }
 
-    box.innerHTML = state.seasons.map(item => `
-      <div class="season-card ${item.is_current ? 'current' : ''}">
-        <div class="season-card-title">${escapeHtml(item.name || '')}</div>
-        <div class="season-card-meta">${escapeHtml(item.start_date || '')} ~ ${escapeHtml(item.end_date || '')}</div>
-        <div class="season-card-meta">${escapeHtml(item.note || '')}</div>
+    wrap.innerHTML = state.seasons.map(season => `
+      <div class="season-card ${Number(season.is_current || 0) ? 'current' : ''}">
+        <div class="season-card-title">${escapeHtml(season.season_name || season.name || '')}</div>
+        <div class="season-card-meta">
+          ${escapeHtml(season.start_date || '')} ~ ${escapeHtml(season.end_date || '')}<br>
+          ${escapeHtml(season.note || '')}
+        </div>
         <div class="item-actions">
-          <button type="button" class="btn" data-season-edit="${escapeHtml(String(item.id))}">수정</button>
-          <button type="button" class="btn" data-season-delete="${escapeHtml(String(item.id))}">삭제</button>
+          <button type="button" class="btn" data-season-edit="${escapeHtml(String(season.id))}">수정</button>
+          <button type="button" class="btn" data-season-delete="${escapeHtml(String(season.id))}">삭제</button>
         </div>
       </div>
     `).join('');
 
-    box.querySelectorAll('[data-season-edit]').forEach(btn => {
+    wrap.querySelectorAll('[data-season-edit]').forEach(btn => {
       btn.addEventListener('click', () => {
         const season = state.seasons.find(s => String(s.id) === String(btn.dataset.seasonEdit));
         if (!season) return;
         state.editingSeasonId = season.id;
-        el.season_name.value = season.name || '';
-        el.season_start_date.value = season.start_date || '';
-        el.season_end_date.value = season.end_date || '';
-        el.season_note.value = season.note || '';
-        el.season_is_current.checked = !!season.is_current;
+        if (el.season_name) el.season_name.value = season.season_name || season.name || '';
+        if (el.season_start_date) el.season_start_date.value = season.start_date || '';
+        if (el.season_end_date) el.season_end_date.value = season.end_date || '';
+        if (el.season_note) el.season_note.value = season.note || '';
+        if (el.season_is_current) el.season_is_current.value = String(Number(season.is_current || 0));
       });
     });
 
-    box.querySelectorAll('[data-season-delete]').forEach(btn => {
+    wrap.querySelectorAll('[data-season-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('삭제하시겠습니까?')) return;
         try {
@@ -1448,13 +1478,60 @@
     });
   }
 
-  function openMaterialModal(options = {}) {
+  function bindMobileCalendarButtons() {
+    on(el['btn-mobile-current'], 'click', () => {
+      state.mobileCalendarMode = 'current';
+      updateMobileCalendarMode();
+    });
+
+    on(el['btn-mobile-previous'], 'click', () => {
+      state.mobileCalendarMode = 'previous';
+      updateMobileCalendarMode();
+    });
+  }
+
+  function updateMobileCalendarMode() {
+    const compareWrap = el['calendar-compare-wrap'];
+    const currentWrap = document.querySelector('.calendar-current-wrap');
+    const currentBtn = el['btn-mobile-current'];
+    const previousBtn = el['btn-mobile-previous'];
+
+    if (!compareWrap || !currentWrap) return;
+
+    const isMobile = window.innerWidth <= 900;
+    if (!isMobile) {
+      currentWrap.style.display = '';
+      compareWrap.style.display = '';
+      if (currentBtn) currentBtn.classList.remove('active');
+      if (previousBtn) previousBtn.classList.remove('active');
+      return;
+    }
+
+    currentWrap.style.display = state.mobileCalendarMode === 'current' ? '' : 'none';
+    compareWrap.style.display = state.mobileCalendarMode === 'previous' ? '' : 'none';
+
+    if (currentBtn) currentBtn.classList.toggle('active', state.mobileCalendarMode === 'current');
+    if (previousBtn) previousBtn.classList.toggle('active', state.mobileCalendarMode === 'previous');
+  }
+
+  function resetMoneyFields() {
+    if (el.has_money) el.has_money.checked = false;
+    if (el.money_note) el.money_note.value = '';
+    if (el.other_cost) el.other_cost.value = 0;
+    toggleMoneyBox(false);
+    updateMoneySummary();
+  }
+
+  function toggleMoneyBox(show) {
+    const box = el['money-box'];
+    if (!box) return;
+    box.classList.toggle('hidden', !show);
+  }
+
+  async function openMaterialModal(options = {}) {
     state.editingMaterialId = null;
     if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 추가';
     resetMaterialForm();
-    if (el['material_unit']) el['material_unit'].innerHTML = state.materialUnits.map(unit =>
-      `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`
-    ).join('');
     removeHidden(el['material-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'material');
@@ -1468,15 +1545,11 @@
     state.editingMaterialId = item.id;
     if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 수정';
 
-    if (el['material_unit']) el['material_unit'].innerHTML = state.materialUnits.map(unit =>
-      `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`
-    ).join('');
-
-    el.material_name.value = item.name || '';
-    el.material_unit.value = item.unit || '';
-    el.material_stock.value = item.stock_qty || item.stock || 0;
-    el.material_price.value = item.unit_price || item.price || 0;
-    el.material_memo.value = item.memo || '';
+    if (el.material_name) el.material_name.value = item.name || '';
+    if (el.material_unit) el.material_unit.value = item.unit || state.materialUnits[0] || '';
+    if (el.material_stock) el.material_stock.value = item.stock_qty ?? item.stock ?? 0;
+    if (el.material_price) el.material_price.value = item.unit_price ?? item.price ?? 0;
+    if (el.material_memo) el.material_memo.value = item.memo || '';
 
     removeHidden(el['material-modal']);
     if (!options.skipHistory) {
@@ -1627,13 +1700,15 @@
   }
 
   function renderMaterialSection(items) {
-    if (!items.length) return `<div class="empty-msg">없음</div>`;
+    if (!items.length) {
+      return `<div class="empty-msg">없음</div>`;
+    }
 
     return items.map(item => `
       <div class="day-item">
         <div><strong>${escapeHtml(item.name || '')}</strong></div>
         <div>재고: ${formatNumber(item.stock_qty || item.stock || 0)} ${escapeHtml(item.unit || '')}</div>
-        <div>단가: ${formatNumber(item.unit_price || item.price || 0)}원</div>
+        <div>단가: ${formatNumber(item.unit_price || item.price || 0)}</div>
         <div>메모: ${escapeHtml(item.memo || '')}</div>
         <div class="item-actions">
           <button type="button" class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
@@ -1643,7 +1718,7 @@
     `).join('');
   }
 
-  async function renderMoney() {
+  function renderMoney() {
     const wrap = el['money-list'];
     if (!wrap) return;
 

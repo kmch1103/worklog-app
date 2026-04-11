@@ -15,6 +15,7 @@
     options: {
       weather: [],
       crops: [],
+      task_categories: [],
       tasks: [],
       pests: [],
       machines: []
@@ -76,7 +77,7 @@
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
-      'weather','task_name','crops-box','pests-box','machines-box',
+      'weather','task_category','task_name','crops-box','pests-box','machines-box',
 
       'labor_cost','work_hours','memo',
       'btn-save-work','btn-cancel-work','works-list',
@@ -85,8 +86,8 @@
       'btn-save-material','btn-open-material-modal','btn-close-material-modal','btn-cancel-material',
       'material-modal','material-modal-title','material-search-box','material-search-keyword','materials-list',
 
-      'new-weather','new-crops','new-tasks','new-pests','new-pests-recommend','new-machines',
-      'options-weather','options-crops','options-tasks','options-pests','options-machines',
+      'new-weather','new-crops','new-task-categories','new-task-category','new-tasks','new-pests','new-pests-recommend','new-machines',
+      'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
 
       'material-search-input','material-search-results','selected-materials-detailed',
 
@@ -191,6 +192,7 @@
     on(el['start_date'], 'change', updateEndDateFromRepeatDays);
     on(el['repeat_days'], 'input', updateEndDateFromRepeatDays);
 
+    on(el['task_category'], 'change', () => renderTaskOptionsByCategory(el['task_category']?.value || ''));
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['work_hours'], 'input', () => syncWorkTimeFields('hours'));
@@ -285,20 +287,22 @@
       state.optionsRaw = {
         weather: data.weather || [],
         crops: data.crops || [],
+        task_categories: data.task_categories || [],
         tasks: data.tasks || [],
         pests: data.pests || [],
         machines: data.machines || []
       };
       state.options.weather = normalizeOptions(data.weather || []);
       state.options.crops = normalizeOptions(data.crops || []);
+      state.options.task_categories = normalizeOptions(data.task_categories || []);
       state.options.tasks = normalizeOptions(data.tasks || []);
       state.options.pests = normalizeOptions(data.pests || []);
       state.options.machines = normalizeOptions(data.machines || []);
       state.options.pestsRaw = data.pests || [];
     } catch (e) {
       console.error(e);
-      state.options = { weather: [], crops: [], tasks: [], pests: [], machines: [], pestsRaw: [] };
-      state.optionsRaw = { weather: [], crops: [], tasks: [], pests: [], machines: [] };
+      state.options = { weather: [], crops: [], task_categories: [], tasks: [], pests: [], machines: [], pestsRaw: [] };
+      state.optionsRaw = { weather: [], crops: [], task_categories: [], tasks: [], pests: [], machines: [] };
     }
   }
 
@@ -501,6 +505,7 @@
           return `
             <div class="calendar-detail-card">
               <div class="calendar-detail-title">${escapeHtml(work.task_name || '')}</div>
+              <div class="calendar-detail-meta">작업카테고리: ${escapeHtml(work.task_category || '')}</div>
               <div class="calendar-detail-meta">작물: ${escapeHtml(work.crops || '')}</div>
               <div class="calendar-detail-meta">병충해: ${escapeHtml(work.pests || '')}</div>
               <div class="calendar-detail-meta">기계: ${escapeHtml(work.machines || '')}</div>
@@ -754,6 +759,7 @@
     if (el.start_time) el.start_time.value = '';
     if (el.end_time) el.end_time.value = '';
     if (el.weather) el.weather.value = '';
+    if (el.task_category) el.task_category.value = '';
     if (el.task_name) el.task_name.value = '';
     if (el.work_hours) el.work_hours.value = 0;
     if (el.memo) el.memo.value = '';
@@ -767,22 +773,25 @@
     state.selectedMaterialsDetailed = [];
     renderSelectedMaterialsDetailed();
     renderRecommendedMaterials();
+    renderTaskOptionsByCategory('');
   }
 
   function fillWorkForm(work) {
     const meta = parseMemo(work.memo);
 
-    el.start_date.value = work.start_date || '';
+    if (el.start_date) el.start_date.value = work.start_date || '';
     if (el.repeat_days) {
       el.repeat_days.value = Number(meta.repeat_days || calcRepeatDays(work.start_date, work.end_date) || 1);
     }
-    el.end_date.value = work.end_date || work.start_date || '';
+    if (el.end_date) el.end_date.value = work.end_date || work.start_date || '';
     if (el.start_time) el.start_time.value = meta.start_time || '';
     if (el.end_time) el.end_time.value = meta.end_time || '';
-    el.weather.value = work.weather || '';
-    el.task_name.value = work.task_name || '';
+    if (el.weather) el.weather.value = work.weather || '';
+    if (el.task_category) el.task_category.value = work.task_category || '';
+    renderTaskOptionsByCategory(work.task_category || '');
+    if (el.task_name) el.task_name.value = work.task_name || '';
     if (el.work_hours) el.work_hours.value = work.work_hours || meta.work_hours || 0;
-    el.memo.value = meta.memo_text || '';
+    if (el.memo) el.memo.value = meta.memo_text || '';
 
     setChipSelections('crops', splitCsv(work.crops));
     setChipSelections('pests', splitCsv(work.pests));
@@ -807,10 +816,10 @@
     }
 
     if (meta.money) {
-      el.has_money.checked = true;
+      if (el.has_money) el.has_money.checked = true;
       toggleMoneyBox(true);
-      el.money_note.value = meta.money.note || '';
-      el.other_cost.value = meta.money.other_total || 0;
+      if (el.money_note) el.money_note.value = meta.money.note || '';
+      if (el.other_cost) el.other_cost.value = meta.money.other_total || 0;
     } else {
       resetMoneyFields();
     }
@@ -906,22 +915,51 @@
       .filter(Boolean);
   }
 
+  function getTaskCategoryName(item) {
+    if (!item) return '';
+    if (typeof item === 'string') return '';
+    return item.category_name || item.category || '';
+  }
+
   function renderWorkFormOptions() {
     setSelectOptions(el.weather, state.options.weather, true);
-    setSelectOptions(el.task_name, state.options.tasks, true);
+    setSelectOptions(el.task_category, state.options.task_categories, true, '카테고리 선택');
+    renderTaskOptionsByCategory(el.task_category?.value || '');
     renderChipOptions('crops', state.options.crops);
     renderChipOptions('pests', state.options.pests);
     renderChipOptions('machines', state.options.machines);
     renderRecommendedMaterials();
   }
 
-  function setSelectOptions(selectEl, items, allowEmpty = false) {
+  function renderTaskOptionsByCategory(categoryName, keepCurrentValue = true) {
+    const selectEl = el.task_name;
+    if (!selectEl) return;
+
+    const current = keepCurrentValue ? (selectEl.value || '') : '';
+    const rawTasks = state.optionsRaw?.tasks || [];
+    const list = categoryName
+      ? rawTasks.filter(item => getTaskCategoryName(item) === categoryName)
+      : rawTasks;
+
+    const options = [`<option value="">작업내용 선택</option>`];
+    list.forEach(item => {
+      const name = optionName(item);
+      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+
+    selectEl.innerHTML = options.join('');
+    if (current && list.some(item => optionName(item) === current)) {
+      selectEl.value = current;
+    }
+  }
+
+  function setSelectOptions(selectEl, items, allowEmpty = false, emptyLabel = '선택') {
     if (!selectEl) return;
     const current = selectEl.value || '';
     const options = [];
 
     if (allowEmpty) {
-      options.push(`<option value="">선택</option>`);
+      options.push(`<option value="">${escapeHtml(emptyLabel)}</option>`);
     }
 
     (items || []).forEach(item => {
@@ -1273,7 +1311,8 @@
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
-    renderOptionList('tasks', state.options.tasks, el['options-tasks'], el['new-tasks']);
+    renderTaskCategoryList();
+    renderTaskOptionList();
     renderOptionList('pests', state.options.pests, el['options-pests'], el['new-pests'], el['new-pests-recommend']);
     renderOptionList('machines', state.options.machines, el['options-machines'], el['new-machines']);
 
@@ -1291,6 +1330,127 @@
     });
 
     renderSeasonList();
+  }
+
+  function renderTaskCategoryList() {
+    const listEl = el['options-task-categories'];
+    if (!listEl) return;
+
+    const rawItems = state.optionsRaw?.task_categories || [];
+    listEl.innerHTML = rawItems.map(item => {
+      const name = optionName(item);
+      const itemId = item?.id ?? name;
+      return `
+        <div class="option-item">
+          <div class="option-item-main">
+            <span>${escapeHtml(name)}</span>
+          </div>
+          <div class="item-actions">
+            <button type="button" class="btn" data-task-category-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}">수정</button>
+            <button type="button" class="btn" data-task-category-delete="${escapeHtml(String(itemId))}">삭제</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('[data-task-category-edit]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const [optionId, currentName] = String(btn.dataset.taskCategoryEdit || '').split('|');
+        const newName = prompt('수정할 작업카테고리', currentName || '');
+        if (newName == null) return;
+        const trimmed = newName.trim();
+        if (!trimmed) return;
+
+        try {
+          await apiPut(`/api/options/task_categories/${optionId}`, { name: trimmed });
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (e) {
+          console.error(e);
+          alert('수정 실패');
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-task-category-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('삭제하시겠습니까?')) return;
+        try {
+          await apiDelete(`/api/options/task_categories/${btn.dataset.taskCategoryDelete}`);
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (e) {
+          console.error(e);
+          alert('삭제 실패');
+        }
+      });
+    });
+  }
+
+  function renderTaskOptionList() {
+    const listEl = el['options-tasks'];
+    if (!listEl) return;
+
+    const rawItems = state.optionsRaw?.tasks || [];
+    listEl.innerHTML = rawItems.map(item => {
+      const name = optionName(item);
+      const itemId = item?.id ?? name;
+      const categoryName = getTaskCategoryName(item);
+      return `
+        <div class="option-item">
+          <div class="option-item-main">
+            <span>${escapeHtml(name)}</span>
+            <div class="option-subtext">${escapeHtml(categoryName || '카테고리 없음')}</div>
+          </div>
+          <div class="item-actions">
+            <button type="button" class="btn" data-task-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}|${escapeHtml(categoryName)}">수정</button>
+            <button type="button" class="btn" data-task-delete="${escapeHtml(String(itemId))}">삭제</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('[data-task-edit]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const [optionId, currentName, currentCategory] = String(btn.dataset.taskEdit || '').split('|');
+        const newName = prompt('수정할 작업내용', currentName || '');
+        if (newName == null) return;
+        const trimmed = newName.trim();
+        if (!trimmed) return;
+
+        const categoryName = prompt('작업카테고리', currentCategory || '') || '';
+
+        try {
+          await apiPut(`/api/options/tasks/${optionId}`, {
+            name: trimmed,
+            category_name: categoryName.trim()
+          });
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (e) {
+          console.error(e);
+          alert('수정 실패');
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-task-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('삭제하시겠습니까?')) return;
+        try {
+          await apiDelete(`/api/options/tasks/${btn.dataset.taskDelete}`);
+          await loadOptions();
+          renderOptions();
+          renderWorkFormOptions();
+        } catch (e) {
+          console.error(e);
+          alert('삭제 실패');
+        }
+      });
+    });
   }
 
   function renderOptionList(type, items, listEl, inputEl, extraInputEl = null) {
@@ -1360,6 +1520,55 @@
     });
   }
 
+  async function saveTaskCategory() {
+    const inputNode = el['new-task-categories'];
+    if (!inputNode) return;
+
+    const name = (inputNode.value || '').trim();
+    if (!name) {
+      alert('작업카테고리를 입력하세요.');
+      inputNode.focus();
+      return;
+    }
+
+    try {
+      await apiPost('/api/options/task_categories', { name });
+      inputNode.value = '';
+      await loadOptions();
+      renderOptions();
+      renderWorkFormOptions();
+    } catch (e) {
+      console.error(e);
+      alert('추가 실패');
+    }
+  }
+
+  async function saveTaskOption() {
+    const nameNode = el['new-tasks'];
+    const categoryNode = el['new-task-category'];
+    if (!nameNode || !categoryNode) return;
+
+    const name = (nameNode.value || '').trim();
+    const category_name = (categoryNode.value || '').trim();
+
+    if (!name) {
+      alert('작업내용을 입력하세요.');
+      nameNode.focus();
+      return;
+    }
+
+    try {
+      await apiPost('/api/options/tasks', { name, category_name });
+      nameNode.value = '';
+      await loadOptions();
+      renderOptions();
+      renderWorkFormOptions();
+    } catch (e) {
+      console.error(e);
+      alert('추가 실패');
+    }
+  }
+
   async function saveOption(type, inputId, extraInputId = null) {
     const inputNode = document.getElementById(inputId);
     const extraNode = extraInputId ? document.getElementById(extraInputId) : null;
@@ -1391,6 +1600,12 @@
   }
 
   window.saveOption = function(type, inputId) {
+    if (type === 'task_categories') {
+      return saveTaskCategory();
+    }
+    if (type === 'tasks') {
+      return saveTaskOption();
+    }
     const extraId = type === 'pests' ? 'new-pests-recommend' : null;
     return saveOption(type, inputId, extraId);
   };
@@ -2025,6 +2240,7 @@
         <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
         <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
         <div>날씨: ${escapeHtml(work.weather || '')}</div>
+        <div>작업카테고리: ${escapeHtml(work.task_category || '')}</div>
         <div>작물: ${escapeHtml(work.crops || '')}</div>
         <div>병충해: ${escapeHtml(work.pests || '')}</div>
         <div>기계: ${escapeHtml(work.machines || '')}</div>
@@ -2066,6 +2282,7 @@
       start_date: el.start_date?.value || '',
       end_date: el.end_date?.value || el.start_date?.value || '',
       weather: el.weather?.value || '',
+      task_category: el.task_category?.value || '',
       task_name: el.task_name?.value || '',
       crops,
       pests,

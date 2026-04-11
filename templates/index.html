@@ -112,6 +112,13 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
+    .work-form-sticky-bar{display:none;}
+    @media (max-width: 900px){
+      #page-works .page-header-actions{position:sticky; top:0; z-index:30; background:#f8fafc; padding:8px 0 10px;}
+      #page-works .page-header-actions .btn{width:100%; justify-content:center;}
+      .grid.two.task-grid{grid-template-columns:1fr;}
+    }
+
     .money-toggle label{display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; cursor:pointer;}
     .money-toggle input{width:20px; height:20px;}
     .labor-row{display:grid; grid-template-columns:120px 80px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
@@ -385,10 +392,27 @@
         <div class="option-mobile-tabs">
           <button class="btn option-tab-btn active" data-option-tab="weather">날씨</button>
           <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
+          <button class="btn option-tab-btn" data-option-tab="task_categories">작업카테고리</button>
           <button class="btn option-tab-btn" data-option-tab="tasks">작업내용</button>
           <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
           <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
         </div>
+
+        <div class="panel season-panel">
+          <h3>시즌관리</h3>
+          <div class="season-form-grid">
+            <label class="field"><span>시즌명</span><input type="text" id="season_name"></label>
+            <label class="field"><span>시작일</span><input type="date" id="season_start_date"></label>
+            <label class="field"><span>종료일</span><input type="date" id="season_end_date"></label>
+            <label class="field"><span>현재시즌</span><select id="season_is_current"><option value="0">아니오</option><option value="1">예</option></select></label>
+          </div>
+          <label class="field" style="margin-top:12px;"><span>비고</span><input type="text" id="season_note"></label>
+          <div class="item-actions">
+            <button id="btn-save-season" class="btn primary">저장</button>
+            <button id="btn-reset-season" class="btn">초기화</button>
+          </div>
+          <div id="season-list" class="season-list"></div>
+        
 
         <div class="options-grid">
           <div class="panel option-panel mobile-active" data-option-panel="weather">
@@ -409,11 +433,23 @@
             <div id="options-crops" class="option-list"></div>
           </div>
 
+          <div class="panel option-panel mobile-active" data-option-panel="task_categories">
+            <h3>작업카테고리</h3>
+            <div class="inline-form">
+              <input type="text" id="new-task-categories" placeholder="새 작업카테고리">
+              <button class="btn primary" onclick="saveOption('task_categories', 'new-task-categories')">추가</button>
+            </div>
+            <div id="options-task-categories"></div>
+          </div>
+
           <div class="panel option-panel mobile-active" data-option-panel="tasks">
             <h3>작업내용</h3>
             <div class="inline-form">
-              <input type="text" id="new-tasks" placeholder="새 작업내용">
-              <button class="btn primary" onclick="saveOption('tasks', 'new-tasks')">추가</button>
+              <div class="grid two" style="width:100%;">
+                <select id="new-task-category"></select>
+                <input type="text" id="new-tasks" placeholder="새 작업내용">
+              </div>
+              <button class="btn primary" onclick="saveOption('tasks', 'new-tasks', 'new-task-category')">추가</button>
             </div>
             <div id="options-tasks" class="option-list"></div>
           </div>
@@ -438,20 +474,6 @@
           </div>
         </div>
 
-        <div class="panel season-panel">
-          <h3>시즌관리</h3>
-          <div class="season-form-grid">
-            <label class="field"><span>시즌명</span><input type="text" id="season_name"></label>
-            <label class="field"><span>시작일</span><input type="date" id="season_start_date"></label>
-            <label class="field"><span>종료일</span><input type="date" id="season_end_date"></label>
-            <label class="field"><span>현재시즌</span><select id="season_is_current"><option value="0">아니오</option><option value="1">예</option></select></label>
-          </div>
-          <label class="field" style="margin-top:12px;"><span>비고</span><input type="text" id="season_note"></label>
-          <div class="item-actions">
-            <button id="btn-save-season" class="btn primary">저장</button>
-            <button id="btn-reset-season" class="btn">초기화</button>
-          </div>
-          <div id="season-list" class="season-list"></div>
         </div>
       </section>
 
@@ -595,11 +617,18 @@
         </div>
         <div class="inline-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
 
-        <div class="grid two">
+        <div class="grid two task-grid">
           <label class="field">
             <span>날씨</span>
             <select id="weather"></select>
           </label>
+          <label class="field">
+            <span>작업카테고리</span>
+            <select id="task_category"></select>
+          </label>
+        </div>
+
+        <div class="grid two">
           <label class="field">
             <span>작업내용</span>
             <select id="task_name"></select>
@@ -761,7 +790,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=2"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=3"></script>
 
 </body>
 </html>

@@ -358,6 +358,7 @@ def init_db():
     ensure_column(cur, "works", "machines", "TEXT")
     ensure_column(cur, "works", "work_hours", "REAL DEFAULT 0")
     ensure_column(cur, "works", "memo", "TEXT DEFAULT ''")
+    ensure_column(cur, "works", "task_category", "TEXT DEFAULT ''")
 
 
     
@@ -466,6 +467,7 @@ def create_work():
             start_date,
             end_date,
             data.get("weather", ""),
+            data.get("task_category", ""),
             task_name,
             data.get("crops", ""),
             data.get("pests", ""),
@@ -514,6 +516,7 @@ def update_work(work_id):
             start_date,
             end_date,
             data.get("weather", ""),
+            data.get("task_category", ""),
             task_name,
             data.get("crops", ""),
             data.get("pests", ""),
@@ -616,11 +619,19 @@ def get_options():
 
     # 프론트에서 지금 쓰는 것만 내려줌
     result = {}
-    for t in ["weather", "crops", "tasks", "machines"]:
+    for t in ["weather", "crops", "machines", "task_categories"]:
+        table = f"options_{t}"
         rows = conn.execute(
-            f"SELECT id, name FROM options_{t} ORDER BY name"
+            f"SELECT id, name FROM {table} ORDER BY name"
         ).fetchall()
         result[t] = rows_to_dicts(rows)
+
+    task_rows = conn.execute("""
+        SELECT id, name, COALESCE(category_name, '') AS category_name
+        FROM options_tasks
+        ORDER BY category_name, name
+    """).fetchall()
+    result["tasks"] = rows_to_dicts(task_rows)
 
     pest_rows = conn.execute("""
         SELECT id, name, COALESCE(recommended_materials, '') AS recommended_materials
@@ -635,19 +646,30 @@ def get_options():
 
 @app.route("/api/options/<option_type>", methods=["POST"])
 def create_option(option_type):
-    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
+    if option_type not in ["weather", "crops", "task_categories", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
 
     data = request.get_json(force=True) or {}
     name = normalize_name(data.get("name"))
     recommended_materials = normalize_name(data.get("recommended_materials"))
+    category_name = normalize_name(data.get("category_name"))
+    category_name = normalize_name(data.get("category_name"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
 
-    if option_type == "pests":
+    if option_type == "tasks":
+        cur.execute(
+            "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
+            (name, category_name)
+        )
+        cur.execute(
+            "UPDATE options_tasks SET category_name = ? WHERE name = ?",
+            (category_name, name)
+        )
+    elif option_type == "pests":
         cur.execute(
             "INSERT OR IGNORE INTO options_pests (name, recommended_materials) VALUES (?, ?)",
             (name, recommended_materials)
@@ -681,12 +703,13 @@ def create_option(option_type):
 
 @app.route("/api/options/<option_type>/<int:option_id>", methods=["PUT"])
 def update_option(option_type, option_id):
-    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
+    if option_type not in ["weather", "crops", "task_categories", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
 
     data = request.get_json(force=True) or {}
     new_name = normalize_name(data.get("name"))
     recommended_materials = normalize_name(data.get("recommended_materials"))
+    category_name = normalize_name(data.get("category_name"))
     if not new_name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
@@ -698,14 +721,29 @@ def update_option(option_type, option_id):
         (option_id,)
     ).fetchone()
 
-    if option_type == "pests":
+    if option_type == "tasks":
+        cur.execute(
+            "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
+            (name, category_name)
+        )
+        cur.execute(
+            "UPDATE options_tasks SET category_name = ? WHERE name = ?",
+            (category_name, name)
+        )
+    elif option_type == "tasks":
+        cur.execute(
+            "UPDATE options_tasks SET name = ?, category_name = ? WHERE id = ?",
+            (new_name, category_name, option_id)
+        )
+    elif option_type == "pests":
         cur.execute(
             "UPDATE options_pests SET name = ?, recommended_materials = ? WHERE id = ?",
             (new_name, recommended_materials, option_id)
         )
     else:
+        table = "options_task_categories" if option_type == "task_categories" else f"options_{option_type}"
         cur.execute(
-            f"UPDATE options_{option_type} SET name = ? WHERE id = ?",
+            f"UPDATE {table} SET name = ? WHERE id = ?",
             (new_name, option_id)
         )
 
@@ -723,21 +761,25 @@ def update_option(option_type, option_id):
 
 @app.route("/api/options/<option_type>/<int:option_id>", methods=["DELETE"])
 def delete_option(option_type, option_id):
-    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
+    if option_type not in ["weather", "crops", "task_categories", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
 
     conn = db()
     cur = conn.cursor()
 
+    table = "options_task_categories" if option_type == "task_categories" else f"options_{option_type}"
     row = cur.execute(
-        f"SELECT name FROM options_{option_type} WHERE id = ?",
+        f"SELECT name FROM {table} WHERE id = ?",
         (option_id,)
     ).fetchone()
 
     cur.execute(
-        f"DELETE FROM options_{option_type} WHERE id = ?",
+        f"DELETE FROM {table} WHERE id = ?",
         (option_id,)
     )
+
+    if option_type == "task_categories" and row:
+        cur.execute("UPDATE options_tasks SET category_name =  WHERE category_name = ?", (row["name"],))
 
     if option_type == "materials" and row:
         cur.execute(

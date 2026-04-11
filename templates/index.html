@@ -1,1113 +1,767 @@
-from flask import Flask, request, jsonify, render_template
-import sqlite3
-import json
-import os
-import tempfile
-import uuid
-from datetime import datetime
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>작업일지 v2</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-app = Flask(__name__)
-DB = "worklog.db"
+  <style>
+    *, *::before, *::after{box-sizing:border-box;}
+    html, body{max-width:100%; overflow-x:hidden;}
+    body{margin:0;}
+    .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
+    input, select, textarea, button{max-width:100%;}
+    .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
+    .readonly-money.total{font-size:18px; color:#0f172a;}
+    .work-date-group{margin-bottom:24px;}
+    .work-date-title{font-size:28px; font-weight:800; margin-bottom:12px;}
+    .work-date-row{display:flex; gap:16px; flex-wrap:wrap; align-items:stretch;}
+    .work-card{flex:1 1 320px; min-width:280px; background:#fff; border:1px solid #d7dbe3; border-radius:16px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,.04);}
+    .work-date-row.single-card .work-card{flex:1 1 100%;}
+    .work-card-title{font-size:20px; font-weight:800; margin-bottom:10px;}
+    .checks{display:flex; flex-wrap:wrap; gap:8px;}
+    .chip{border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:8px 14px; cursor:pointer; user-select:none;}
+    .chip.active{background:#3b82f6; border-color:#3b82f6; color:#fff;}
+    .chip input{display:none;}
+    .search-result-item{padding:8px 10px; border:1px solid #d7dbe3; border-radius:10px; cursor:pointer; background:#fff;}
+    .material-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
+    .material-row input{width:90px;}
+    .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
+    .grid.six{display:grid; grid-template-columns:120px 90px 120px 130px 1fr 70px; gap:8px; align-items:center;}
+    .inline-help{font-size:12px; color:#64748b; margin-top:4px;}
+    .option-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #eef2f7;}
+    .option-item:last-child{border-bottom:0;}
+    .option-item span{flex:1;}
+    .option-item-main{display:flex; flex-direction:column; gap:4px; flex:1;}
+    .option-subtext{font-size:12px; color:#64748b;}
+    .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+    .recommended-materials-empty{font-size:13px; color:#64748b;}
+    .options-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; align-items:start;}
+    .option-panel{min-width:0;}
+    .option-panel h3{font-size:26px; margin-bottom:12px;}
+    .option-panel .inline-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;}
+    .option-panel[data-option-panel="pests"] .inline-form{grid-template-columns:1fr;}
+    .option-panel .inline-form input{min-width:0; width:100%;}
+    .option-item{align-items:flex-start;}
+    .option-item .btn{padding:8px 10px; white-space:nowrap;}
+    .option-item-main span{word-break:break-word; line-height:1.4;}
+    .option-mobile-tabs{display:none; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+    .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
+    .season-panel{margin-top:16px;}
+    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
+    @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
+    @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
+    .season-form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
+    .season-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px;}
+    .season-card{border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fff;}
+    .season-card.current{border-color:#2563eb; background:#eff6ff;}
+    .season-card-title{font-weight:800; margin-bottom:6px;}
+    .season-card-meta{font-size:13px; color:#475569; line-height:1.5;}
+    .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
+    .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+    .money-table{width:100%;}
+    .money-table th,.money-table td{padding:10px; border-bottom:1px solid #e5e7eb; text-align:left;}
+    .calendar-day{min-height:120px; border:1px solid #dde3ea; border-radius:14px; background:#fff; padding:10px; cursor:pointer;}
+    .calendar-day.empty{background:#f8fafc; cursor:default;}
+    .calendar-day.selected{background:#eff6ff; border-color:#2563eb;}
+    .calendar-day .day-num{font-size:18px; font-weight:700; margin-bottom:8px;}
+    .calendar-day .day-title-list{display:grid; gap:4px;}
+    .calendar-day .day-title-group{
+  margin-bottom:4px;
+}
 
+.calendar-day .day-group-label{
+  font-size:11px;
+  font-weight:700;
+  color:#475569;
+  margin-bottom:2px;
+}
 
-def db():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
+.calendar-day .day-title-item{
+  font-size:12px;
+  line-height:1.35;
+  padding:2px 6px;
+  border-radius:8px;
+  white-space:normal;
+  overflow:visible;
+  word-break:keep-all;
+}
+    .calendar-day .day-title-item{font-size:12px; line-height:1.35; padding:2px 6px; border-radius:8px; white-space:normal; overflow:visible;}
+    .calendar-day .day-title-item.plan{background:#eef2ff; color:#334155;}
+    .calendar-day .day-title-item.work{background:#ecfeff; color:#0f766e;}
+    .calendar-day .day-more{font-size:11px; color:#64748b; margin-top:4px;}
+    .day-item{border:1px solid #dde3ea; border-radius:12px; padding:12px; background:#fff; margin-bottom:8px;}
+    .materials-two-col{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start;}
+    .materials-two-col > div{min-width:0;}
+    #page-materials h3{margin:0 0 10px; font-size:18px; font-weight:800;}
+    #page-materials .day-item{padding:10px 12px; border-radius:10px; margin-bottom:6px;}
+    #page-materials .day-item > div{font-size:14px; line-height:1.35; margin-bottom:2px;}
+    #page-materials .day-item > div:last-child{margin-bottom:0;}
+    #page-materials .day-item strong{font-size:15px;}
+    #page-materials .item-actions{gap:6px; margin-top:6px;}
+    #page-materials .item-actions .btn{padding:6px 10px; font-size:13px;}
+    .item-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+    .empty-msg{color:#64748b; padding:16px 0;}
+    .modal-overlay{position:fixed; inset:0; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; z-index:1000;}
+    .modal-overlay.hidden{display:none;}
+    .modal-box{width:min(760px, calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:auto; background:#fff; border-radius:18px; box-shadow:0 10px 32px rgba(0,0,0,.18);}
+    .modal-box-large{width:min(1040px, calc(100vw - 24px));}
+    .modal-box-material{width:min(700px, calc(100vw - 24px));}
+    .modal-header,.modal-footer{padding:16px 18px; border-bottom:1px solid #eef2f7; display:flex; align-items:center; justify-content:space-between; gap:8px;}
+    .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
+    .modal-body{padding:18px;}
+    .page-header-actions{display:flex; gap:8px;}
+    .money-toggle label{display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; cursor:pointer;}
+    .money-toggle input{width:20px; height:20px;}
+    .labor-row{display:grid; grid-template-columns:120px 80px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
+    .labor-row input,.labor-row select{width:100%;}
+    .calendar-detail-group{margin-bottom:16px;}
+    .calendar-detail-group h4{margin:0 0 10px; font-size:16px;}
+    .calendar-detail-card{border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:12px; margin-bottom:8px;}
+    .calendar-detail-title{font-weight:700; margin-bottom:6px;}
+    .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
-
-def rows_to_dicts(rows):
-    return [dict(r) for r in rows]
-
-
-def ensure_column(cur, table_name, column_name, column_def):
-    cols = [r["name"] for r in cur.execute(f"PRAGMA table_info({table_name})").fetchall()]
-    if column_name not in cols:
-        cur.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
-
-
-def normalize_name(value):
-    return (value or "").strip()
-
-
-def sync_material_option(cur, material_name):
-    name = normalize_name(material_name)
-    if not name:
-        return
-
-    row = cur.execute(
-        "SELECT id FROM options_materials WHERE name = ?",
-        (name,)
-    ).fetchone()
-
-    if not row:
-        cur.execute(
-            "INSERT INTO options_materials (name) VALUES (?)",
-            (name,)
-        )
-
-
-def safe_float(value, default=0):
-    try:
-        if value is None or value == "":
-            return default
-        return float(value)
-    except Exception:
-        return default
-
-
-def row_value(row, key, default=""):
-    try:
-        value = row[key]
-        return default if value is None else value
-    except Exception:
-        return default
-
-
-def parse_old_materials(raw_text, material_price_map):
-    raw = (raw_text or "").strip()
-    if not raw:
-        return []
-
-    parts = [p.strip() for p in raw.split(";") if p.strip()]
-    result = []
-
-    for part in parts:
-        tokens = [t.strip() for t in part.split("|")]
-        name = tokens[0] if len(tokens) >= 1 else ""
-        qty = safe_float(tokens[1], 0) if len(tokens) >= 2 else 0
-        unit = tokens[2] if len(tokens) >= 3 else ""
-        price = safe_float(material_price_map.get(name), 0)
-
-        if not name:
-            continue
-
-        result.append({
-            "id": "",
-            "name": name,
-            "unit": unit,
-            "price": price,
-            "qty": qty,
-            "method": ""
-        })
-
-    return result
-
-
-def parse_old_labor_rows(row):
-    raw = str(row_value(row, "인력내역", "") or "").strip()
-    rows = []
-
-    if raw:
-        for chunk in raw.split(";"):
-            chunk = chunk.strip()
-            if not chunk:
-                continue
-
-            tokens = [t.strip() for t in chunk.split("|")]
-            labor_type = tokens[0] if len(tokens) >= 1 else ""
-            count = int(safe_float(tokens[1], 0)) if len(tokens) >= 2 else 0
-            price = safe_float(tokens[2], 0) if len(tokens) >= 3 else 0
-            note = tokens[3] if len(tokens) >= 4 else ""
-            amount = count * price
-
-            if count > 0 or price > 0 or note:
-                rows.append({
-                    "type": labor_type,
-                    "count": count,
-                    "price": price,
-                    "amount": amount,
-                    "method": "",
-                    "note": note
-                })
-
-    if rows:
-        return rows
-
-    legacy_map = [
-        ("남자", "남자수", "남자단가"),
-        ("여자", "여자수", "여자단가"),
-        ("기타", "기타수", "기타단가")
-    ]
-
-    for labor_type, count_key, price_key in legacy_map:
-        count = int(safe_float(row_value(row, count_key, 0), 0))
-        price = safe_float(row_value(row, price_key, 0), 0)
-        amount = count * price
-        if count > 0 or price > 0:
-            rows.append({
-                "type": labor_type,
-                "count": count,
-                "price": price,
-                "amount": amount,
-                "method": "",
-                "note": ""
-            })
-
-    return rows
-
-
-def build_import_money(materials, labor_rows, legacy_labor_cost):
-    material_total = sum(safe_float(item.get("qty"), 0) * safe_float(item.get("price"), 0) for item in materials)
-    labor_total = sum(safe_float(item.get("amount"), 0) for item in labor_rows)
-
-    if labor_total <= 0:
-        labor_total = safe_float(legacy_labor_cost, 0)
-
-    total_amount = labor_total + material_total
-    if total_amount <= 0:
-        return None
-
-    if labor_total > 0 and material_total > 0:
-        money_type = "인건비+자재비"
-    elif labor_total > 0:
-        money_type = "인건비"
-    elif material_total > 0:
-        money_type = "자재비"
-    else:
-        money_type = "기타"
-
-    return {
-        "type": money_type,
-        "total_amount": total_amount,
-        "labor_total": labor_total,
-        "material_total": material_total,
-        "other_total": 0,
-        "method": "",
-        "note": "기존 DB 가져오기"
+    .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
+    @media (min-width: 901px){
+      .app{display:grid; grid-template-columns:260px minmax(0,1fr); align-items:start; min-height:100vh;}
+      .sidebar{position:sticky; top:0; height:100vh; overflow:auto;}
+      .content{min-width:0; padding:20px;}
     }
-
-
-def clear_current_data(cur):
-    cur.execute("DELETE FROM works")
-    cur.execute("DELETE FROM materials")
-    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
-        cur.execute(f"DELETE FROM options_{t}")
-
-
-def import_old_options(old_conn, cur, old_table, new_table, old_column):
-    try:
-        rows = old_conn.execute(f"SELECT {old_column} FROM '{old_table}'").fetchall()
-        for row in rows:
-            name = normalize_name(row[0])
-            if name:
-                cur.execute(f"INSERT OR IGNORE INTO {new_table} (name) VALUES (?)", (name,))
-    except Exception:
-        pass
-
-
-def import_old_db_into_current(uploaded_db_path):
-    old_conn = sqlite3.connect(uploaded_db_path)
-    old_conn.row_factory = sqlite3.Row
-
-    conn = db()
-    cur = conn.cursor()
-
-    try:
-        material_rows = old_conn.execute("SELECT 자재명, 단위, 가격, 재고 FROM 자재").fetchall()
-        material_price_map = {}
-        for row in material_rows:
-            name = normalize_name(row_value(row, "자재명", ""))
-            if name:
-                material_price_map[name] = safe_float(row_value(row, "가격", 0), 0)
-
-        clear_current_data(cur)
-
-        for row in material_rows:
-            name = normalize_name(row_value(row, "자재명", ""))
-            unit = normalize_name(row_value(row, "단위", ""))
-            unit_price = safe_float(row_value(row, "가격", 0), 0)
-            stock_qty = safe_float(row_value(row, "재고", 0), 0)
-
-            if not name:
-                continue
-
-            cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
-                VALUES (?, ?, ?, ?, '')
-            """, (name, unit, stock_qty, unit_price))
-            sync_material_option(cur, name)
-
-        import_old_options(old_conn, cur, "옵션_날씨", "options_weather", "항목")
-        import_old_options(old_conn, cur, "옵션_작물", "options_crops", "항목")
-        import_old_options(old_conn, cur, "옵션_작업내용", "options_tasks", "항목")
-        import_old_options(old_conn, cur, "옵션_기계", "options_machines", "항목")
-        import_old_options(old_conn, cur, "병충해", "options_pests", "이름")
-
-        work_rows = old_conn.execute("SELECT * FROM 작업일지 ORDER BY 날짜 ASC, 번호 ASC").fetchall()
-
-        for row in work_rows:
-            materials = parse_old_materials(row_value(row, "사용자재", ""), material_price_map)
-            labor_rows = parse_old_labor_rows(row)
-            money = build_import_money(materials, labor_rows, row_value(row, "인건비", 0))
-
-            memo_obj = {
-                "memo_text": str(row_value(row, "비고", "") or ""),
-                "repeat_days": 1,
-                "start_time": str(row_value(row, "시작시간", "") or ""),
-                "end_time": str(row_value(row, "종료시간", "") or ""),
-                "materials": materials,
-                "labor_rows": labor_rows,
-                "work_hours": safe_float(row_value(row, "작업시간", 0), 0),
-                "money": money,
-                "legacy": {
-                    "created_at": str(row_value(row, "생성시각", "") or ""),
-                    "updated_at": str(row_value(row, "수정시각", "") or ""),
-                    "work_list": str(row_value(row, "작업목록", "") or "")
-                }
-            }
-
-            cur.execute("""
-                INSERT INTO works (
-                    start_date, end_date, weather, task_name,
-                    crops, pests, machines, work_hours, memo
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(row_value(row, "날짜", "") or ""),
-                str(row_value(row, "종료날짜", "") or row_value(row, "날짜", "") or ""),
-                str(row_value(row, "날씨", "") or ""),
-                str(row_value(row, "작업내용", "") or ""),
-                str(row_value(row, "작물", "") or ""),
-                str(row_value(row, "적용병충해", "") or ""),
-                str(row_value(row, "사용기계", "") or ""),
-                safe_float(row_value(row, "작업시간", 0), 0),
-                json.dumps(memo_obj, ensure_ascii=False)
-            ))
-
-        conn.commit()
-        return {
-            "ok": True,
-            "imported": {
-                "works": len(work_rows),
-                "materials": len(material_rows)
-            }
-        }
-    except Exception as e:
-        conn.rollback()
-        return {"ok": False, "error": str(e)}
-    finally:
-        conn.close()
-        old_conn.close()
-
-
-
-def current_timestamp():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def get_season_row(conn, season_id):
-    if season_id in (None, '', 'all'):
-        return None
-
-    if season_id == 'current':
-        return conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY id DESC LIMIT 1").fetchone()
-
-    try:
-        sid = int(season_id)
-    except Exception:
-        return None
-
-    return conn.execute("SELECT * FROM seasons WHERE id = ?", (sid,)).fetchone()
-
-
-def apply_season_filter_sql(base_sql, season_row, date_column='start_date'):
-    if not season_row:
-        return base_sql, ()
-    return f"{base_sql} WHERE {date_column} BETWEEN ? AND ?", (season_row['start_date'], season_row['end_date'])
-
-
-def season_payload(row):
-    if not row:
-        return None
-    return {
-        'id': row['id'],
-        'season_name': row['season_name'],
-        'start_date': row['start_date'],
-        'end_date': row['end_date'],
-        'is_current': row['is_current'],
-        'note': row['note'],
-        'created_at': row['created_at'],
+    .sidebar h1{margin:0 0 18px;}
+    .mobile-menu-row{display:flex; flex-direction:column; gap:12px;}
+    .mobile-menu-row::-webkit-scrollbar{height:6px;}
+    .mobile-menu-row::-webkit-scrollbar-thumb{background:#94a3b8; border-radius:999px;}
+    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
+    .calendar-mobile-toggle{display:none; gap:8px; margin-bottom:12px;}
+    .calendar-mobile-toggle .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
+    .calendar-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
+    @media (max-width: 1100px){ .calendar-compare-wrap{grid-template-columns:1fr;} }
+    @media (max-width: 900px){
+      body{padding-top:112px;}
+      .app{display:block; width:100%; overflow-x:hidden;}
+      .sidebar{
+        position:fixed;
+        top:0;
+        left:0;
+        right:0;
+        z-index:200;
+        width:100%;
+        min-width:0;
+        height:auto;
+        overflow:visible;
+        border-right:none;
+        padding:10px 12px 8px;
+        background:#1e293b;
+        box-shadow:0 2px 10px rgba(0,0,0,.12);
+      }
+      .sidebar h1{
+        margin:0 0 8px;
+        font-size:22px;
+        line-height:1.15;
+      }
+      .mobile-menu-row{
+        display:grid;
+        grid-template-columns:repeat(4, minmax(0, 1fr));
+        gap:8px;
+        overflow:visible;
+        padding-bottom:0;
+      }
+      .mobile-menu-row .menu-btn{
+        width:100%;
+        min-width:0;
+        margin:0;
+        padding:9px 6px;
+        font-size:13px;
+        line-height:1.15;
+        white-space:normal;
+        word-break:keep-all;
+        border-radius:12px;
+      }
+      .content{
+        min-width:0;
+        width:100%;
+        padding:12px 12px 24px;
+      }
+      .page-header{
+        flex-direction:column;
+        align-items:stretch;
+        gap:12px;
+      }
+      .calendar-toolbar{
+        width:100%;
+        justify-content:space-between;
+      }
+      .calendar-mobile-toggle{
+        display:flex;
+        flex-wrap:wrap;
+      }
+      .calendar-compare-wrap{grid-template-columns:1fr;}
+      .calendar-compare-wrap.mobile-show-current .calendar-previous-panel{display:none;}
+      .calendar-compare-wrap.mobile-show-previous .calendar-current-panel{display:none;}
+      .grid.three{grid-template-columns:1fr;}
+      .grid.two{grid-template-columns:1fr;}
+      .materials-two-col{grid-template-columns:1fr; gap:10px;}
+      .labor-row{grid-template-columns:1fr 1fr;}
+      .work-date-row{display:grid; grid-template-columns:1fr;}
+      .work-card{min-width:0;}
+      .calendar-day{min-height:84px; padding:8px; border-radius:12px;}
+      .calendar-day .day-num{font-size:16px; margin-bottom:6px;}
+      .calendar-day .day-title-list{gap:3px;}
+      .calendar-day .day-group-label{font-size:10px; margin-bottom:1px;}
+      .calendar-day .day-title-item{font-size:11px; line-height:1.25; padding:2px 4px; border-radius:6px;}
+      .calendar-panel-title{font-size:16px; margin-bottom:8px;}
+      .calendar-toolbar{gap:10px;}
+      .option-mobile-tabs{
+        display:flex;
+        overflow-x:auto;
+        overflow-y:hidden;
+        flex-wrap:nowrap;
+        -webkit-overflow-scrolling:touch;
+        padding-bottom:2px;
+      }
+      .option-mobile-tabs .btn{
+        flex:0 0 auto;
+        white-space:nowrap;
+      }
+      .options-grid{display:block;}
+      .option-panel{display:none;}
+      .option-panel.mobile-active{display:block;}
+      .season-form-grid{grid-template-columns:1fr;}
+      .season-list{grid-template-columns:1fr;}
+      .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+      .money-filter .btn{width:100%;}
+      .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+      #material-search-input{min-width:0 !important; width:100%;}
+      .modal-body{padding:14px;}
+      .modal-header,.modal-footer{padding:14px;}
+    @media (max-width: 420px){
+      body{padding-top:124px;}
+      .mobile-menu-row .menu-btn{font-size:12px; padding:8px 4px;}
+      .calendar-day{min-height:78px; padding:6px;}
+      .calendar-day .day-num{font-size:15px;}
+      .calendar-day .day-title-item{font-size:10px;}
     }
-
-def init_db():
-    conn = db()
-    cur = conn.cursor()
-
-    # works
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS works (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        start_date TEXT,
-        end_date TEXT,
-        weather TEXT,
-        task_name TEXT,
-        crops TEXT,
-        pests TEXT,
-        machines TEXT,
-        work_hours REAL DEFAULT 0,
-        memo TEXT DEFAULT ''
-    )
-    """)
-
-    ensure_column(cur, "works", "end_date", "TEXT")
-    ensure_column(cur, "works", "weather", "TEXT")
-    ensure_column(cur, "works", "task_name", "TEXT")
-    ensure_column(cur, "works", "crops", "TEXT")
-    ensure_column(cur, "works", "pests", "TEXT")
-    ensure_column(cur, "works", "machines", "TEXT")
-    ensure_column(cur, "works", "work_hours", "REAL DEFAULT 0")
-    ensure_column(cur, "works", "memo", "TEXT DEFAULT ''")
-
-
-    
-    # plans
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS plans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        plan_date TEXT,
-        title TEXT,
-        details TEXT,
-        status TEXT DEFAULT 'planned'
-    )
-    """)
-
-    # materials
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS materials (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        unit TEXT DEFAULT '',
-        stock_qty REAL DEFAULT 0,
-        unit_price REAL DEFAULT 0,
-        memo TEXT DEFAULT ''
-    )
-    """)
-
-    ensure_column(cur, "materials", "unit", "TEXT DEFAULT ''")
-    ensure_column(cur, "materials", "stock_qty", "REAL DEFAULT 0")
-    ensure_column(cur, "materials", "unit_price", "REAL DEFAULT 0")
-    ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
-
-    # option tables
-    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
-        cur.execute(f"""
-        CREATE TABLE IF NOT EXISTS options_{t} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE
-        )
-        """)
-    ensure_column(cur, "options_pests", "recommended_materials", "TEXT DEFAULT ''")
-
-    # seasons
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS seasons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        season_name TEXT NOT NULL,
-        start_date TEXT NOT NULL,
-        end_date TEXT NOT NULL,
-        is_current INTEGER DEFAULT 0,
-        note TEXT DEFAULT '',
-        created_at TEXT DEFAULT ''
-    )
-    """)
-    ensure_column(cur, "seasons", "note", "TEXT DEFAULT ''")
-    ensure_column(cur, "seasons", "created_at", "TEXT DEFAULT ''")
-
-    conn.commit()
-    conn.close()
-
-
-init_db()
-
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-
-# =========================
-# WORKS
-# =========================
-@app.route("/api/works", methods=["GET"])
-def get_works():
-    conn = db()
-    season_id = (request.args.get("season_id") or "").strip()
-    season = get_season_row(conn, season_id)
-    sql, params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
-    rows = conn.execute(sql + " ORDER BY start_date DESC, id DESC", params).fetchall()
-    conn.close()
-    return jsonify(rows_to_dicts(rows))
-
-
-@app.route("/api/works", methods=["POST"])
-def create_work():
-    data = request.get_json(force=True) or {}
-
-    start_date = (data.get("start_date") or "").strip()
-    end_date = (data.get("end_date") or start_date).strip()
-    task_name = (data.get("task_name") or "").strip()
-
-    if not start_date:
-        return jsonify({"ok": False, "error": "시작일이 없습니다."}), 400
-    if not task_name:
-        return jsonify({"ok": False, "error": "작업내용이 없습니다."}), 400
-
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO works (
-                start_date, end_date, weather, task_name,
-                crops, pests, machines, work_hours, memo
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            start_date,
-            end_date,
-            data.get("weather", ""),
-            task_name,
-            data.get("crops", ""),
-            data.get("pests", ""),
-            data.get("machines", ""),
-            float(data.get("work_hours") or 0),
-            data.get("memo", "")
-        ))
-        conn.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"ok": False, "error": f"작업 저장 오류: {e}"}), 500
-    finally:
-        conn.close()
-
-
-@app.route("/api/works/<int:work_id>", methods=["PUT"])
-def update_work(work_id):
-    data = request.get_json(force=True) or {}
-
-    start_date = (data.get("start_date") or "").strip()
-    end_date = (data.get("end_date") or start_date).strip()
-    task_name = (data.get("task_name") or "").strip()
-
-    if not start_date:
-        return jsonify({"ok": False, "error": "시작일이 없습니다."}), 400
-    if not task_name:
-        return jsonify({"ok": False, "error": "작업내용이 없습니다."}), 400
-
-    conn = db()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE works
-            SET start_date = ?,
-                end_date = ?,
-                weather = ?,
-                task_name = ?,
-                crops = ?,
-                pests = ?,
-                machines = ?,
-                work_hours = ?,
-                memo = ?
-            WHERE id = ?
-        """, (
-            start_date,
-            end_date,
-            data.get("weather", ""),
-            task_name,
-            data.get("crops", ""),
-            data.get("pests", ""),
-            data.get("machines", ""),
-            float(data.get("work_hours") or 0),
-            data.get("memo", ""),
-            work_id
-        ))
-        conn.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"ok": False, "error": f"작업 수정 오류: {e}"}), 500
-    finally:
-        conn.close()
-
-
-@app.route("/api/works/<int:work_id>", methods=["DELETE"])
-def delete_work(work_id):
-    conn = db()
-    conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-# =========================
-# PLANS
-# =========================
-@app.route("/api/plans", methods=["GET"])
-def get_plans():
-    conn = db()
-    rows = conn.execute(
-        "SELECT * FROM plans ORDER BY plan_date DESC, id DESC"
-    ).fetchall()
-    conn.close()
-    return jsonify(rows_to_dicts(rows))
-
-
-@app.route("/api/plans", methods=["POST"])
-def create_plan():
-    data = request.get_json(force=True) or {}
-
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO plans (plan_date, title, details, status)
-        VALUES (?, ?, ?, ?)
-    """, (
-        data.get("plan_date", ""),
-        data.get("title", ""),
-        data.get("details", ""),
-        data.get("status", "planned")
-    ))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/plans/<int:plan_id>", methods=["PUT"])
-def update_plan(plan_id):
-    data = request.get_json(force=True) or {}
-
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE plans
-        SET plan_date = ?,
-            title = ?,
-            details = ?,
-            status = ?
-        WHERE id = ?
-    """, (
-        data.get("plan_date", ""),
-        data.get("title", ""),
-        data.get("details", ""),
-        data.get("status", "planned"),
-        plan_id
-    ))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/plans/<int:plan_id>", methods=["DELETE"])
-def delete_plan(plan_id):
-    conn = db()
-    conn.execute("DELETE FROM plans WHERE id = ?", (plan_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-# =========================
-# OPTIONS
-# =========================
-@app.route("/api/options", methods=["GET"])
-def get_options():
-    conn = db()
-
-    # 프론트에서 지금 쓰는 것만 내려줌
-    result = {}
-    for t in ["weather", "crops", "tasks", "machines"]:
-        rows = conn.execute(
-            f"SELECT id, name FROM options_{t} ORDER BY name"
-        ).fetchall()
-        result[t] = rows_to_dicts(rows)
-
-    pest_rows = conn.execute("""
-        SELECT id, name, COALESCE(recommended_materials, '') AS recommended_materials
-        FROM options_pests
-        ORDER BY name
-    """).fetchall()
-    result["pests"] = rows_to_dicts(pest_rows)
-
-    conn.close()
-    return jsonify(result)
-
-
-@app.route("/api/options/<option_type>", methods=["POST"])
-def create_option(option_type):
-    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
-        return jsonify({"ok": False, "error": "invalid option type"}), 400
-
-    data = request.get_json(force=True) or {}
-    name = normalize_name(data.get("name"))
-    recommended_materials = normalize_name(data.get("recommended_materials"))
-    if not name:
-        return jsonify({"ok": False, "error": "name required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-
-    if option_type == "pests":
-        cur.execute(
-            "INSERT OR IGNORE INTO options_pests (name, recommended_materials) VALUES (?, ?)",
-            (name, recommended_materials)
-        )
-        cur.execute(
-            "UPDATE options_pests SET recommended_materials = ? WHERE name = ?",
-            (recommended_materials, name)
-        )
-    else:
-        cur.execute(
-            f"INSERT OR IGNORE INTO options_{option_type} (name) VALUES (?)",
-            (name,)
-        )
-
-    # materials 옵션을 직접 만들면 materials 테이블에도 최소 등록
-    if option_type == "materials":
-        row = cur.execute(
-            "SELECT id FROM materials WHERE name = ?",
-            (name,)
-        ).fetchone()
-        if not row:
-            cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
-                VALUES (?, '', 0, 0, '')
-            """, (name,))
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/options/<option_type>/<int:option_id>", methods=["PUT"])
-def update_option(option_type, option_id):
-    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
-        return jsonify({"ok": False, "error": "invalid option type"}), 400
-
-    data = request.get_json(force=True) or {}
-    new_name = normalize_name(data.get("name"))
-    recommended_materials = normalize_name(data.get("recommended_materials"))
-    if not new_name:
-        return jsonify({"ok": False, "error": "name required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-
-    old_row = cur.execute(
-        f"SELECT name FROM options_{option_type} WHERE id = ?",
-        (option_id,)
-    ).fetchone()
-
-    if option_type == "pests":
-        cur.execute(
-            "UPDATE options_pests SET name = ?, recommended_materials = ? WHERE id = ?",
-            (new_name, recommended_materials, option_id)
-        )
-    else:
-        cur.execute(
-            f"UPDATE options_{option_type} SET name = ? WHERE id = ?",
-            (new_name, option_id)
-        )
-
-    if option_type == "materials" and old_row:
-        old_name = old_row["name"]
-        cur.execute(
-            "UPDATE materials SET name = ? WHERE name = ?",
-            (new_name, old_name)
-        )
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/options/<option_type>/<int:option_id>", methods=["DELETE"])
-def delete_option(option_type, option_id):
-    if option_type not in ["weather", "crops", "tasks", "pests", "machines", "materials"]:
-        return jsonify({"ok": False, "error": "invalid option type"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-
-    row = cur.execute(
-        f"SELECT name FROM options_{option_type} WHERE id = ?",
-        (option_id,)
-    ).fetchone()
-
-    cur.execute(
-        f"DELETE FROM options_{option_type} WHERE id = ?",
-        (option_id,)
-    )
-
-    if option_type == "materials" and row:
-        cur.execute(
-            "DELETE FROM materials WHERE name = ?",
-            (row["name"],)
-        )
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-# =========================
-# MATERIALS
-# =========================
-@app.route("/api/materials", methods=["GET"])
-def get_materials():
-    conn = db()
-    rows = conn.execute("""
-        SELECT id, name, unit, stock_qty, unit_price, memo
-        FROM materials
-        ORDER BY
-          CASE WHEN COALESCE(stock_qty, 0) > 0 THEN 0 ELSE 1 END,
-          name
-    """).fetchall()
-    conn.close()
-    return jsonify(rows_to_dicts(rows))
-
-
-@app.route("/api/materials", methods=["POST"])
-def create_material():
-    data = request.get_json(force=True) or {}
-
-    name = normalize_name(data.get("name"))
-    unit = normalize_name(data.get("unit"))
-    stock_qty = float(data.get("stock_qty") or 0)
-    unit_price = float(data.get("unit_price") or 0)
-    memo = normalize_name(data.get("memo"))
-
-    if not name:
-        return jsonify({"ok": False, "error": "name required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-
-    row = cur.execute(
-        "SELECT id FROM materials WHERE name = ?",
-        (name,)
-    ).fetchone()
-
-    if row:
-        cur.execute("""
-            UPDATE materials
-            SET unit = ?, stock_qty = ?, unit_price = ?, memo = ?
-            WHERE id = ?
-        """, (unit, stock_qty, unit_price, memo, row["id"]))
-    else:
-        cur.execute("""
-            INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
-            VALUES (?, ?, ?, ?, ?)
-        """, (name, unit, stock_qty, unit_price, memo))
-
-    sync_material_option(cur, name)
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/materials/<int:material_id>", methods=["PUT"])
-def update_material(material_id):
-    data = request.get_json(force=True) or {}
-
-    name = normalize_name(data.get("name"))
-    unit = normalize_name(data.get("unit"))
-    stock_qty = float(data.get("stock_qty") or 0)
-    unit_price = float(data.get("unit_price") or 0)
-    memo = normalize_name(data.get("memo"))
-
-    if not name:
-      return jsonify({"ok": False, "error": "name required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-
-    old_row = cur.execute(
-        "SELECT name FROM materials WHERE id = ?",
-        (material_id,)
-    ).fetchone()
-
-    cur.execute("""
-        UPDATE materials
-        SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, memo = ?
-        WHERE id = ?
-    """, (name, unit, stock_qty, unit_price, memo, material_id))
-
-    if old_row:
-        old_name = old_row["name"]
-        opt_row = cur.execute(
-            "SELECT id FROM options_materials WHERE name = ?",
-            (old_name,)
-        ).fetchone()
-        if opt_row:
-            cur.execute(
-                "UPDATE options_materials SET name = ? WHERE id = ?",
-                (name, opt_row["id"])
-            )
-        else:
-            sync_material_option(cur, name)
-    else:
-        sync_material_option(cur, name)
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/materials/<int:material_id>", methods=["DELETE"])
-def delete_material(material_id):
-    conn = db()
-    cur = conn.cursor()
-
-    row = cur.execute(
-        "SELECT name FROM materials WHERE id = ?",
-        (material_id,)
-    ).fetchone()
-
-    cur.execute("DELETE FROM materials WHERE id = ?", (material_id,))
-
-    if row:
-        cur.execute(
-            "DELETE FROM options_materials WHERE name = ?",
-            (row["name"],)
-        )
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-
-
-
-# =========================
-# SEASONS
-# =========================
-@app.route("/api/seasons", methods=["GET"])
-def get_seasons():
-    conn = db()
-    rows = conn.execute("SELECT * FROM seasons ORDER BY start_date DESC, id DESC").fetchall()
-    conn.close()
-    return jsonify(rows_to_dicts(rows))
-
-
-@app.route("/api/seasons", methods=["POST"])
-def create_season():
-    data = request.get_json(force=True) or {}
-    season_name = normalize_name(data.get("season_name") or data.get("name"))
-    start_date = normalize_name(data.get("start_date"))
-    end_date = normalize_name(data.get("end_date"))
-    note = (data.get("note") or "").strip()
-    is_current_raw = data.get("is_current")
-    is_current = 1 if str(is_current_raw).lower() in ["1", "true", "yes", "y", "on"] else 0
-
-    if not season_name or not start_date or not end_date:
-        return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-    if is_current:
-        cur.execute("UPDATE seasons SET is_current = 0")
-    cur.execute("""
-        INSERT INTO seasons (season_name, start_date, end_date, is_current, note, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (season_name, start_date, end_date, is_current, note, current_timestamp()))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/<int:season_id>", methods=["PUT"])
-def update_season(season_id):
-    data = request.get_json(force=True) or {}
-    season_name = normalize_name(data.get("season_name") or data.get("name"))
-    start_date = normalize_name(data.get("start_date"))
-    end_date = normalize_name(data.get("end_date"))
-    note = (data.get("note") or "").strip()
-    is_current_raw = data.get("is_current")
-    is_current = 1 if str(is_current_raw).lower() in ["1", "true", "yes", "y", "on"] else 0
-
-    if not season_name or not start_date or not end_date:
-        return jsonify({"ok": False, "error": "season_name, start_date, end_date required"}), 400
-
-    conn = db()
-    cur = conn.cursor()
-    if is_current:
-        cur.execute("UPDATE seasons SET is_current = 0")
-    cur.execute("""
-        UPDATE seasons
-        SET season_name = ?, start_date = ?, end_date = ?, is_current = ?, note = ?
-        WHERE id = ?
-    """, (season_name, start_date, end_date, is_current, note, season_id))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/<int:season_id>", methods=["DELETE"])
-def delete_season(season_id):
-    conn = db()
-    conn.execute("DELETE FROM seasons WHERE id = ?", (season_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/<int:season_id>/set_current", methods=["PUT"])
-def set_current_season(season_id):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("UPDATE seasons SET is_current = 0")
-    cur.execute("UPDATE seasons SET is_current = 1 WHERE id = ?", (season_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/seasons/current", methods=["GET"])
-def get_current_season():
-    conn = db()
-    row = get_season_row(conn, 'current')
-    conn.close()
-    return jsonify(season_payload(row) or {})
-
-
-@app.route("/api/seasons/<int:season_id>/backup", methods=["GET"])
-def backup_season(season_id):
-    conn = db()
-    season = get_season_row(conn, str(season_id))
-    if not season:
-        conn.close()
-        return jsonify({"ok": False, "error": "season not found"}), 404
-
-    works_sql, works_params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
-    work_rows = conn.execute(works_sql + " ORDER BY start_date ASC, id ASC", works_params).fetchall()
-
-    money_rows = []
-    for row in work_rows:
-        item = dict(row)
-        try:
-            memo = json.loads(item.get("memo") or "{}")
-        except Exception:
-            memo = {}
-        money = memo.get("money") or {}
-        if money:
-            money_rows.append({
-                "date": item.get("start_date", ""),
-                "task_name": item.get("task_name", ""),
-                "type": money.get("type", ""),
-                "total": float(money.get("total_amount") or money.get("amount") or 0),
-                "method": money.get("method", ""),
-                "note": money.get("note", "")
-            })
-
-    materials = rows_to_dicts(conn.execute("SELECT * FROM materials ORDER BY name").fetchall())
-    options = {}
-    for t in ["weather", "crops", "tasks", "machines"]:
-        options[t] = rows_to_dicts(conn.execute(f"SELECT id, name FROM options_{t} ORDER BY name").fetchall())
-    options["pests"] = rows_to_dicts(conn.execute("""
-        SELECT id, name, COALESCE(recommended_materials, '') AS recommended_materials
-        FROM options_pests
-        ORDER BY name
-    """).fetchall())
-    plans = rows_to_dicts(conn.execute("SELECT * FROM plans ORDER BY plan_date DESC, id DESC").fetchall())
-    conn.close()
-
-    payload = {
-        "ok": True,
-        "season": season_payload(season),
-        "exported_at": current_timestamp(),
-        "works": rows_to_dicts(work_rows),
-        "money": money_rows,
-        "materials": materials,
-        "options": options,
-        "plans": plans,
-        "summary": {
-            "works_count": len(work_rows),
-            "money_count": len(money_rows),
-            "money_total": sum(item["total"] for item in money_rows)
-        }
-    }
-    return jsonify(payload)
-
-
-# =========================
-# IMPORT OLD DB
-# =========================
-@app.route("/api/import_old_db", methods=["POST"])
-def import_old_db():
-    uploaded = request.files.get("file")
-    if not uploaded or not uploaded.filename:
-        return jsonify({"ok": False, "error": "파일이 없습니다."}), 400
-
-    temp_dir = tempfile.gettempdir()
-    temp_path = os.path.join(temp_dir, f"old_worklog_{uuid.uuid4().hex}.db")
-
-    try:
-        uploaded.save(temp_path)
-        result = import_old_db_into_current(temp_path)
-        status = 200 if result.get("ok") else 400
-        return jsonify(result), status
-    finally:
-        try:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-        except Exception:
-            pass
-
-
-# =========================
-# MONEY
-# =========================
-@app.route("/api/money", methods=["GET"])
-def get_money():
-    conn = db()
-    season_id = (request.args.get("season_id") or "").strip()
-    season = get_season_row(conn, season_id)
-    sql, params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
-    rows = conn.execute(sql + " ORDER BY start_date DESC, id DESC", params).fetchall()
-    conn.close()
-
-    result = []
-    for row in rows:
-        item = dict(row)
-        memo = {}
-        try:
-            memo = json.loads(item.get("memo") or "{}")
-        except Exception:
-            memo = {}
-
-        money = memo.get("money") or {}
-        if not money:
-            continue
-
-        total_amount = float(money.get("total_amount") or money.get("amount") or 0)
-        labor_total = float(money.get("labor_total") or 0)
-        material_total = float(money.get("material_total") or 0)
-        other_total = float(money.get("other_total") or 0)
-        method = money.get("method", "")
-
-        cash_amount = total_amount if method == "현금" else 0
-        card_amount = total_amount if method in ["카드", "일시불", "할부"] else 0
-
-        result.append({
-            "date": item.get("start_date", ""),
-            "task_name": item.get("task_name", ""),
-            "type": money.get("type", ""),
-            "total": total_amount,
-            "total_amount": total_amount,
-            "labor_total": labor_total,
-            "material_total": material_total,
-            "other_total": other_total,
-            "method": method,
-            "cash_amount": cash_amount,
-            "card_amount": card_amount,
-            "note": money.get("note", "")
-        })
-
-    return jsonify(result)
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>작업일지 v2</h1>
+      <div class="mobile-menu-row">
+        <button class="menu-btn active" data-page="calendar">작업달력</button>
+        <button class="menu-btn" data-page="works">작업일지</button>
+        <button class="menu-btn" data-page="materials">자재관리</button>
+        <button class="menu-btn" data-page="money">금전관리</button>
+        <button class="menu-btn" data-page="options">옵션관리</button>
+        <button class="menu-btn" data-page="excel">엑셀다운</button>
+        <button class="menu-btn" data-page="backup">백업</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section id="page-calendar" class="page active">
+        <div class="page-header">
+          <h2>작업달력</h2>
+          <div class="calendar-toolbar">
+            <button id="btn-prev-month" class="btn">이전달</button>
+            <div id="calendar-title" class="calendar-title"></div>
+            <button id="btn-next-month" class="btn">다음달</button>
+          </div>
+        </div>
+
+        <div class="calendar-mobile-toggle">
+          <button id="btn-mobile-current" class="btn active">현재</button>
+          <button id="btn-mobile-previous" class="btn">전년도 같은 달</button>
+        </div>
+
+        <div id="calendar-compare-wrap" class="calendar-compare-wrap mobile-show-current">
+          <div class="panel calendar-current-panel">
+            <div id="calendar-current-title" class="calendar-panel-title">현재</div>
+            <div class="calendar-week-header">
+              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+            </div>
+            <div id="calendar-grid" class="calendar-grid"></div>
+          </div>
+
+          <div class="panel calendar-previous-panel">
+            <div id="calendar-compare-title" class="calendar-panel-title">전년도 같은 달</div>
+            <div class="calendar-week-header">
+              <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+            </div>
+            <div id="calendar-compare-grid" class="calendar-grid"></div>
+          </div>
+        </div>
+
+        <div class="calendar-layout">
+          <div class="panel">
+            <div class="date-panel-header">
+              <h3>달력 상세</h3>
+              <div class="date-panel-actions">
+                <button id="btn-open-work-from-calendar" class="btn primary hidden">실적 입력</button>
+                <button id="btn-open-plan-form" class="btn hidden">작업계획 입력</button>
+              </div>
+            </div>
+            <div class="empty-msg">날짜를 누르면 상세 팝업이 열립니다.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-works" class="page">
+        <div class="page-header">
+          <h2>작업일지</h2>
+          <button id="btn-new-work" class="btn primary">새 작업 입력</button>
+        </div>
+        <div id="works-list" class="cards"></div>
+      </section>
+
+      <section id="page-materials" class="page">
+        <div class="page-header">
+          <h2>자재관리</h2>
+          <div class="page-header-actions">
+            <button id="btn-open-material-modal" class="btn primary">+ 자재 추가</button>
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:12px;">
+          <input type="text" id="material-list-search" placeholder="자재명 / 단위 / 메모 검색" style="width:100%; max-width:420px;">
+        </div>
+        <div id="materials-list"></div>
+      </section>
+
+      <section id="page-money" class="page">
+        <div class="page-header">
+          <h2>금전관리</h2>
+        </div>
+
+        <div class="panel">
+          <div class="money-summary">
+            <div>총 지출: <strong id="money-total">0</strong> 원</div>
+            <div>현금/이체: <strong id="money-cash">0</strong> 원</div>
+            <div>카드/외상: <strong id="money-card">0</strong> 원</div>
+          </div>
+
+          <div class="money-filter">
+            <input type="date" id="money-start">
+            <input type="date" id="money-end">
+
+            <select id="money-type-filter">
+              <option value="">전체</option>
+              <option>자재비</option>
+              <option>인건비</option>
+              <option>기타</option>
+            </select>
+
+            <select id="money-method-filter">
+              <option value="">전체</option>
+              <option>현금</option>
+              <option>계좌이체</option>
+              <option>카드일시불</option>
+              <option>카드할부</option>
+              <option>외상</option>
+            </select>
+
+            <button id="btn-money-filter" class="btn">검색</button>
+          </div>
+
+          <table class="money-table">
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>작업</th>
+                <th>구분</th>
+                <th>금액</th>
+                <th>방식</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody id="money-list"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="page-options" class="page">
+        <div class="page-header"><h2>옵션관리</h2></div>
+
+        <div class="option-mobile-tabs">
+          <button class="btn option-tab-btn active" data-option-tab="weather">날씨</button>
+          <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
+          <button class="btn option-tab-btn" data-option-tab="tasks">작업내용</button>
+          <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
+          <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
+        </div>
+
+        <div class="options-grid">
+          <div class="panel option-panel mobile-active" data-option-panel="weather">
+            <h3>날씨</h3>
+            <div class="inline-form">
+              <input type="text" id="new-weather" placeholder="새 날씨">
+              <button class="btn primary" onclick="saveOption('weather', 'new-weather')">추가</button>
+            </div>
+            <div id="options-weather" class="option-list"></div>
+          </div>
+
+          <div class="panel option-panel mobile-active" data-option-panel="crops">
+            <h3>작물</h3>
+            <div class="inline-form">
+              <input type="text" id="new-crops" placeholder="새 작물">
+              <button class="btn primary" onclick="saveOption('crops', 'new-crops')">추가</button>
+            </div>
+            <div id="options-crops" class="option-list"></div>
+          </div>
+
+          <div class="panel option-panel mobile-active" data-option-panel="tasks">
+            <h3>작업내용</h3>
+            <div class="inline-form">
+              <input type="text" id="new-tasks" placeholder="새 작업내용">
+              <button class="btn primary" onclick="saveOption('tasks', 'new-tasks')">추가</button>
+            </div>
+            <div id="options-tasks" class="option-list"></div>
+          </div>
+
+          <div class="panel option-panel mobile-active" data-option-panel="pests">
+            <h3>병충해</h3>
+            <div class="inline-form">
+              <input type="text" id="new-pests" placeholder="새 병충해">
+              <input type="text" id="new-pests-recommend" placeholder="추천약제 (쉼표로 구분)">
+              <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
+            </div>
+            <div id="options-pests" class="option-list"></div>
+          </div>
+
+          <div class="panel option-panel mobile-active" data-option-panel="machines">
+            <h3>사용기계</h3>
+            <div class="inline-form">
+              <input type="text" id="new-machines" placeholder="새 사용기계">
+              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
+            </div>
+            <div id="options-machines" class="option-list"></div>
+          </div>
+        </div>
+
+        <div class="panel season-panel">
+          <h3>시즌관리</h3>
+          <div class="season-form-grid">
+            <label class="field"><span>시즌명</span><input type="text" id="season_name"></label>
+            <label class="field"><span>시작일</span><input type="date" id="season_start_date"></label>
+            <label class="field"><span>종료일</span><input type="date" id="season_end_date"></label>
+            <label class="field"><span>현재시즌</span><select id="season_is_current"><option value="0">아니오</option><option value="1">예</option></select></label>
+          </div>
+          <label class="field" style="margin-top:12px;"><span>비고</span><input type="text" id="season_note"></label>
+          <div class="item-actions">
+            <button id="btn-save-season" class="btn primary">저장</button>
+            <button id="btn-reset-season" class="btn">초기화</button>
+          </div>
+          <div id="season-list" class="season-list"></div>
+        </div>
+      </section>
+
+      <section id="page-excel" class="page">
+        <div class="page-header"><h2>엑셀다운</h2></div>
+        <div class="panel">
+          <p class="placeholder-title">준비중</p>
+          <p class="placeholder-text">엑셀 다운로드 기능은 다음 단계에서 연결할 예정입니다.</p>
+        </div>
+      </section>
+
+      <section id="page-backup" class="page">
+        <div class="page-header"><h2>백업</h2></div>
+        <div class="panel">
+          <div class="field">
+            <span>기존 worklog.db 가져오기</span>
+            <input type="file" id="backup-file-input" accept=".db,.sqlite,.sqlite3,application/octet-stream">
+            <div class="inline-help">예전 PC에서 사용하던 worklog.db 파일을 선택하면 현재 작업일지 구조로 변환해서 가져옵니다.</div>
+          </div>
+
+          <div class="item-actions">
+            <button id="btn-import-old-db" class="btn primary">기존 DB 가져오기</button>
+          </div>
+
+          <div id="backup-import-status" class="inline-help" style="margin-top:12px;"></div>
+
+          <div class="panel" style="margin-top:16px; background:#f8fafc;">
+            <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
+            <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 작업계획 입력/수정 팝업 -->
+  <div id="plan-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="plan-modal-title">작업계획 입력</h3>
+        <button id="btn-close-plan-modal" class="btn">닫기</button>
+      </div>
+
+      <div class="modal-body">
+        <label class="field">
+          <span>계획일</span>
+          <input type="date" id="plan_date">
+        </label>
+
+        <label class="field">
+          <span>계획 제목 검색</span>
+          <input type="text" id="plan-search" placeholder="작업내용 검색">
+          <div id="plan-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+        </label>
+
+        <label class="field">
+          <span>계획 제목</span>
+          <input type="text" id="plan_title" placeholder="계획 제목 입력">
+        </label>
+
+        <label class="field">
+          <span>세부내용</span>
+          <textarea id="plan_details" rows="4" placeholder="예: 상단동 2시간 관수"></textarea>
+        </label>
+
+        <label class="field">
+          <span>상태</span>
+          <select id="plan_status">
+            <option value="planned">계획</option>
+            <option value="done">완료</option>
+            <option value="cancelled">취소</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-save-plan" class="btn primary">저장</button>
+        <button id="btn-cancel-plan" class="btn">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 달력 날짜 상세 팝업 -->
+  <div id="calendar-detail-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <h3 id="calendar-detail-title">날짜 상세</h3>
+        <button id="btn-close-calendar-detail" class="btn">닫기</button>
+      </div>
+
+      <div class="modal-body" id="calendar-detail-body">
+        <div class="empty-msg">상세 내용 없음</div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-calendar-add-plan" class="btn">작업계획 입력</button>
+        <button id="btn-calendar-add-work" class="btn primary">실적 입력</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 새 작업 입력/수정 팝업 -->
+  <div id="work-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <h3 id="work-modal-title">새 작업 입력</h3>
+        <button id="btn-close-work-modal" class="btn">닫기</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="grid three">
+          <label class="field">
+            <span>시작일</span>
+            <input type="date" id="start_date">
+          </label>
+
+          <label class="field">
+            <span>연속작업일수</span>
+            <input type="number" id="repeat_days" min="1" step="1" value="1">
+          </label>
+
+          <label class="field">
+            <span>종료일</span>
+            <input type="date" id="end_date" readonly>
+          </label>
+        </div>
+
+        <div class="grid three">
+          <label class="field">
+            <span>시작시간</span>
+            <input type="time" id="start_time">
+          </label>
+          <label class="field">
+            <span>총 작업시간</span>
+            <input type="number" id="work_hours" min="0" step="0.5" value="0">
+          </label>
+          <label class="field">
+            <span>종료시간</span>
+            <input type="time" id="end_time">
+          </label>
+        </div>
+        <div class="inline-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
+
+        <div class="grid two">
+          <label class="field">
+            <span>날씨</span>
+            <select id="weather"></select>
+          </label>
+          <label class="field">
+            <span>작업내용</span>
+            <select id="task_name"></select>
+          </label>
+        </div>
+
+        <div class="field">
+          <span>작물</span>
+          <div id="crops-box" class="checks"></div>
+        </div>
+
+        <div class="field">
+          <span>병충해</span>
+          <div id="pests-box" class="checks"></div>
+        </div>
+
+        <div class="field hidden" id="recommended-materials-wrap">
+          <span>추천약제</span>
+          <div id="recommended-materials-box" class="recommended-materials-box"></div>
+        </div>
+
+        <div class="field">
+          <span>사용자재</span>
+          <div id="material-picker-wrap">
+            <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+              <input type="text" id="material-search-input" placeholder="자재명 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:220px;">
+            </div>
+            <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
+            <div id="selected-materials-detailed"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>사용기계</span>
+          <div id="machines-box" class="checks"></div>
+        </div>
+
+        <div class="field">
+          <div class="money-toggle">
+            <label>
+              <input type="checkbox" id="has_money">
+              <span>💰 비용 발생</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="money-box" class="panel hidden" style="margin-top:8px;">
+          <div class="grid two">
+            <label class="field">
+              <span>기타비용</span>
+              <input type="number" id="other_cost" value="0" min="0">
+            </label>
+
+            <label class="field">
+              <span>금전비고</span>
+              <input type="text" id="money_note" placeholder="예: 농약값, 일당, 수리비">
+            </label>
+          </div>
+
+          <div class="grid three" style="margin-top:12px;">
+            <div class="field">
+              <span>인건비 합계</span>
+              <div class="readonly-money" id="money_labor_total">0</div>
+            </div>
+            <div class="field">
+              <span>자재비 합계</span>
+              <div class="readonly-money" id="money_material_total">0</div>
+            </div>
+            <div class="field">
+              <span>총 비용</span>
+              <div class="readonly-money total" id="money_total_amount">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span>인건비 상세</span>
+          <div id="labor-rows-wrap"></div>
+          <div class="inline-help">남자/여자, 인원수, 단가, 지급방법, 비고를 한 줄씩 입력합니다.</div>
+          <div style="margin-top:8px;">
+            <button type="button" class="btn" id="btn-add-labor-row">+ 인건비 추가</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>비고</span>
+          <textarea id="memo" rows="4"></textarea>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-save-work" class="btn primary">저장</button>
+        <button id="btn-cancel-work" class="btn">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 자재 추가/수정 팝업 -->
+  <div id="material-modal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-material">
+      <div class="modal-header">
+        <h3 id="material-modal-title">자재 추가</h3>
+        <button id="btn-close-material-modal" class="btn">닫기</button>
+      </div>
+
+      <div class="modal-body">
+        <label class="field">
+          <span>자재 검색</span>
+          <input type="text" id="material-search-keyword" placeholder="기존 자재 검색 또는 새 자재명 입력">
+          <div id="material-search-box" style="margin-top:8px;"></div>
+        </label>
+
+        <div class="grid two">
+          <label class="field">
+            <span>자재명</span>
+            <input type="text" id="material_name">
+          </label>
+
+          <label class="field">
+            <span>단위</span>
+            <select id="material_unit">
+              <option value="">선택</option>
+              <option value="개">개</option>
+              <option value="병">병</option>
+              <option value="통">통</option>
+              <option value="봉">봉</option>
+              <option value="포">포</option>
+              <option value="kg">kg</option>
+              <option value="L">L</option>
+              <option value="ml">ml</option>
+              <option value="말">말</option>
+              <option value="M">M</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label class="field">
+            <span>재고</span>
+            <input type="number" id="material_stock" min="0" step="0.1">
+          </label>
+
+          <label class="field">
+            <span>단가</span>
+            <input type="number" id="material_price" min="0" step="1">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>비고</span>
+          <textarea id="material_memo" rows="3"></textarea>
+        </label>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-save-material" class="btn primary">저장</button>
+        <button id="btn-cancel-material" class="btn">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}?v=2"></script>
+
+</body>
+</html>

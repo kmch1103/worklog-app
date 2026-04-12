@@ -113,22 +113,6 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
-    #page-works .works-sticky-actions{position:fixed; top:20px; left:280px; right:20px; z-index:80; background:#f8fafc; padding:8px 0 10px; margin:0;}
-    #page-works .works-search-box{margin-top:74px;}
-    @media (max-width: 900px){
-      #page-works .works-sticky-actions{position:sticky; top:0; left:auto; right:auto; z-index:35; margin-bottom:12px;}
-      #page-works .works-search-box{margin-top:0;}
-    }
-    #page-works .works-sticky-actions .btn{justify-content:center;}
-    .favorite-work-bar{display:none !important;}
-    .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;}
-    .money-summary > div{background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;}
-    #money-monthly-summary{background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;}
-    .money-monthly-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px;}
-    .money-monthly-card{border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#f8fafc;}
-    .money-monthly-card .month{font-weight:800; margin-bottom:6px;}
-    @media (max-width: 1200px){ .money-summary{grid-template-columns:repeat(2,minmax(0,1fr));} .money-monthly-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
-    @media (max-width: 700px){ .money-summary,.money-monthly-grid{grid-template-columns:1fr;} }
 
     .works-search-box{padding:14px 16px;}
     .works-filter-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
@@ -353,8 +337,6 @@
       <section id="page-works" class="page">
         <div class="page-header">
           <h2>작업일지</h2>
-        </div>
-        <div class="page-header-actions works-sticky-actions">
           <button id="btn-new-work" class="btn primary">새 작업 입력</button>
         </div>
         <div id="works-list" class="cards"></div>
@@ -381,11 +363,11 @@
         <div class="panel">
           <div class="money-summary">
             <div>총 지출: <strong id="money-total">0</strong> 원</div>
-            <div>현금/이체: <strong id="money-cash">0</strong> 원</div>
-            <div>카드/외상: <strong id="money-card">0</strong> 원</div>
-            <div>인건비: <strong id="money-labor-sum">0</strong> 원</div>
-            <div>자재비: <strong id="money-material-sum">0</strong> 원</div>
-            <div>기타비: <strong id="money-other-sum">0</strong> 원</div>
+            <div>현금: <strong id="money-cash">0</strong> 원</div>
+            <div>계좌이체: <strong id="money-transfer">0</strong> 원</div>
+            <div>카드일시불: <strong id="money-card-lump">0</strong> 원</div>
+            <div>카드할부: <strong id="money-card-install">0</strong> 원</div>
+            <div>외상: <strong id="money-credit">0</strong> 원</div>
           </div>
 
           <div class="money-filter">
@@ -415,8 +397,6 @@
             <button id="btn-money-filter" class="btn">검색</button>
           </div>
 
-          <div id="money-monthly-summary" class="panel" style="margin-bottom:12px;"></div>
-
           <table class="money-table">
             <thead>
               <tr>
@@ -430,6 +410,11 @@
             </thead>
             <tbody id="money-list"></tbody>
           </table>
+
+          <div class="panel" style="margin-top:12px;">
+            <h3 style="margin:0 0 10px;">외상 상세</h3>
+            <div id="money-credit-list" class="empty-msg">외상 내역 없음</div>
+          </div>
         </div>
       </section>
 
@@ -628,15 +613,13 @@
       <div class="modal-header">
         <h3 id="work-modal-title">새 작업 입력</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
-          <div class="favorite-work-bar" style="display:none;">
-            <select id="favorite-work-select" class="btn" style="min-width:180px;">
-              <option value="">즐겨찾기 선택</option>
-            </select>
-            <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
-            <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
-            <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
-            <span id="favorite-work-status" class="inline-help" style="margin-left:8px;"></span>
-          </div>
+          <select id="favorite-work-select" class="btn" style="min-width:180px;">
+            <option value="">즐겨찾기 선택</option>
+          </select>
+          <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
+          <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
+          <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
+          <span id="favorite-work-status" class="inline-help" style="margin-left:8px;"></span>
           <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
           <button id="btn-close-work-modal" class="btn">닫기</button>
         </div>
@@ -737,13 +720,32 @@
         <div id="money-box" class="panel hidden" style="margin-top:8px;">
           <div class="grid two">
             <label class="field">
+              <span>결제방식</span>
+              <select id="money_method">
+                <option value="">선택</option>
+                <option value="현금">현금</option>
+                <option value="계좌이체">계좌이체</option>
+                <option value="카드일시불">카드일시불</option>
+                <option value="카드할부">카드할부</option>
+                <option value="외상">외상</option>
+              </select>
+            </label>
+
+            <label class="field" id="money_installment_wrap" style="display:none;">
+              <span>할부 개월</span>
+              <input type="number" id="money_installment_months" value="0" min="0" step="1" placeholder="예: 3">
+            </label>
+          </div>
+
+          <div class="grid two" style="margin-top:12px;">
+            <label class="field">
               <span>기타비용</span>
               <input type="number" id="other_cost" value="0" min="0">
             </label>
 
             <label class="field">
               <span>금전비고</span>
-              <input type="text" id="money_note" placeholder="예: 농약값, 일당, 수리비">
+              <input type="text" id="money_note" placeholder="예: 농약값, 일당, 수리비 / 외상처 상세">
             </label>
           </div>
 

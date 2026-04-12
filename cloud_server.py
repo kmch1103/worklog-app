@@ -1142,10 +1142,18 @@ def get_money():
         labor_total = float(money.get("labor_total") or 0)
         material_total = float(money.get("material_total") or 0)
         other_total = float(money.get("other_total") or 0)
-        method = money.get("method", "")
+        method = (money.get("method") or "").strip()
+        installment_months = int(safe_float(money.get("installment_months"), 0))
 
         cash_amount = total_amount if method == "현금" else 0
-        card_amount = total_amount if method in ["카드", "일시불", "할부"] else 0
+        transfer_amount = total_amount if method == "계좌이체" else 0
+        card_lump_amount = total_amount if method == "카드일시불" else 0
+        card_install_amount = total_amount if method == "카드할부" else 0
+        credit_amount = total_amount if method == "외상" else 0
+
+        method_display = method
+        if method == "카드할부" and installment_months > 0:
+            method_display = f"카드할부 ({installment_months}개월)"
 
         result.append({
             "date": item.get("start_date", ""),
@@ -1157,8 +1165,13 @@ def get_money():
             "material_total": material_total,
             "other_total": other_total,
             "method": method,
+            "method_display": method_display,
+            "installment_months": installment_months,
             "cash_amount": cash_amount,
-            "card_amount": card_amount,
+            "transfer_amount": transfer_amount,
+            "card_lump_amount": card_lump_amount,
+            "card_install_amount": card_install_amount,
+            "credit_amount": credit_amount,
             "note": money.get("note", "")
         })
 

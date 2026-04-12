@@ -391,7 +391,7 @@ def init_db():
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
 
     # option tables
-    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
+    for t in ["weather", "crops", "pests", "materials", "machines"]:
         cur.execute(f"""
         CREATE TABLE IF NOT EXISTS options_{t} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -402,6 +402,13 @@ def init_db():
     CREATE TABLE IF NOT EXISTS options_task_categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE
+    )
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS options_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        category_name TEXT DEFAULT ''
     )
     """)
     ensure_column(cur, "options_tasks", "category_name", "TEXT DEFAULT ''")
@@ -627,7 +634,7 @@ def get_options():
     # 프론트에서 지금 쓰는 것만 내려줌
     result = {}
     for t in ["weather", "crops", "machines", "task_categories"]:
-        table = f"options_{t}"
+        table = "options_task_categories" if t == "task_categories" else f"options_{t}"
         rows = conn.execute(
             f"SELECT id, name FROM {table} ORDER BY name"
         ).fetchall()
@@ -660,18 +667,14 @@ def create_option(option_type):
     name = normalize_name(data.get("name"))
     recommended_materials = normalize_name(data.get("recommended_materials"))
     category_name = normalize_name(data.get("category_name"))
+    category_name = normalize_name(data.get("category_name"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
 
-    if option_type == "task_categories":
-        cur.execute(
-            "INSERT OR IGNORE INTO options_task_categories (name) VALUES (?)",
-            (name,)
-        )
-    elif option_type == "tasks":
+    if option_type == "tasks":
         cur.execute(
             "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
             (name, category_name)
@@ -688,6 +691,11 @@ def create_option(option_type):
         cur.execute(
             "UPDATE options_pests SET recommended_materials = ? WHERE name = ?",
             (recommended_materials, name)
+        )
+    elif option_type == "task_categories":
+        cur.execute(
+            "INSERT OR IGNORE INTO options_task_categories (name) VALUES (?)",
+            (name,)
         )
     else:
         cur.execute(

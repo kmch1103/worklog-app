@@ -923,7 +923,7 @@
 
   function renderWorkFormOptions() {
     setSelectOptions(el.weather, state.options.weather, true);
-    setSelectOptions(el.task_category, state.options.task_categories, true, '카테고리 선택');
+    setSelectOptions(el.task_category, state.options.task_categories, true, '작업분류 선택');
     renderTaskOptionsByCategory(el.task_category?.value || '');
     renderChipOptions('crops', state.options.crops);
     renderChipOptions('pests', state.options.pests);
@@ -1311,6 +1311,7 @@
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
+    renderTaskCategorySelect();
     renderTaskCategoryList();
     renderTaskOptionList();
     renderOptionList('pests', state.options.pests, el['options-pests'], el['new-pests'], el['new-pests-recommend']);
@@ -1330,6 +1331,25 @@
     });
 
     renderSeasonList();
+  }
+
+  function renderTaskCategorySelect() {
+    const selectEl = el['new-task-category'];
+    if (!selectEl) return;
+
+    const current = selectEl.value || '';
+    const rawItems = state.optionsRaw?.task_categories || [];
+    const options = ['<option value="">작업분류 선택</option>'];
+
+    rawItems.forEach(item => {
+      const name = optionName(item);
+      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+
+    selectEl.innerHTML = options.join('');
+    if (rawItems.some(item => optionName(item) === current)) {
+      selectEl.value = current;
+    }
   }
 
   function renderTaskCategoryList() {

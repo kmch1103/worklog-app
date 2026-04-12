@@ -113,6 +113,17 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
+    #page-works .works-sticky-actions{position:sticky; top:0; z-index:35; background:#f8fafc; padding:8px 0 10px; margin-bottom:12px;}
+    #page-works .works-sticky-actions .btn{justify-content:center;}
+    .favorite-work-bar{display:none !important;}
+    .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;}
+    .money-summary > div{background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;}
+    #money-monthly-summary{background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;}
+    .money-monthly-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px;}
+    .money-monthly-card{border:1px solid #e5e7eb; border-radius:12px; padding:10px; background:#f8fafc;}
+    .money-monthly-card .month{font-weight:800; margin-bottom:6px;}
+    @media (max-width: 1200px){ .money-summary{grid-template-columns:repeat(2,minmax(0,1fr));} .money-monthly-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+    @media (max-width: 700px){ .money-summary,.money-monthly-grid{grid-template-columns:1fr;} }
 
     .works-search-box{padding:14px 16px;}
     .works-filter-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
@@ -337,6 +348,8 @@
       <section id="page-works" class="page">
         <div class="page-header">
           <h2>작업일지</h2>
+        </div>
+        <div class="page-header-actions works-sticky-actions">
           <button id="btn-new-work" class="btn primary">새 작업 입력</button>
         </div>
         <div id="works-list" class="cards"></div>
@@ -365,6 +378,9 @@
             <div>총 지출: <strong id="money-total">0</strong> 원</div>
             <div>현금/이체: <strong id="money-cash">0</strong> 원</div>
             <div>카드/외상: <strong id="money-card">0</strong> 원</div>
+            <div>인건비: <strong id="money-labor-sum">0</strong> 원</div>
+            <div>자재비: <strong id="money-material-sum">0</strong> 원</div>
+            <div>기타비: <strong id="money-other-sum">0</strong> 원</div>
           </div>
 
           <div class="money-filter">
@@ -393,6 +409,8 @@
 
             <button id="btn-money-filter" class="btn">검색</button>
           </div>
+
+          <div id="money-monthly-summary" class="panel" style="margin-bottom:12px;"></div>
 
           <table class="money-table">
             <thead>
@@ -605,13 +623,15 @@
       <div class="modal-header">
         <h3 id="work-modal-title">새 작업 입력</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
-          <select id="favorite-work-select" class="btn" style="min-width:180px;">
-            <option value="">즐겨찾기 선택</option>
-          </select>
-          <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
-          <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
-          <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
-          <span id="favorite-work-status" class="inline-help" style="margin-left:8px;"></span>
+          <div class="favorite-work-bar" style="display:none;">
+            <select id="favorite-work-select" class="btn" style="min-width:180px;">
+              <option value="">즐겨찾기 선택</option>
+            </select>
+            <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
+            <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
+            <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
+            <span id="favorite-work-status" class="inline-help" style="margin-left:8px;"></span>
+          </div>
           <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
           <button id="btn-close-work-modal" class="btn">닫기</button>
         </div>

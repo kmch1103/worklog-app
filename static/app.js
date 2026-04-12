@@ -813,11 +813,11 @@
   function setFavoriteWorks(rows) {
     try {
       localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
-      return True;
+      return true;
     } catch (e) {
       console.error(e);
       showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
-      return False;
+      return false;
     }
   }
 

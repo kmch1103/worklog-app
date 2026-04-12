@@ -505,7 +505,7 @@
           return `
             <div class="calendar-detail-card">
               <div class="calendar-detail-title">${escapeHtml(work.task_name || '')}</div>
-              <div class="calendar-detail-meta">작업카테고리: ${escapeHtml(work.task_category || '')}</div>
+              <div class="calendar-detail-meta">작업분류: ${escapeHtml(work.task_category || '')}</div>
               <div class="calendar-detail-meta">작물: ${escapeHtml(work.crops || '')}</div>
               <div class="calendar-detail-meta">병충해: ${escapeHtml(work.pests || '')}</div>
               <div class="calendar-detail-meta">기계: ${escapeHtml(work.machines || '')}</div>
@@ -941,7 +941,7 @@
       ? rawTasks.filter(item => getTaskCategoryName(item) === categoryName)
       : rawTasks;
 
-    const options = [`<option value="">작업내용 선택</option>`];
+    const options = [`<option value="">세부작업 선택</option>`];
     list.forEach(item => {
       const name = optionName(item);
       options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
@@ -1356,7 +1356,7 @@
     listEl.querySelectorAll('[data-task-category-edit]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const [optionId, currentName] = String(btn.dataset.taskCategoryEdit || '').split('|');
-        const newName = prompt('수정할 작업카테고리', currentName || '');
+        const newName = prompt('수정할 작업분류', currentName || '');
         if (newName == null) return;
         const trimmed = newName.trim();
         if (!trimmed) return;
@@ -1415,12 +1415,12 @@
     listEl.querySelectorAll('[data-task-edit]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const [optionId, currentName, currentCategory] = String(btn.dataset.taskEdit || '').split('|');
-        const newName = prompt('수정할 작업내용', currentName || '');
+        const newName = prompt('수정할 세부작업', currentName || '');
         if (newName == null) return;
         const trimmed = newName.trim();
         if (!trimmed) return;
 
-        const categoryName = prompt('작업카테고리', currentCategory || '') || '';
+        const categoryName = prompt('작업분류', currentCategory || '') || '';
 
         try {
           await apiPut(`/api/options/tasks/${optionId}`, {
@@ -1526,7 +1526,7 @@
 
     const name = (inputNode.value || '').trim();
     if (!name) {
-      alert('작업카테고리를 입력하세요.');
+      alert('작업분류를 입력하세요.');
       inputNode.focus();
       return;
     }
@@ -1552,7 +1552,7 @@
     const category_name = (categoryNode.value || '').trim();
 
     if (!name) {
-      alert('작업내용을 입력하세요.');
+      alert('세부작업을 입력하세요.');
       nameNode.focus();
       return;
     }
@@ -2240,7 +2240,7 @@
         <div class="work-card-title">${escapeHtml(work.task_name || '')}</div>
         <div>기간: ${escapeHtml(work.start_date || '')} ~ ${escapeHtml(work.end_date || '')}</div>
         <div>날씨: ${escapeHtml(work.weather || '')}</div>
-        <div>작업카테고리: ${escapeHtml(work.task_category || '')}</div>
+        <div>작업분류: ${escapeHtml(work.task_category || '')}</div>
         <div>작물: ${escapeHtml(work.crops || '')}</div>
         <div>병충해: ${escapeHtml(work.pests || '')}</div>
         <div>기계: ${escapeHtml(work.machines || '')}</div>
@@ -2313,7 +2313,7 @@
     }
 
     if (!payload.task_name) {
-      alert('작업내용을 선택하세요.');
+      alert('세부작업을 선택하세요.');
       return;
     }
 

@@ -391,7 +391,7 @@ def init_db():
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
 
     # option tables
-    for t in ["weather", "crops", "pests", "materials", "machines"]:
+    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
         cur.execute(f"""
         CREATE TABLE IF NOT EXISTS options_{t} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -402,13 +402,6 @@ def init_db():
     CREATE TABLE IF NOT EXISTS options_task_categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE
-    )
-    """)
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS options_tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        category_name TEXT DEFAULT ''
     )
     """)
     ensure_column(cur, "options_tasks", "category_name", "TEXT DEFAULT ''")
@@ -456,6 +449,7 @@ def get_works():
 
 
 @app.route("/api/works", methods=["POST"])
+
 def create_work():
     data = request.get_json(force=True) or {}
 
@@ -498,7 +492,9 @@ def create_work():
         conn.close()
 
 
+
 @app.route("/api/works/<int:work_id>", methods=["PUT"])
+
 def update_work(work_id):
     data = request.get_json(force=True) or {}
 
@@ -547,6 +543,7 @@ def update_work(work_id):
         return jsonify({"ok": False, "error": f"작업 수정 오류: {e}"}), 500
     finally:
         conn.close()
+
 
 
 @app.route("/api/works/<int:work_id>", methods=["DELETE"])
@@ -635,7 +632,7 @@ def get_options():
     # 프론트에서 지금 쓰는 것만 내려줌
     result = {}
     for t in ["weather", "crops", "machines", "task_categories"]:
-        table = "options_task_categories" if t == "task_categories" else f"options_{t}"
+        table = f"options_{t}"
         rows = conn.execute(
             f"SELECT id, name FROM {table} ORDER BY name"
         ).fetchall()
@@ -668,18 +665,14 @@ def create_option(option_type):
     name = normalize_name(data.get("name"))
     recommended_materials = normalize_name(data.get("recommended_materials"))
     category_name = normalize_name(data.get("category_name"))
+    category_name = normalize_name(data.get("category_name"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
 
-    if option_type == "task_categories":
-        cur.execute(
-            "INSERT OR IGNORE INTO options_task_categories (name) VALUES (?)",
-            (name,)
-        )
-    elif option_type == "tasks":
+    if option_type == "tasks":
         cur.execute(
             "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
             (name, category_name)
@@ -703,6 +696,7 @@ def create_option(option_type):
             (name,)
         )
 
+    # materials 옵션을 직접 만들면 materials 테이블에도 최소 등록
     if option_type == "materials":
         row = cur.execute(
             "SELECT id FROM materials WHERE name = ?",
@@ -720,6 +714,7 @@ def create_option(option_type):
 
 
 @app.route("/api/options/<option_type>/<int:option_id>", methods=["PUT"])
+
 def update_option(option_type, option_id):
     if option_type not in ["weather", "crops", "task_categories", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
@@ -756,17 +751,17 @@ def update_option(option_type, option_id):
             (new_name, option_id)
         )
 
-    if option_type == "materials" and old_row:
-        old_name = old_row["name"]
-        cur.execute(
-            "UPDATE materials SET name = ? WHERE name = ?",
-            (new_name, old_name)
-        )
-
     if option_type == "task_categories" and old_row:
         old_name = old_row["name"]
         cur.execute(
             "UPDATE options_tasks SET category_name = ? WHERE category_name = ?",
+            (new_name, old_name)
+        )
+
+    if option_type == "materials" and old_row:
+        old_name = old_row["name"]
+        cur.execute(
+            "UPDATE materials SET name = ? WHERE name = ?",
             (new_name, old_name)
         )
 
@@ -775,7 +770,9 @@ def update_option(option_type, option_id):
     return jsonify({"ok": True})
 
 
+
 @app.route("/api/options/<option_type>/<int:option_id>", methods=["DELETE"])
+
 def delete_option(option_type, option_id):
     if option_type not in ["weather", "crops", "task_categories", "tasks", "pests", "machines", "materials"]:
         return jsonify({"ok": False, "error": "invalid option type"}), 400
@@ -806,6 +803,7 @@ def delete_option(option_type, option_id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
 
 
 # =========================

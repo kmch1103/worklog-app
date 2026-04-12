@@ -1402,7 +1402,7 @@
         <div class="option-item">
           <div class="option-item-main">
             <span>${escapeHtml(name)}</span>
-            <div class="option-subtext">${escapeHtml(categoryName || '카테고리 없음')}</div>
+            <div class="option-subtext">${escapeHtml(categoryName || '분류 없음')}</div>
           </div>
           <div class="item-actions">
             <button type="button" class="btn" data-task-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}|${escapeHtml(categoryName)}">수정</button>

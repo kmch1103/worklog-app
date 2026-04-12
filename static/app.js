@@ -102,8 +102,9 @@
       'has_money','money-box','money_note','other_cost',
       'money_labor_total','money_material_total','money_total_amount',
 
-      'money-start','money-end','money-type-filter','money-method-filter',
-      'btn-money-filter','money-list','money-total','money-cash','money-card'
+      'money-start','money-end','money-season-filter','money-type-filter','money-method-filter',
+      'btn-money-filter','money-list','money-total','money-cash','money-card',
+      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
     ids.forEach(id => {
@@ -205,7 +206,7 @@
     });
 
     on(el['other_cost'], 'input', updateMoneySummary);
-    on(el['btn-money-filter'], 'click', renderMoney);
+    on(el['btn-money-filter'], 'click', async () => { await loadMoney(); renderMoney(); });
   }
 
   function bindMaterialButtons() {
@@ -236,10 +237,11 @@
 
     on(el['btn-save-season'], 'click', saveSeason);
     on(el['btn-reset-season'], 'click', resetSeasonForm);
-    on(el['new-task-category'], 'change', () => {
-      renderTaskOptionList();
-      updateTaskOptionEditorUI();
-    });
+    on(el['btn-close-task-option-modal'], 'click', closeTaskOptionModal);
+    on(el['btn-cancel-task-option'], 'click', closeTaskOptionModal);
+    on(el['btn-save-task-option'], 'click', saveTaskOptionEdit);
+    on(el['new-task-category'], 'change', () => renderTaskOptionList());
+    on(el['money-season-filter'], 'change', async () => { await loadMoney(); renderMoney(); });
   }
 
   function autoFillMaterialName(keyword) {
@@ -322,7 +324,9 @@
 
   async function loadMoney() {
     try {
-      state.moneyRows = await apiGet('/api/money');
+      const seasonId = el['money-season-filter']?.value || '';
+      const url = seasonId ? `/api/money?season_id=${encodeURIComponent(seasonId)}` : '/api/money';
+      state.moneyRows = await apiGet(url);
     } catch (e) {
       console.error(e);
       state.moneyRows = [];
@@ -928,7 +932,7 @@
 
   function renderWorkFormOptions() {
     setSelectOptions(el.weather, state.options.weather, true);
-    setSelectOptions(el.task_category, state.options.task_categories, true, '카테고리 선택');
+    setSelectOptions(el.task_category, state.options.task_categories, true, '작업분류 선택');
     renderTaskOptionsByCategory(el.task_category?.value || '');
     renderChipOptions('crops', state.options.crops);
     renderChipOptions('pests', state.options.pests);
@@ -1316,10 +1320,8 @@
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
-    renderTaskCategorySelect();
     renderTaskCategoryList();
     renderTaskOptionList();
-    updateTaskOptionEditorUI();
     renderOptionList('pests', state.options.pests, el['options-pests'], el['new-pests'], el['new-pests-recommend']);
     renderOptionList('machines', state.options.machines, el['options-machines'], el['new-machines']);
 
@@ -1336,7 +1338,96 @@
       btn.classList.toggle('active', btn.dataset.optionTab === state.optionTab);
     });
 
+    renderTaskCategorySelects();
     renderSeasonList();
+    renderMoneySeasonOptions();
+  }
+
+
+  function renderTaskCategorySelects() {
+    const categoryItems = state.optionsRaw?.task_categories || [];
+    const buildOptions = (selectedValue = '', emptyLabel = '작업분류 선택') => {
+      return [`<option value="">${escapeHtml(emptyLabel)}</option>`]
+        .concat(categoryItems.map(item => {
+          const name = optionName(item);
+          const selected = name === selectedValue ? ' selected' : '';
+          return `<option value="${escapeHtml(name)}"${selected}>${escapeHtml(name)}</option>`;
+        }))
+        .join('');
+    };
+
+    if (el['new-task-category']) {
+      const current = el['new-task-category'].value || '';
+      el['new-task-category'].innerHTML = buildOptions(current);
+      if (current) el['new-task-category'].value = current;
+    }
+
+    if (el['edit-task-category']) {
+      const current = el['edit-task-category'].value || '';
+      el['edit-task-category'].innerHTML = buildOptions(current);
+      if (current) el['edit-task-category'].value = current;
+    }
+  }
+
+  function renderMoneySeasonOptions() {
+    const node = el['money-season-filter'];
+    if (!node) return;
+
+    const current = node.value || '';
+    const options = [
+      '<option value="">전체 시즌</option>',
+      '<option value="current">현재 시즌</option>'
+    ].concat((state.seasons || []).map(season => {
+      const seasonId = String(season.id);
+      const seasonName = season.season_name || season.name || '';
+      return `<option value="${escapeHtml(seasonId)}">${escapeHtml(seasonName)}</option>`;
+    }));
+
+    node.innerHTML = options.join('');
+    if (current && Array.from(node.options).some(opt => opt.value === current)) {
+      node.value = current;
+    }
+  }
+
+  function openTaskOptionModal(optionId, currentName, currentCategory) {
+    state.editingTaskOptionId = optionId;
+    if (el['task-option-modal-title']) el['task-option-modal-title'].textContent = '세부작업 수정';
+    renderTaskCategorySelects();
+    if (el['edit-task-name']) el['edit-task-name'].value = currentName || '';
+    if (el['edit-task-category']) el['edit-task-category'].value = currentCategory || '';
+    removeHidden(el['task-option-modal']);
+  }
+
+  function closeTaskOptionModal() {
+    addHidden(el['task-option-modal']);
+    state.editingTaskOptionId = null;
+    if (el['edit-task-name']) el['edit-task-name'].value = '';
+    if (el['edit-task-category']) el['edit-task-category'].value = '';
+  }
+
+  async function saveTaskOptionEdit() {
+    const optionId = state.editingTaskOptionId;
+    if (!optionId) return;
+
+    const name = (el['edit-task-name']?.value || '').trim();
+    const category_name = (el['edit-task-category']?.value || '').trim();
+
+    if (!name) {
+      alert('세부작업을 입력하세요.');
+      el['edit-task-name']?.focus();
+      return;
+    }
+
+    try {
+      await apiPut(`/api/options/tasks/${optionId}`, { name, category_name });
+      closeTaskOptionModal();
+      await loadOptions();
+      renderOptions();
+      renderWorkFormOptions();
+    } catch (e) {
+      console.error(e);
+      alert('수정 실패');
+    }
   }
 
   function renderTaskCategoryList() {
@@ -1396,47 +1487,17 @@
     });
   }
 
-
-  function renderTaskCategorySelect() {
-    const selectEl = el['new-task-category'];
-    if (!selectEl) return;
-
-    const current = selectEl.value || '';
-    const rawItems = state.optionsRaw?.task_categories || [];
-    const html = ['<option value="">작업분류 선택</option>']
-      .concat(rawItems.map(item => {
-        const name = optionName(item);
-        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-      }))
-      .join('');
-
-    selectEl.innerHTML = html;
-    if (rawItems.some(item => optionName(item) === current)) {
-      selectEl.value = current;
-    }
-  }
-
-  function getTaskOptionSaveButton() {
-    return document.querySelector('[data-option-panel="tasks"] .inline-form .btn.primary');
-  }
-
-  function updateTaskOptionEditorUI() {
-    const btn = getTaskOptionSaveButton();
-    if (!btn) return;
-    btn.textContent = state.editingTaskOptionId ? '수정 저장' : '추가';
-  }
-
   function renderTaskOptionList() {
     const listEl = el['options-tasks'];
     if (!listEl) return;
 
-    const rawItems = state.optionsRaw?.tasks || [];
     const selectedCategory = (el['new-task-category']?.value || '').trim();
-    const items = selectedCategory
+    const rawItems = state.optionsRaw?.tasks || [];
+    const filteredItems = selectedCategory
       ? rawItems.filter(item => getTaskCategoryName(item) === selectedCategory)
       : rawItems;
 
-    listEl.innerHTML = items.map(item => {
+    listEl.innerHTML = filteredItems.map(item => {
       const name = optionName(item);
       const itemId = item?.id ?? name;
       const categoryName = getTaskCategoryName(item);
@@ -1444,7 +1505,7 @@
         <div class="option-item">
           <div class="option-item-main">
             <span>${escapeHtml(name)}</span>
-            <div class="option-subtext">${escapeHtml(categoryName || '작업분류 없음')}</div>
+            <div class="option-subtext">${escapeHtml(categoryName || '분류 없음')}</div>
           </div>
           <div class="item-actions">
             <button type="button" class="btn" data-task-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}|${escapeHtml(categoryName)}">수정</button>
@@ -1457,14 +1518,7 @@
     listEl.querySelectorAll('[data-task-edit]').forEach(btn => {
       btn.addEventListener('click', () => {
         const [optionId, currentName, currentCategory] = String(btn.dataset.taskEdit || '').split('|');
-        state.editingTaskOptionId = optionId || null;
-        if (el['new-task-category']) el['new-task-category'].value = currentCategory || '';
-        if (el['new-tasks']) {
-          el['new-tasks'].value = currentName || '';
-          el['new-tasks'].focus();
-        }
-        updateTaskOptionEditorUI();
-        renderTaskOptionList();
+        openTaskOptionModal(optionId, currentName, currentCategory);
       });
     });
 
@@ -1473,10 +1527,6 @@
         if (!confirm('삭제하시겠습니까?')) return;
         try {
           await apiDelete(`/api/options/tasks/${btn.dataset.taskDelete}`);
-          if (String(state.editingTaskOptionId || '') === String(btn.dataset.taskDelete || '')) {
-            state.editingTaskOptionId = null;
-            if (el['new-tasks']) el['new-tasks'].value = '';
-          }
           await loadOptions();
           renderOptions();
           renderWorkFormOptions();
@@ -1593,19 +1643,14 @@
     }
 
     try {
-      if (state.editingTaskOptionId) {
-        await apiPut(`/api/options/tasks/${state.editingTaskOptionId}`, { name, category_name });
-      } else {
-        await apiPost('/api/options/tasks', { name, category_name });
-      }
-      state.editingTaskOptionId = null;
+      await apiPost('/api/options/tasks', { name, category_name });
       nameNode.value = '';
       await loadOptions();
       renderOptions();
       renderWorkFormOptions();
     } catch (e) {
       console.error(e);
-      alert(state.editingTaskOptionId ? '수정 실패' : '추가 실패');
+      alert('추가 실패');
     }
   }
 
@@ -1639,14 +1684,14 @@
     }
   }
 
-  window.saveOption = function(type, inputId) {
+  window.saveOption = function(type, inputId, extraInputId) {
     if (type === 'task_categories') {
       return saveTaskCategory();
     }
     if (type === 'tasks') {
       return saveTaskOption();
     }
-    const extraId = type === 'pests' ? 'new-pests-recommend' : null;
+    const extraId = type === 'pests' ? 'new-pests-recommend' : extraInputId;
     return saveOption(type, inputId, extraId);
   };
 

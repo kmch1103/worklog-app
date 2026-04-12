@@ -350,6 +350,10 @@
           <div class="money-filter">
             <input type="date" id="money-start">
             <input type="date" id="money-end">
+            <select id="money-season-filter">
+              <option value="">전체 시즌</option>
+              <option value="current">현재 시즌</option>
+            </select>
 
             <select id="money-type-filter">
               <option value="">전체</option>
@@ -790,7 +794,34 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=3"></script>
+
+  <!-- 세부작업 수정 팝업 -->
+  <div id="task-option-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="task-option-modal-title">세부작업 수정</h3>
+        <button id="btn-close-task-option-modal" class="btn">닫기</button>
+      </div>
+      <div class="modal-body">
+        <div class="grid two">
+          <label class="field">
+            <span>작업분류</span>
+            <select id="edit-task-category"></select>
+          </label>
+          <label class="field">
+            <span>세부작업</span>
+            <input type="text" id="edit-task-name">
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-task-option" class="btn primary">저장</button>
+        <button id="btn-cancel-task-option" class="btn">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}?v=6"></script>
 
 </body>
 </html>

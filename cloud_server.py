@@ -391,7 +391,7 @@ def init_db():
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
 
     # option tables
-    for t in ["weather", "crops", "pests", "materials", "machines"]:
+    for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
         cur.execute(f"""
         CREATE TABLE IF NOT EXISTS options_{t} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -402,13 +402,6 @@ def init_db():
     CREATE TABLE IF NOT EXISTS options_task_categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE
-    )
-    """)
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS options_tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        category_name TEXT DEFAULT ''
     )
     """)
     ensure_column(cur, "options_tasks", "category_name", "TEXT DEFAULT ''")
@@ -473,10 +466,10 @@ def create_work():
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO works (
-                start_date, end_date, weather, task_name,
+                start_date, end_date, weather, task_category, task_name,
                 crops, pests, machines, work_hours, memo
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             start_date,
             end_date,
@@ -519,6 +512,7 @@ def update_work(work_id):
             SET start_date = ?,
                 end_date = ?,
                 weather = ?,
+                task_category = ?,
                 task_name = ?,
                 crops = ?,
                 pests = ?,
@@ -634,7 +628,7 @@ def get_options():
     # 프론트에서 지금 쓰는 것만 내려줌
     result = {}
     for t in ["weather", "crops", "machines", "task_categories"]:
-        table = "options_task_categories" if t == "task_categories" else f"options_{t}"
+        table = f"options_{t}"
         rows = conn.execute(
             f"SELECT id, name FROM {table} ORDER BY name"
         ).fetchall()
@@ -667,7 +661,6 @@ def create_option(option_type):
     name = normalize_name(data.get("name"))
     recommended_materials = normalize_name(data.get("recommended_materials"))
     category_name = normalize_name(data.get("category_name"))
-    category_name = normalize_name(data.get("category_name"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
@@ -691,11 +684,6 @@ def create_option(option_type):
         cur.execute(
             "UPDATE options_pests SET recommended_materials = ? WHERE name = ?",
             (recommended_materials, name)
-        )
-    elif option_type == "task_categories":
-        cur.execute(
-            "INSERT OR IGNORE INTO options_task_categories (name) VALUES (?)",
-            (name,)
         )
     else:
         cur.execute(
@@ -752,10 +740,16 @@ def update_option(option_type, option_id):
             (new_name, recommended_materials, option_id)
         )
     else:
-        table = "options_task_categories" if option_type == "task_categories" else f"options_{option_type}"
         cur.execute(
             f"UPDATE {table} SET name = ? WHERE id = ?",
             (new_name, option_id)
+        )
+
+    if option_type == "task_categories" and old_row:
+        old_name = old_row["name"]
+        cur.execute(
+            "UPDATE options_tasks SET category_name = ? WHERE category_name = ?",
+            (new_name, old_name)
         )
 
     if option_type == "materials" and old_row:
@@ -790,7 +784,10 @@ def delete_option(option_type, option_id):
     )
 
     if option_type == "task_categories" and row:
-        cur.execute("UPDATE options_tasks SET category_name = '' WHERE category_name = ?", (row["name"],))
+        cur.execute(
+            "UPDATE options_tasks SET category_name = '' WHERE category_name = ?",
+            (row["name"],)
+        )
 
     if option_type == "materials" and row:
         cur.execute(

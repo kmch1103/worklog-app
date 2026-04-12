@@ -8,8 +8,8 @@
 
   <style>
     *, *::before, *::after{box-sizing:border-box;}
-    html, body{max-width:100%; overflow-x:hidden; overflow-y:auto;}
-    body{margin:0; overflow-y:auto;}
+    html, body{max-width:100%; overflow-x:hidden;}
+    body{margin:0;}
     .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
     input, select, textarea, button{max-width:100%;}
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
@@ -129,11 +129,11 @@
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
-    .sidebar{position:sticky; top:0; align-self:flex-start; max-height:100vh; overflow-y:auto; overflow-x:hidden;}
+    .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
     @media (min-width: 901px){
-      .app{display:grid; grid-template-columns:260px minmax(0,1fr); align-items:start; min-height:100vh;}
-      .sidebar{position:sticky; top:0; height:100vh; overflow:auto;}
-      .content{min-width:0; padding:20px; overflow:visible;}
+      .app{display:block; min-height:100vh;}
+      .sidebar{position:fixed; top:0; left:0; width:260px; height:100vh; overflow-y:auto; overflow-x:hidden; z-index:100;}
+      .content{min-width:0; margin-left:260px; padding:20px;}
     }
     .sidebar h1{margin:0 0 18px;}
     .mobile-menu-row{display:flex; flex-direction:column; gap:12px;}
@@ -189,7 +189,6 @@
         min-width:0;
         width:100%;
         padding:12px 12px 24px;
-        overflow:visible;
       }
       .page-header{
         flex-direction:column;

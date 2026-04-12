@@ -27,7 +27,8 @@
     materialListSearchKeyword: '',
     optionTab: 'weather',
     seasons: [],
-    editingSeasonId: null
+    editingSeasonId: null,
+    editingTaskOptionId: null
   };
 
   const el = {};
@@ -233,12 +234,12 @@
       });
     });
 
-    on(el['new-task-category'], 'change', () => {
-      renderTaskOptionList();
-    });
-
     on(el['btn-save-season'], 'click', saveSeason);
     on(el['btn-reset-season'], 'click', resetSeasonForm);
+    on(el['new-task-category'], 'change', () => {
+      renderTaskOptionList();
+      updateTaskOptionEditorUI();
+    });
   }
 
   function autoFillMaterialName(keyword) {
@@ -1315,9 +1316,10 @@
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
-    renderTaskCategoryList();
     renderTaskCategorySelect();
+    renderTaskCategoryList();
     renderTaskOptionList();
+    updateTaskOptionEditorUI();
     renderOptionList('pests', state.options.pests, el['options-pests'], el['new-pests'], el['new-pests-recommend']);
     renderOptionList('machines', state.options.machines, el['options-machines'], el['new-machines']);
 
@@ -1335,25 +1337,6 @@
     });
 
     renderSeasonList();
-  }
-
-  function renderTaskCategorySelect() {
-    const selectEl = el['new-task-category'];
-    if (!selectEl) return;
-
-    const current = selectEl.value || '';
-    const rawItems = state.optionsRaw?.task_categories || [];
-    const options = [`<option value="">작업분류 선택</option>`];
-
-    rawItems.forEach(item => {
-      const name = optionName(item);
-      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
-    });
-
-    selectEl.innerHTML = options.join('');
-    if (rawItems.some(item => optionName(item) === current)) {
-      selectEl.value = current;
-    }
   }
 
   function renderTaskCategoryList() {
@@ -1413,17 +1396,47 @@
     });
   }
 
+
+  function renderTaskCategorySelect() {
+    const selectEl = el['new-task-category'];
+    if (!selectEl) return;
+
+    const current = selectEl.value || '';
+    const rawItems = state.optionsRaw?.task_categories || [];
+    const html = ['<option value="">작업분류 선택</option>']
+      .concat(rawItems.map(item => {
+        const name = optionName(item);
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+      }))
+      .join('');
+
+    selectEl.innerHTML = html;
+    if (rawItems.some(item => optionName(item) === current)) {
+      selectEl.value = current;
+    }
+  }
+
+  function getTaskOptionSaveButton() {
+    return document.querySelector('[data-option-panel="tasks"] .inline-form .btn.primary');
+  }
+
+  function updateTaskOptionEditorUI() {
+    const btn = getTaskOptionSaveButton();
+    if (!btn) return;
+    btn.textContent = state.editingTaskOptionId ? '수정 저장' : '추가';
+  }
+
   function renderTaskOptionList() {
     const listEl = el['options-tasks'];
     if (!listEl) return;
 
-    const selectedCategory = (el['new-task-category']?.value || '').trim();
     const rawItems = state.optionsRaw?.tasks || [];
-    const filteredItems = selectedCategory
+    const selectedCategory = (el['new-task-category']?.value || '').trim();
+    const items = selectedCategory
       ? rawItems.filter(item => getTaskCategoryName(item) === selectedCategory)
       : rawItems;
 
-    listEl.innerHTML = filteredItems.map(item => {
+    listEl.innerHTML = items.map(item => {
       const name = optionName(item);
       const itemId = item?.id ?? name;
       const categoryName = getTaskCategoryName(item);
@@ -1442,30 +1455,16 @@
     }).join('');
 
     listEl.querySelectorAll('[data-task-edit]').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const [optionId, currentName, currentCategory] = String(btn.dataset.taskEdit || '').split('|');
-        const newName = prompt('수정할 세부작업', currentName || '');
-        if (newName == null) return;
-        const trimmed = newName.trim();
-        if (!trimmed) return;
-
-        const categoryName = prompt('작업분류', currentCategory || '') || '';
-
-        try {
-          await apiPut(`/api/options/tasks/${optionId}`, {
-            name: trimmed,
-            category_name: categoryName.trim()
-          });
-          await loadOptions();
-          if (el['new-task-category']) {
-            el['new-task-category'].value = categoryName.trim();
-          }
-          renderOptions();
-          renderWorkFormOptions();
-        } catch (e) {
-          console.error(e);
-          alert('수정 실패');
+        state.editingTaskOptionId = optionId || null;
+        if (el['new-task-category']) el['new-task-category'].value = currentCategory || '';
+        if (el['new-tasks']) {
+          el['new-tasks'].value = currentName || '';
+          el['new-tasks'].focus();
         }
+        updateTaskOptionEditorUI();
+        renderTaskOptionList();
       });
     });
 
@@ -1474,6 +1473,10 @@
         if (!confirm('삭제하시겠습니까?')) return;
         try {
           await apiDelete(`/api/options/tasks/${btn.dataset.taskDelete}`);
+          if (String(state.editingTaskOptionId || '') === String(btn.dataset.taskDelete || '')) {
+            state.editingTaskOptionId = null;
+            if (el['new-tasks']) el['new-tasks'].value = '';
+          }
           await loadOptions();
           renderOptions();
           renderWorkFormOptions();
@@ -1590,14 +1593,19 @@
     }
 
     try {
-      await apiPost('/api/options/tasks', { name, category_name });
+      if (state.editingTaskOptionId) {
+        await apiPut(`/api/options/tasks/${state.editingTaskOptionId}`, { name, category_name });
+      } else {
+        await apiPost('/api/options/tasks', { name, category_name });
+      }
+      state.editingTaskOptionId = null;
       nameNode.value = '';
       await loadOptions();
       renderOptions();
       renderWorkFormOptions();
     } catch (e) {
       console.error(e);
-      alert('추가 실패');
+      alert(state.editingTaskOptionId ? '수정 실패' : '추가 실패');
     }
   }
 

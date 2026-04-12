@@ -104,11 +104,11 @@
 
       'labor-rows-wrap','btn-add-labor-row',
 
-      'has_money','money-box','money_note','other_cost',
+      'has_money','money-box','money_method','money_installment_wrap','money_installment_months','money_note','other_cost',
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-season-filter','money-type-filter','money-method-filter',
-      'btn-money-filter','money-list','money-total','money-cash','money-card','money-labor-sum','money-material-sum','money-other-sum','money-monthly-summary',
+      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -215,6 +215,11 @@
       updateMoneySummary();
     });
 
+    on(el['money_method'], 'change', () => {
+      toggleInstallmentField();
+      updateMoneySummary();
+    });
+    on(el['money_installment_months'], 'input', updateMoneySummary);
     on(el['other_cost'], 'input', updateMoneySummary);
     on(el['btn-money-filter'], 'click', async () => { await loadMoney(); renderMoney(); });
   }
@@ -1054,8 +1059,11 @@
     if (meta.money) {
       if (el.has_money) el.has_money.checked = true;
       toggleMoneyBox(true);
+      if (el.money_method) el.money_method.value = meta.money.method || '';
+      if (el.money_installment_months) el.money_installment_months.value = Number(meta.money.installment_months || 0);
       if (el.money_note) el.money_note.value = meta.money.note || '';
       if (el.other_cost) el.other_cost.value = meta.money.other_total || 0;
+      toggleInstallmentField();
     } else {
       resetMoneyFields();
     }
@@ -2054,9 +2062,12 @@
 
   function resetMoneyFields() {
     if (el.has_money) el.has_money.checked = false;
+    if (el.money_method) el.money_method.value = '';
+    if (el.money_installment_months) el.money_installment_months.value = 0;
     if (el.money_note) el.money_note.value = '';
     if (el.other_cost) el.other_cost.value = 0;
     toggleMoneyBox(false);
+    toggleInstallmentField();
     updateMoneySummary();
   }
 
@@ -2064,6 +2075,18 @@
     const box = el['money-box'];
     if (!box) return;
     box.classList.toggle('hidden', !show);
+    toggleInstallmentField();
+  }
+
+  function toggleInstallmentField() {
+    const wrap = el['money_installment_wrap'];
+    if (!wrap) return;
+    const method = el['money_method']?.value || '';
+    const show = method === '카드할부';
+    wrap.style.display = show ? '' : 'none';
+    if (!show && el['money_installment_months']) {
+      el['money_installment_months'].value = 0;
+    }
   }
 
   async function openMaterialModal(options = {}) {
@@ -2274,55 +2297,31 @@
     });
 
     const total = filtered.reduce((sum, row) => sum + Number(row.total_amount || row.total || 0), 0);
-    const laborSum = filtered.reduce((sum, row) => sum + Number(row.labor_total || 0), 0);
-    const materialSum = filtered.reduce((sum, row) => sum + Number(row.material_total || 0), 0);
-    const otherSum = filtered.reduce((sum, row) => sum + Number(row.other_total || 0), 0);
-    const cash = filtered.reduce((sum, row) => {
-      const method = String(row.method || '');
-      const amount = Number(row.total_amount || row.total || 0);
-      return (method === '현금' || method === '계좌이체') ? sum + amount : sum;
-    }, 0);
-    const card = filtered.reduce((sum, row) => {
-      const method = String(row.method || '');
-      const amount = Number(row.total_amount || row.total || 0);
-      return (method.includes('카드') || method === '외상') ? sum + amount : sum;
-    }, 0);
+    const cash = filtered.reduce((sum, row) => sum + Number(row.cash_amount || 0), 0);
+    const transfer = filtered.reduce((sum, row) => sum + Number(row.transfer_amount || 0), 0);
+    const cardLump = filtered.reduce((sum, row) => sum + Number(row.card_lump_amount || 0), 0);
+    const cardInstall = filtered.reduce((sum, row) => sum + Number(row.card_install_amount || 0), 0);
+    const credit = filtered.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0);
 
     if (el['money-total']) el['money-total'].innerText = formatNumber(total);
     if (el['money-cash']) el['money-cash'].innerText = formatNumber(cash);
-    if (el['money-card']) el['money-card'].innerText = formatNumber(card);
-    if (el['money-labor-sum']) el['money-labor-sum'].innerText = formatNumber(laborSum);
-    if (el['money-material-sum']) el['money-material-sum'].innerText = formatNumber(materialSum);
-    if (el['money-other-sum']) el['money-other-sum'].innerText = formatNumber(otherSum);
+    if (el['money-transfer']) el['money-transfer'].innerText = formatNumber(transfer);
+    if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(cardLump);
+    if (el['money-card-install']) el['money-card-install'].innerText = formatNumber(cardInstall);
+    if (el['money-credit']) el['money-credit'].innerText = formatNumber(credit);
 
-    const monthlyWrap = el['money-monthly-summary'];
-    if (monthlyWrap) {
-      if (!filtered.length) {
-        monthlyWrap.innerHTML = `<div class="empty-msg">월별 합계 없음</div>`;
-      } else {
-        const monthlyMap = {};
-        filtered.forEach(row => {
-          const monthKey = String(row.date || '').slice(0, 7);
-          if (!monthKey) return;
-          if (!monthlyMap[monthKey]) {
-            monthlyMap[monthKey] = { total: 0, labor: 0, material: 0, other: 0 };
-          }
-          monthlyMap[monthKey].total += Number(row.total_amount || row.total || 0);
-          monthlyMap[monthKey].labor += Number(row.labor_total || 0);
-          monthlyMap[monthKey].material += Number(row.material_total || 0);
-          monthlyMap[monthKey].other += Number(row.other_total || 0);
-        });
-        const monthKeys = Object.keys(monthlyMap).sort();
-        monthlyWrap.innerHTML = `<div style="font-weight:800; margin-bottom:10px;">월별 합계</div><div class="money-monthly-grid">${monthKeys.map(monthKey => `
-          <div class="money-monthly-card">
-            <div class="month">${escapeHtml(monthKey)}</div>
-            <div>총지출: <strong>${formatNumber(monthlyMap[monthKey].total)}</strong></div>
-            <div>인건비: ${formatNumber(monthlyMap[monthKey].labor)}</div>
-            <div>자재비: ${formatNumber(monthlyMap[monthKey].material)}</div>
-            <div>기타비: ${formatNumber(monthlyMap[monthKey].other)}</div>
-          </div>
-        `).join('')}</div>`;
-      }
+    const creditRows = filtered.filter(row => row.method === '외상');
+    if (el['money-credit-list']) {
+      el['money-credit-list'].innerHTML = creditRows.length
+        ? `<table class="money-table"><thead><tr><th>날짜</th><th>작업</th><th>금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
+            <tr>
+              <td>${escapeHtml(row.date || '')}</td>
+              <td>${escapeHtml(row.task_name || '')}</td>
+              <td>${formatNumber(row.total_amount || row.total || 0)}</td>
+              <td>${escapeHtml(row.note || '')}</td>
+            </tr>
+          `).join('')}</tbody></table>`
+        : `<div class="empty-msg">외상 내역 없음</div>`;
     }
 
     if (!filtered.length) {
@@ -2335,11 +2334,13 @@
         <thead>
           <tr>
             <th>날짜</th>
+            <th>작업</th>
             <th>구분</th>
             <th>총금액</th>
             <th>인건비</th>
             <th>자재비</th>
             <th>기타</th>
+            <th>방식</th>
             <th>비고</th>
           </tr>
         </thead>
@@ -2347,11 +2348,13 @@
           ${filtered.map(row => `
             <tr>
               <td>${escapeHtml(row.date || '')}</td>
+              <td>${escapeHtml(row.task_name || '')}</td>
               <td>${escapeHtml(row.type || '')}</td>
               <td>${formatNumber(row.total_amount || row.total || 0)}</td>
               <td>${formatNumber(row.labor_total || 0)}</td>
               <td>${formatNumber(row.material_total || 0)}</td>
               <td>${formatNumber(row.other_total || 0)}</td>
+              <td>${escapeHtml(row.method_display || row.method || '')}</td>
               <td>${escapeHtml(row.note || '')}</td>
             </tr>
           `).join('')}
@@ -2540,11 +2543,8 @@
           <button type="button" class="btn" id="btn-works-filter-reset">필터 초기화</button>
         </div>
       `;
-      const stickyActions = page.querySelector('.works-sticky-actions');
       const header = page.querySelector('.page-header');
-      if (stickyActions && stickyActions.parentNode === page) {
-        page.insertBefore(box, stickyActions.nextSibling);
-      } else if (header && header.parentNode === page) {
+      if (header && header.parentNode === page) {
         page.insertBefore(box, header.nextSibling);
       } else {
         page.insertBefore(box, page.firstChild);
@@ -2749,13 +2749,19 @@
     const machines = getSelectedChipValues('machines').join(', ');
 
     const laborRows = getLaborRows();
+    const moneyMethod = (el.money_method?.value || '').trim();
+    if (el.has_money?.checked && !moneyMethod) {
+      alert('결제방식을 선택하세요.');
+      return;
+    }
     const money = el.has_money?.checked ? {
       type: buildMoneyType(),
       total_amount: getLaborTotal() + getMaterialTotal() + getOtherTotal(),
       labor_total: getLaborTotal(),
       material_total: getMaterialTotal(),
       other_total: getOtherTotal(),
-      method: '',
+      method: moneyMethod,
+      installment_months: moneyMethod === '카드할부' ? Number(el.money_installment_months?.value || 0) : 0,
       note: (el.money_note?.value || '').trim()
     } : null;
 

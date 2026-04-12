@@ -48,6 +48,7 @@
     .option-item-main span{word-break:break-word; line-height:1.4;}
     .option-mobile-tabs{display:none; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
+    .btn[disabled]{opacity:.5; cursor:not-allowed;}
     .season-panel{margin-top:16px;}
     @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
@@ -603,7 +604,13 @@
     <div class="modal-box modal-box-large">
       <div class="modal-header">
         <h3 id="work-modal-title">새 작업 입력</h3>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+          <select id="favorite-work-select" class="btn" style="min-width:180px;">
+            <option value="">즐겨찾기 선택</option>
+          </select>
+          <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
+          <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
+          <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
           <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
           <button id="btn-close-work-modal" class="btn">닫기</button>
         </div>

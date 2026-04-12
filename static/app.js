@@ -21,6 +21,11 @@
       machines: []
     },
     workSearchKeyword: '',
+    workFilterStartDate: '',
+    workFilterEndDate: '',
+    workFilterTaskCategory: '',
+    workFilterTaskName: '',
+    workFilterCrop: '',
     selectedMaterialsDetailed: [],
     materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
     mobileCalendarMode: 'current',
@@ -2236,24 +2241,137 @@
     let box = page.querySelector('.works-search-box');
     if (!box) {
       box = document.createElement('div');
-      box.className = 'works-search-box';
+      box.className = 'works-search-box panel';
       box.style.marginBottom = '12px';
       box.innerHTML = `
-        <input type="text" id="works-search-input" placeholder="검색어 입력" style="width:100%; max-width:420px;">
+        <div class="works-filter-grid">
+          <div>
+            <label class="inline-help">시작일</label>
+            <input type="date" id="works-filter-start">
+          </div>
+          <div>
+            <label class="inline-help">종료일</label>
+            <input type="date" id="works-filter-end">
+          </div>
+          <div>
+            <label class="inline-help">작업분류</label>
+            <select id="works-filter-task-category"></select>
+          </div>
+          <div>
+            <label class="inline-help">세부작업</label>
+            <select id="works-filter-task-name"></select>
+          </div>
+          <div>
+            <label class="inline-help">작물</label>
+            <select id="works-filter-crop"></select>
+          </div>
+          <div>
+            <label class="inline-help">검색</label>
+            <input type="text" id="works-search-input" placeholder="메모/자재/작업 검색">
+          </div>
+        </div>
+        <div class="works-filter-actions">
+          <button type="button" class="btn" id="btn-works-filter-reset">필터 초기화</button>
+        </div>
       `;
-      const target = page.querySelector('.page-header-actions') || page.firstElementChild || page;
-      if (target && target.parentNode === page) {
-        page.insertBefore(box, target.nextSibling);
+      const header = page.querySelector('.page-header');
+      if (header && header.parentNode === page) {
+        page.insertBefore(box, header.nextSibling);
       } else {
         page.insertBefore(box, page.firstChild);
       }
 
+      el['works-filter-start'] = box.querySelector('#works-filter-start');
+      el['works-filter-end'] = box.querySelector('#works-filter-end');
+      el['works-filter-task-category'] = box.querySelector('#works-filter-task-category');
+      el['works-filter-task-name'] = box.querySelector('#works-filter-task-name');
+      el['works-filter-crop'] = box.querySelector('#works-filter-crop');
       const input = box.querySelector('#works-search-input');
+      const resetBtn = box.querySelector('#btn-works-filter-reset');
+
       input.addEventListener('input', (e) => {
         state.workSearchKeyword = (e.target.value || '').trim();
         renderWorks();
       });
+      el['works-filter-start'].addEventListener('change', (e) => {
+        state.workFilterStartDate = e.target.value || '';
+        renderWorks();
+      });
+      el['works-filter-end'].addEventListener('change', (e) => {
+        state.workFilterEndDate = e.target.value || '';
+        renderWorks();
+      });
+      el['works-filter-task-category'].addEventListener('change', (e) => {
+        state.workFilterTaskCategory = e.target.value || '';
+        state.workFilterTaskName = '';
+        renderWorksSearchFilterOptions();
+        renderWorks();
+      });
+      el['works-filter-task-name'].addEventListener('change', (e) => {
+        state.workFilterTaskName = e.target.value || '';
+        renderWorks();
+      });
+      el['works-filter-crop'].addEventListener('change', (e) => {
+        state.workFilterCrop = e.target.value || '';
+        renderWorks();
+      });
+      resetBtn.addEventListener('click', () => {
+        state.workSearchKeyword = '';
+        state.workFilterStartDate = '';
+        state.workFilterEndDate = '';
+        state.workFilterTaskCategory = '';
+        state.workFilterTaskName = '';
+        state.workFilterCrop = '';
+        renderWorksSearchFilterOptions();
+        if (el['works-filter-start']) el['works-filter-start'].value = '';
+        if (el['works-filter-end']) el['works-filter-end'].value = '';
+        const searchInput = box.querySelector('#works-search-input');
+        if (searchInput) searchInput.value = '';
+        renderWorks();
+      });
     }
+
+    renderWorksSearchFilterOptions();
+    if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
+    if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
+    const searchInput = box.querySelector('#works-search-input');
+    if (searchInput) searchInput.value = state.workSearchKeyword || '';
+  }
+
+  function renderWorksSearchFilterOptions() {
+    const categoryEl = el['works-filter-task-category'];
+    const taskEl = el['works-filter-task-name'];
+    const cropEl = el['works-filter-crop'];
+    if (!categoryEl || !taskEl || !cropEl) return;
+
+    const categoryOptions = ['<option value="">전체 작업분류</option>']
+      .concat((state.options.task_categories || []).map(item => {
+        const name = optionName(item);
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+      }));
+    categoryEl.innerHTML = categoryOptions.join('');
+    categoryEl.value = state.workFilterTaskCategory || '';
+
+    const allTasks = state.optionsRaw?.tasks || [];
+    const taskList = state.workFilterTaskCategory
+      ? allTasks.filter(item => (item.category_name || '') === state.workFilterTaskCategory)
+      : allTasks;
+    const taskOptions = ['<option value="">전체 세부작업</option>']
+      .concat(taskList.map(item => {
+        const name = optionName(item);
+        return `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+      }));
+    taskEl.innerHTML = taskOptions.join('');
+    taskEl.value = state.workFilterTaskName || '';
+
+    const cropSet = new Set();
+    (state.works || []).forEach(work => {
+      splitCsv(work.crops).forEach(crop => cropSet.add(crop));
+    });
+    const cropOptions = ['<option value="">전체 작물</option>']
+      .concat(Array.from(cropSet).sort().map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+    cropEl.innerHTML = cropOptions.join('');
+    cropEl.value = state.workFilterCrop || '';
   }
 
   function renderWorks() {
@@ -2269,6 +2387,7 @@
         work.start_date,
         work.end_date,
         work.weather,
+        work.task_category,
         work.task_name,
         work.crops,
         work.pests,
@@ -2277,7 +2396,15 @@
         (meta.materials || []).map(m => `${m.name || ''} ${m.qty || ''} ${m.unit || ''}`).join(' ')
       ].join(' ').toLowerCase();
 
-      return text.includes(q);
+      const inKeyword = text.includes(q);
+      const inStart = !state.workFilterStartDate || String(work.start_date || '') >= state.workFilterStartDate;
+      const inEnd = !state.workFilterEndDate || String(work.start_date || '') <= state.workFilterEndDate;
+      const inCategory = !state.workFilterTaskCategory || String(work.task_category || '') === state.workFilterTaskCategory;
+      const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
+      const cropValues = splitCsv(work.crops);
+      const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
+
+      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
     });
 
     if (!filtered.length) {

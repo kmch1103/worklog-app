@@ -182,6 +182,10 @@
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
     on(el['btn-load-recent-work'], 'click', loadRecentWorkIntoForm);
+    on(el['btn-save-favorite-work'], 'click', saveCurrentWorkAsFavorite);
+    on(el['btn-load-favorite-work'], 'click', loadFavoriteWorkIntoForm);
+    on(el['btn-delete-favorite-work'], 'click', deleteFavoriteWork);
+    on(el['favorite-work-select'], 'change', syncFavoriteWorkButtons);
     on(el['btn-cancel-work'], 'click', closeWorkModal);
     on(el['btn-save-work'], 'click', saveWork);
 
@@ -742,6 +746,8 @@
     if (el.start_date) el.start_date.value = defaultDate;
     if (el.repeat_days) el.repeat_days.value = 1;
     updateEndDateFromRepeatDays();
+    renderFavoriteWorkSelect();
+    syncFavoriteWorkButtons();
 
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
@@ -756,6 +762,8 @@
     state.editingWorkId = work.id;
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
     fillWorkForm(work);
+    renderFavoriteWorkSelect();
+    syncFavoriteWorkButtons();
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'work');
@@ -785,6 +793,169 @@
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
   }
 
+
+  function getFavoriteWorkStorageKey() {
+    return 'worklog_favorite_works_v1';
+  }
+
+  function getFavoriteWorks() {
+    try {
+      const raw = localStorage.getItem(getFavoriteWorkStorageKey()) || '[]';
+      const rows = JSON.parse(raw);
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  }
+
+  function setFavoriteWorks(rows) {
+    localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
+  }
+
+  function renderFavoriteWorkSelect(selectedId = '') {
+    const select = el['favorite-work-select'];
+    if (!select) return;
+
+    const items = getFavoriteWorks();
+    const current = selectedId || select.value || '';
+    select.innerHTML = ['<option value="">즐겨찾기 선택</option>']
+      .concat(items.map(item => `<option value="${escapeHtml(String(item.id || ''))}">${escapeHtml(item.name || '이름없음')}</option>`))
+      .join('');
+
+    if (current && items.some(item => String(item.id) === String(current))) {
+      select.value = String(current);
+    } else {
+      select.value = '';
+    }
+    syncFavoriteWorkButtons();
+  }
+
+  function syncFavoriteWorkButtons() {
+    const hasSelection = !!(el['favorite-work-select']?.value || '');
+    if (el['btn-load-favorite-work']) el['btn-load-favorite-work'].disabled = !hasSelection;
+    if (el['btn-delete-favorite-work']) el['btn-delete-favorite-work'].disabled = !hasSelection;
+  }
+
+  function buildWorkTemplateFromForm() {
+    return {
+      weather: el.weather?.value || '',
+      task_category: el.task_category?.value || '',
+      task_name: el.task_name?.value || '',
+      crops: getSelectedChips('crops'),
+      pests: getSelectedChips('pests'),
+      machines: getSelectedChips('machines'),
+      work_hours: Number(el.work_hours?.value || 0),
+      memo_text: el.memo?.value || '',
+      start_time: el.start_time?.value || '',
+      end_time: el.end_time?.value || '',
+      materials: JSON.parse(JSON.stringify(state.selectedMaterialsDetailed || [])),
+      labor_rows: JSON.parse(JSON.stringify(getLaborRows() || [])),
+      money: {
+        enabled: !!el.has_money?.checked,
+        note: el.money_note?.value || '',
+        other_total: Number(el.other_cost?.value || 0)
+      }
+    };
+  }
+
+  function applyWorkTemplateToForm(template) {
+    if (!template) return;
+
+    const currentStartDate = el.start_date?.value || fmtDate(new Date());
+    const currentRepeatDays = Number(el.repeat_days?.value || 1);
+
+    if (el.weather) el.weather.value = template.weather || '';
+    if (el.task_category) el.task_category.value = template.task_category || '';
+    renderTaskOptionsByCategory(template.task_category || '');
+    if (el.task_name) el.task_name.value = template.task_name || '';
+    if (el.work_hours) el.work_hours.value = template.work_hours || 0;
+    if (el.memo) el.memo.value = template.memo_text || '';
+    if (el.start_time) el.start_time.value = template.start_time || '';
+    if (el.end_time) el.end_time.value = template.end_time || '';
+
+    setChipSelections('crops', template.crops || []);
+    setChipSelections('pests', template.pests || []);
+    setChipSelections('machines', template.machines || []);
+    renderRecommendedMaterials();
+
+    state.selectedMaterialsDetailed = Array.isArray(template.materials)
+      ? JSON.parse(JSON.stringify(template.materials))
+      : [];
+    renderSelectedMaterialsDetailed();
+
+    resetLaborRows();
+    if (Array.isArray(template.labor_rows) && template.labor_rows.length) {
+      template.labor_rows.forEach(row => addLaborRow(row));
+    }
+
+    if (el.has_money) el.has_money.checked = !!template.money?.enabled;
+    toggleMoneyBox(!!template.money?.enabled);
+    if (el.money_note) el.money_note.value = template.money?.note || '';
+    if (el.other_cost) el.other_cost.value = template.money?.other_total || 0;
+
+    if (el.start_date) el.start_date.value = currentStartDate;
+    if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
+    updateEndDateFromRepeatDays();
+    syncWorkTimeFields('time');
+    updateMoneySummary();
+  }
+
+  function saveCurrentWorkAsFavorite() {
+    const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
+    const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
+    if (name == null) return;
+
+    const trimmed = name.trim();
+    if (!trimmed) {
+      alert('즐겨찾기 이름을 입력하세요.');
+      return;
+    }
+
+    const rows = getFavoriteWorks();
+    const newItem = {
+      id: `${Date.now()}`,
+      name: trimmed,
+      template: buildWorkTemplateFromForm()
+    };
+    rows.push(newItem);
+    setFavoriteWorks(rows);
+    renderFavoriteWorkSelect(newItem.id);
+    alert('즐겨찾기로 저장했습니다.');
+  }
+
+  function loadFavoriteWorkIntoForm() {
+    const selectedId = el['favorite-work-select']?.value || '';
+    if (!selectedId) {
+      alert('불러올 즐겨찾기를 선택하세요.');
+      return;
+    }
+
+    const item = getFavoriteWorks().find(row => String(row.id) === String(selectedId));
+    if (!item) {
+      alert('선택한 즐겨찾기를 찾을 수 없습니다.');
+      renderFavoriteWorkSelect();
+      return;
+    }
+
+    applyWorkTemplateToForm(item.template || {});
+    state.editingWorkId = null;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+  }
+
+  function deleteFavoriteWork() {
+    const selectedId = el['favorite-work-select']?.value || '';
+    if (!selectedId) {
+      alert('삭제할 즐겨찾기를 선택하세요.');
+      return;
+    }
+    if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
+
+    const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
+    setFavoriteWorks(rows);
+    renderFavoriteWorkSelect('');
+  }
+
   function closeWorkModal() {
     addHidden(el['work-modal']);
     state.editingWorkId = null;
@@ -812,6 +983,7 @@
     renderSelectedMaterialsDetailed();
     renderRecommendedMaterials();
     renderTaskOptionsByCategory('');
+    syncFavoriteWorkButtons();
   }
 
   function fillWorkForm(work) {

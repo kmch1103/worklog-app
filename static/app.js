@@ -79,7 +79,7 @@
       'calendar-detail-modal','calendar-detail-title','calendar-detail-body',
       'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
 
-      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work',
+      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work','favorite-work-status',
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
@@ -809,8 +809,22 @@
     }
   }
 
+
   function setFavoriteWorks(rows) {
-    localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
+    try {
+      localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
+      return True;
+    } catch (e) {
+      console.error(e);
+      showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
+      return False;
+    }
+  }
+
+  function showFavoriteWorkStatus(message) {
+    if (el['favorite-work-status']) {
+      el['favorite-work-status'].textContent = message || '';
+    }
   }
 
   function renderFavoriteWorkSelect(selectedId = '') {
@@ -828,6 +842,7 @@
     } else {
       select.value = '';
     }
+    showFavoriteWorkStatus(items.length ? `저장된 즐겨찾기 ${items.length}개` : '저장된 즐겨찾기 없음');
     syncFavoriteWorkButtons();
   }
 
@@ -919,8 +934,13 @@
       template: buildWorkTemplateFromForm()
     };
     rows.push(newItem);
-    setFavoriteWorks(rows);
+    const ok = setFavoriteWorks(rows);
+    if (!ok) {
+      alert('즐겨찾기 저장 실패');
+      return;
+    }
     renderFavoriteWorkSelect(newItem.id);
+    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
     alert('즐겨찾기로 저장했습니다.');
   }
 
@@ -941,6 +961,7 @@
     applyWorkTemplateToForm(item.template || {});
     state.editingWorkId = null;
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+    showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
   function deleteFavoriteWork() {
@@ -952,8 +973,13 @@
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
     const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
-    setFavoriteWorks(rows);
+    const ok = setFavoriteWorks(rows);
+    if (!ok) {
+      alert('즐겨찾기 삭제 실패');
+      return;
+    }
     renderFavoriteWorkSelect('');
+    showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
   }
 
   function closeWorkModal() {

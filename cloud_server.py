@@ -398,6 +398,13 @@ def init_db():
             name TEXT NOT NULL UNIQUE
         )
         """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS options_task_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+    )
+    """)
+    ensure_column(cur, "options_tasks", "category_name", "TEXT DEFAULT ''")
     ensure_column(cur, "options_pests", "recommended_materials", "TEXT DEFAULT ''")
 
     # seasons
@@ -653,14 +660,18 @@ def create_option(option_type):
     name = normalize_name(data.get("name"))
     recommended_materials = normalize_name(data.get("recommended_materials"))
     category_name = normalize_name(data.get("category_name"))
-    category_name = normalize_name(data.get("category_name"))
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
 
     conn = db()
     cur = conn.cursor()
 
-    if option_type == "tasks":
+    if option_type == "task_categories":
+        cur.execute(
+            "INSERT OR IGNORE INTO options_task_categories (name) VALUES (?)",
+            (name,)
+        )
+    elif option_type == "tasks":
         cur.execute(
             "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
             (name, category_name)
@@ -716,21 +727,13 @@ def update_option(option_type, option_id):
     conn = db()
     cur = conn.cursor()
 
+    table = "options_task_categories" if option_type == "task_categories" else f"options_{option_type}"
     old_row = cur.execute(
-        f"SELECT name FROM options_{option_type} WHERE id = ?",
+        f"SELECT name FROM {table} WHERE id = ?",
         (option_id,)
     ).fetchone()
 
     if option_type == "tasks":
-        cur.execute(
-            "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
-            (name, category_name)
-        )
-        cur.execute(
-            "UPDATE options_tasks SET category_name = ? WHERE name = ?",
-            (category_name, name)
-        )
-    elif option_type == "tasks":
         cur.execute(
             "UPDATE options_tasks SET name = ?, category_name = ? WHERE id = ?",
             (new_name, category_name, option_id)
@@ -779,7 +782,7 @@ def delete_option(option_type, option_id):
     )
 
     if option_type == "task_categories" and row:
-        cur.execute("UPDATE options_tasks SET category_name =  WHERE category_name = ?", (row["name"],))
+        cur.execute("UPDATE options_tasks SET category_name = '' WHERE category_name = ?", (row["name"],))
 
     if option_type == "materials" and row:
         cur.execute(

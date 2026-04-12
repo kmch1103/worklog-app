@@ -33,6 +33,7 @@
     optionTab: 'weather',
     seasons: [],
     editingSeasonId: null,
+    favoriteWorks: [],
     editingTaskOptionId: null
   };
 
@@ -267,7 +268,8 @@
       loadPlans(),
       loadMaterials(),
       loadOptions(),
-      loadSeasons()
+      loadSeasons(),
+      loadFavoriteWorks()
     ]);
   }
 
@@ -351,6 +353,7 @@
     renderMaterials();
     renderOptions();
     renderMoney();
+    renderFavoriteWorkSelect();
     ensureWorksSearchBar();
   }
 
@@ -794,31 +797,9 @@
   }
 
 
-  function getFavoriteWorkStorageKey() {
-    return 'worklog_favorite_works_v1';
-  }
 
   function getFavoriteWorks() {
-    try {
-      const raw = localStorage.getItem(getFavoriteWorkStorageKey()) || '[]';
-      const rows = JSON.parse(raw);
-      return Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      console.error(e);
-      return [];
-    }
-  }
-
-
-  function setFavoriteWorks(rows) {
-    try {
-      localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
-      return true;
-    } catch (e) {
-      console.error(e);
-      showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
-      return false;
-    }
+    return Array.isArray(state.favoriteWorks) ? state.favoriteWorks : [];
   }
 
   function showFavoriteWorkStatus(message) {
@@ -916,7 +897,7 @@
     updateMoneySummary();
   }
 
-  function saveCurrentWorkAsFavorite() {
+  async function saveCurrentWorkAsFavorite() {
     const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
     const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
     if (name == null) return;
@@ -927,21 +908,20 @@
       return;
     }
 
-    const rows = getFavoriteWorks();
-    const newItem = {
-      id: `${Date.now()}`,
-      name: trimmed,
-      template: buildWorkTemplateFromForm()
-    };
-    rows.push(newItem);
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
+    try {
+      const result = await apiPost('/api/favorite_works', {
+        name: trimmed,
+        template: buildWorkTemplateFromForm()
+      });
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect(String(result.id || ''));
+      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+      alert('즐겨찾기로 저장했습니다.');
+    } catch (e) {
+      console.error(e);
       alert('즐겨찾기 저장 실패');
-      return;
+      showFavoriteWorkStatus('즐겨찾기 저장 실패');
     }
-    renderFavoriteWorkSelect(newItem.id);
-    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-    alert('즐겨찾기로 저장했습니다.');
   }
 
   function loadFavoriteWorkIntoForm() {
@@ -964,7 +944,7 @@
     showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
-  function deleteFavoriteWork() {
+  async function deleteFavoriteWork() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('삭제할 즐겨찾기를 선택하세요.');
@@ -972,17 +952,19 @@
     }
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
-    const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
+    try {
+      await apiDelete(`/api/favorite_works/${selectedId}`);
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect('');
+      showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
+    } catch (e) {
+      console.error(e);
       alert('즐겨찾기 삭제 실패');
-      return;
     }
-    renderFavoriteWorkSelect('');
-    showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
   }
 
   function closeWorkModal() {
+
     addHidden(el['work-modal']);
     state.editingWorkId = null;
   }

@@ -79,7 +79,7 @@
       'calendar-detail-modal','calendar-detail-title','calendar-detail-body',
       'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
 
-      'work-modal','work-modal-title','btn-close-work-modal',
+      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work',
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
@@ -181,6 +181,7 @@
   function bindWorkButtons() {
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
+    on(el['btn-load-recent-work'], 'click', loadRecentWorkIntoForm);
     on(el['btn-cancel-work'], 'click', closeWorkModal);
     on(el['btn-save-work'], 'click', saveWork);
 
@@ -759,6 +760,29 @@
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'work');
     }
+  }
+
+  function loadRecentWorkIntoForm() {
+    const sorted = [...(state.works || [])]
+      .filter(work => !state.editingWorkId || String(work.id) !== String(state.editingWorkId))
+      .sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
+    const recent = sorted[0];
+    if (!recent) {
+      alert('불러올 최근 작업이 없습니다.');
+      return;
+    }
+
+    const currentStartDate = el.start_date?.value || fmtDate(new Date());
+    const currentRepeatDays = Number(el.repeat_days?.value || 1);
+
+    fillWorkForm(recent);
+
+    if (el.start_date) el.start_date.value = currentStartDate;
+    if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
+    updateEndDateFromRepeatDays();
+
+    state.editingWorkId = null;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
   }
 
   function closeWorkModal() {

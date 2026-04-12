@@ -10,7 +10,7 @@
     *, *::before, *::after{box-sizing:border-box;}
     html, body{max-width:100%; overflow-x:hidden;}
     body{margin:0;}
-    .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
+    .app, .content, .page, .panel, .sidebar{position:sticky; top:0; height:100vh;min-width:0; max-width:100%;}
     input, select, textarea, button{max-width:100%;}
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
     .readonly-money.total{font-size:18px; color:#0f172a;}
@@ -37,7 +37,7 @@
     .option-subtext{font-size:12px; color:#64748b;}
     .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
     .recommended-materials-empty{font-size:13px; color:#64748b;}
-    .options-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; align-items:start;}
+    .options-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:start;}
     .option-panel{min-width:0;}
     .option-panel h3{font-size:26px; margin-bottom:12px;}
     .option-panel .inline-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;}
@@ -49,7 +49,7 @@
     .option-mobile-tabs{display:none; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .season-panel{margin-top:16px;}
-    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
+    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
     @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
     .season-form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
@@ -129,10 +129,10 @@
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
     .calendar-detail-meta{font-size:14px; color:#475569; line-height:1.5;}
 
-    .sidebar{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
+    .sidebar{position:sticky; top:0; height:100vh;position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;}
     @media (min-width: 901px){
       .app{display:grid; grid-template-columns:260px minmax(0,1fr); align-items:start; min-height:100vh;}
-      .sidebar{position:sticky; top:0; height:100vh; overflow:auto;}
+      .sidebar{position:sticky; top:0; height:100vh;position:sticky; top:0; height:100vh; overflow:auto;}
       .content{min-width:0; padding:20px;}
     }
     .sidebar h1{margin:0 0 18px;}
@@ -147,7 +147,7 @@
     @media (max-width: 900px){
       body{padding-top:112px;}
       .app{display:block; width:100%; overflow-x:hidden;}
-      .sidebar{
+      .sidebar{position:sticky; top:0; height:100vh;
         position:fixed;
         top:0;
         left:0;
@@ -392,8 +392,8 @@
         <div class="option-mobile-tabs">
           <button class="btn option-tab-btn active" data-option-tab="weather">날씨</button>
           <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
-          <button class="btn option-tab-btn" data-option-tab="task_categories">작업카테고리</button>
-          <button class="btn option-tab-btn" data-option-tab="tasks">작업내용</button>
+          <button class="btn option-tab-btn" data-option-tab="task_categories">작업분류</button>
+          <button class="btn option-tab-btn" data-option-tab="tasks">세부작업</button>
           <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
           <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
         </div>
@@ -434,20 +434,20 @@
           </div>
 
           <div class="panel option-panel mobile-active" data-option-panel="task_categories">
-            <h3>작업카테고리</h3>
+            <h3>작업분류</h3>
             <div class="inline-form">
-              <input type="text" id="new-task-categories" placeholder="새 작업카테고리">
+              <input type="text" id="new-task-categories" placeholder="새 작업분류">
               <button class="btn primary" onclick="saveOption('task_categories', 'new-task-categories')">추가</button>
             </div>
             <div id="options-task-categories"></div>
           </div>
 
           <div class="panel option-panel mobile-active" data-option-panel="tasks">
-            <h3>작업내용</h3>
+            <h3>세부작업</h3>
             <div class="inline-form">
               <div class="grid two" style="width:100%;">
                 <select id="new-task-category"></select>
-                <input type="text" id="new-tasks" placeholder="새 작업내용">
+                <input type="text" id="new-tasks" placeholder="새 세부작업">
               </div>
               <button class="btn primary" onclick="saveOption('tasks', 'new-tasks', 'new-task-category')">추가</button>
             </div>
@@ -525,7 +525,7 @@
 
         <label class="field">
           <span>계획 제목 검색</span>
-          <input type="text" id="plan-search" placeholder="작업내용 검색">
+          <input type="text" id="plan-search" placeholder="세부작업 검색">
           <div id="plan-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
         </label>
 
@@ -623,14 +623,14 @@
             <select id="weather"></select>
           </label>
           <label class="field">
-            <span>작업카테고리</span>
+            <span>작업분류</span>
             <select id="task_category"></select>
           </label>
         </div>
 
         <div class="grid two">
           <label class="field">
-            <span>작업내용</span>
+            <span>세부작업</span>
             <select id="task_name"></select>
           </label>
         </div>

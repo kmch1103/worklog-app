@@ -233,6 +233,10 @@
       });
     });
 
+    on(el['new-task-category'], 'change', () => {
+      renderTaskOptionList();
+    });
+
     on(el['btn-save-season'], 'click', saveSeason);
     on(el['btn-reset-season'], 'click', resetSeasonForm);
   }
@@ -923,7 +927,7 @@
 
   function renderWorkFormOptions() {
     setSelectOptions(el.weather, state.options.weather, true);
-    setSelectOptions(el.task_category, state.options.task_categories, true, '작업분류 선택');
+    setSelectOptions(el.task_category, state.options.task_categories, true, '카테고리 선택');
     renderTaskOptionsByCategory(el.task_category?.value || '');
     renderChipOptions('crops', state.options.crops);
     renderChipOptions('pests', state.options.pests);
@@ -1311,8 +1315,8 @@
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
-    renderTaskCategorySelect();
     renderTaskCategoryList();
+    renderTaskCategorySelect();
     renderTaskOptionList();
     renderOptionList('pests', state.options.pests, el['options-pests'], el['new-pests'], el['new-pests-recommend']);
     renderOptionList('machines', state.options.machines, el['options-machines'], el['new-machines']);
@@ -1339,7 +1343,7 @@
 
     const current = selectEl.value || '';
     const rawItems = state.optionsRaw?.task_categories || [];
-    const options = ['<option value="">작업분류 선택</option>'];
+    const options = [`<option value="">작업분류 선택</option>`];
 
     rawItems.forEach(item => {
       const name = optionName(item);
@@ -1413,8 +1417,13 @@
     const listEl = el['options-tasks'];
     if (!listEl) return;
 
+    const selectedCategory = (el['new-task-category']?.value || '').trim();
     const rawItems = state.optionsRaw?.tasks || [];
-    listEl.innerHTML = rawItems.map(item => {
+    const filteredItems = selectedCategory
+      ? rawItems.filter(item => getTaskCategoryName(item) === selectedCategory)
+      : rawItems;
+
+    listEl.innerHTML = filteredItems.map(item => {
       const name = optionName(item);
       const itemId = item?.id ?? name;
       const categoryName = getTaskCategoryName(item);
@@ -1422,7 +1431,7 @@
         <div class="option-item">
           <div class="option-item-main">
             <span>${escapeHtml(name)}</span>
-            <div class="option-subtext">${escapeHtml(categoryName || '분류 없음')}</div>
+            <div class="option-subtext">${escapeHtml(categoryName || '작업분류 없음')}</div>
           </div>
           <div class="item-actions">
             <button type="button" class="btn" data-task-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}|${escapeHtml(categoryName)}">수정</button>
@@ -1448,6 +1457,9 @@
             category_name: categoryName.trim()
           });
           await loadOptions();
+          if (el['new-task-category']) {
+            el['new-task-category'].value = categoryName.trim();
+          }
           renderOptions();
           renderWorkFormOptions();
         } catch (e) {

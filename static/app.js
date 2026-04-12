@@ -79,7 +79,7 @@
       'calendar-detail-modal','calendar-detail-title','calendar-detail-body',
       'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
 
-      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work',
+      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work',
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',

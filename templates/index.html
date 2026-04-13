@@ -139,6 +139,8 @@
 
     .money-toggle label{display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; cursor:pointer;}
     .money-toggle input{width:20px; height:20px;}
+    .labor-row-header{display:grid; grid-template-columns:110px 70px 100px 110px 120px 1fr 70px; gap:8px; margin-bottom:6px; align-items:center; font-size:12px; color:#64748b; font-weight:700;}
+    .labor-row-header div{padding:0 4px;}
     .labor-row{display:grid; grid-template-columns:110px 70px 100px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
     .labor-row input,.labor-row select{width:100%;}
     .labor-row .labor-installment{min-width:0;}
@@ -241,6 +243,7 @@
       .grid.three{grid-template-columns:1fr;}
       .grid.two{grid-template-columns:1fr;}
       .materials-two-col{grid-template-columns:1fr; gap:10px;}
+      .labor-row-header{display:none;}
       .labor-row{grid-template-columns:1fr 1fr;}
       .labor-row .labor-installment{grid-column:1 / -1;}
       .work-date-row{display:grid; grid-template-columns:1fr;}
@@ -775,6 +778,15 @@
 
         <div class="field">
           <span>인건비 상세</span>
+          <div class="labor-row-header">
+            <div>구분</div>
+            <div>인원</div>
+            <div>단가</div>
+            <div>금액</div>
+            <div>결제방식</div>
+            <div>비고</div>
+            <div>삭제</div>
+          </div>
           <div id="labor-rows-wrap"></div>
           <div class="inline-help">남자/여자, 인원수, 단가, 지급방법, 비고를 한 줄씩 입력합니다.</div>
           <div style="margin-top:8px;">

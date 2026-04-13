@@ -1046,7 +1046,8 @@
           unit: m.unit || '',
           price: Number(m.price || m.unit_price || 0),
           qty: Number(m.qty || 0),
-          method: m.method || '현금'
+          method: m.method || '',
+          installment_months: Number(m.installment_months || 0)
         }))
       : [];
     renderSelectedMaterialsDetailed();
@@ -1422,7 +1423,8 @@
         unit: source.unit || '',
         price: Number(source.unit_price || source.price || 0),
         qty: 1,
-        method: ''
+        method: '',
+        installment_months: 0
       });
     }
 
@@ -1457,16 +1459,26 @@
       return;
     }
 
-    box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
+    const methodOptions = ['', '현금', '계좌이체', '카드일시불', '카드할부', '외상'];
+
+    box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => {
+      const method = item.method || '';
+      const installmentMonths = Number(item.installment_months || 0);
+      return `
       <div class="material-row">
         <span style="min-width:140px;"><strong>${escapeHtml(item.name || '')}</strong></span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
         <span>${escapeHtml(item.unit || '')}</span>
         <span>단가 ${formatNumber(item.price || 0)}</span>
         <span>합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
+        <select data-material-method="${idx}">
+          ${methodOptions.map(opt => `<option value="${escapeHtml(opt)}" ${method === opt ? 'selected' : ''}>${escapeHtml(opt || '결제방식')}</option>`).join('')}
+        </select>
+        ${method === '카드할부' ? `<input type="number" min="0" step="1" placeholder="개월수" value="${escapeHtml(String(installmentMonths || 0))}" data-material-installment="${idx}" style="width:90px;">` : `<span style="min-width:90px;"></span>`}
         <button type="button" class="btn" data-material-remove="${idx}">삭제</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     box.querySelectorAll('[data-material-qty]').forEach(input => {
       input.addEventListener('input', () => {
@@ -1474,6 +1486,28 @@
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         renderSelectedMaterialsDetailed();
+        updateMoneySummary();
+      });
+    });
+
+    box.querySelectorAll('[data-material-method]').forEach(select => {
+      select.addEventListener('change', () => {
+        const idx = Number(select.dataset.materialMethod);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].method = select.value || '';
+        if ((select.value || '') !== '카드할부') {
+          state.selectedMaterialsDetailed[idx].installment_months = 0;
+        }
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
+      });
+    });
+
+    box.querySelectorAll('[data-material-installment]').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = Number(input.dataset.materialInstallment);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].installment_months = Number(input.value || 0);
         updateMoneySummary();
       });
     });
@@ -1536,7 +1570,8 @@
             unit: '',
             price: 0,
             qty: 1,
-            method: ''
+            method: '',
+            installment_months: 0
           });
         }
 
@@ -2786,7 +2821,8 @@
           unit: item.unit || '',
           price: Number(item.price || 0),
           qty: Number(item.qty || 0),
-          method: item.method || ''
+          method: item.method || '',
+          installment_months: Number(item.installment_months || 0)
         })),
         labor_rows: laborRows,
         work_hours: Number(el.work_hours?.value || 0),

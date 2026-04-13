@@ -79,10 +79,30 @@
     .season-panel.collapsed .season-panel-body{display:none;}
     .season-panel-summary{display:none; margin-top:10px; color:#475569; font-size:13px; line-height:1.5;}
     .season-panel.collapsed .season-panel-summary{display:block;}
-    .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
-    .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
-    .money-table{width:100%;}
-    .money-table th,.money-table td{padding:10px; border-bottom:1px solid #e5e7eb; text-align:left;}
+    .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
+    .money-summary > div{background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700; color:#334155;}
+    .money-summary strong{font-size:18px; color:#0f172a;}
+    .money-filter{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin-bottom:14px; align-items:stretch;}
+    .money-filter input,.money-filter select,.money-filter .btn{width:100%; min-width:0;}
+    .money-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #e5e7eb; border-radius:14px; background:#fff;}
+    .money-table{width:100%; border-collapse:collapse; table-layout:fixed;}
+    .money-table th,.money-table td{padding:12px 10px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; word-break:keep-all;}
+    .money-table th{background:#f8fafc; font-size:14px; font-weight:800; color:#334155; position:sticky; top:0; z-index:1;}
+    .money-table td.money-num,.money-table th.money-num{text-align:right; font-variant-numeric:tabular-nums;}
+    .money-table td.money-note{color:#475569;}
+    .money-mobile-list{display:none;}
+    .money-day-group{margin-bottom:14px;}
+    .money-day-title{font-size:16px; font-weight:800; color:#0f172a; margin:0 0 8px;}
+    .money-card-list{display:grid; gap:10px;}
+    .money-card{background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:12px;}
+    .money-card-top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px;}
+    .money-card-task{font-size:16px; font-weight:800; color:#0f172a; line-height:1.35;}
+    .money-card-type{display:inline-flex; align-items:center; justify-content:center; min-width:54px; padding:5px 8px; border-radius:999px; background:#eef2ff; color:#334155; font-size:12px; font-weight:700;}
+    .money-card-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 10px;}
+    .money-card-item{background:#f8fafc; border-radius:10px; padding:8px 10px;}
+    .money-card-label{font-size:12px; color:#64748b; margin-bottom:2px;}
+    .money-card-value{font-size:15px; font-weight:700; color:#0f172a; word-break:break-word;}
+    .money-card-note{margin-top:8px; font-size:13px; color:#475569; line-height:1.45;}
     .calendar-grid{display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; align-items:stretch;}
     .calendar-week-header{display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; margin-bottom:8px; text-align:center; font-weight:700; color:#475569;}
     .calendar-week-header > div{padding:6px 0;}
@@ -300,9 +320,13 @@
       .season-list{grid-template-columns:1fr;}
       .season-panel-header{align-items:flex-start;}
       .season-panel-toggle{font-size:12px; padding:5px 9px;}
-      .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+      .money-summary{grid-template-columns:1fr 1fr; gap:8px;}
+      .money-summary > div{padding:12px 12px; font-size:14px;}
+      .money-summary strong{font-size:16px;}
+      .money-filter{grid-template-columns:1fr 1fr; gap:8px;}
       .money-filter .btn{width:100%;}
-      .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+      .money-table-wrap{display:none;}
+      .money-mobile-list{display:block; margin-top:10px;}
       #material-search-input{min-width:0 !important; width:100%;}
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
@@ -314,6 +338,8 @@
       .calendar-day .day-title-item{font-size:10px;}
       .option-mobile-tabs{gap:4px;}
       .option-mobile-tabs .btn{font-size:11px; padding:7px 1px; letter-spacing:-0.5px;}
+      .money-card-grid{grid-template-columns:1fr;}
+      .money-card-task{font-size:15px;}
     }
   
     .mobile-quick-exit{display:none;}
@@ -474,19 +500,25 @@
             <button id="btn-money-filter" class="btn">검색</button>
           </div>
 
-          <table class="money-table">
-            <thead>
-              <tr>
-                <th>날짜</th>
-                <th>작업</th>
-                <th>구분</th>
-                <th>금액</th>
-                <th>방식</th>
-                <th>비고</th>
-              </tr>
-            </thead>
-            <tbody id="money-list"></tbody>
-          </table>
+          <div class="money-table-wrap">
+            <table class="money-table money-table-desktop">
+              <thead>
+                <tr>
+                  <th style="width:110px;">날짜</th>
+                  <th style="width:180px;">작업</th>
+                  <th style="width:80px;">구분</th>
+                  <th class="money-num" style="width:110px;">총금액</th>
+                  <th class="money-num" style="width:100px;">인건비</th>
+                  <th class="money-num" style="width:100px;">자재비</th>
+                  <th class="money-num" style="width:90px;">기타</th>
+                  <th style="width:110px;">방식</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody id="money-list"></tbody>
+            </table>
+          </div>
+          <div id="money-mobile-list" class="money-mobile-list"></div>
 
           <div class="panel" style="margin-top:12px;">
             <h3 style="margin:0 0 10px;">외상 상세</h3>

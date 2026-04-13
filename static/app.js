@@ -136,39 +136,9 @@
   }
 
   function handleQuickExit() {
-    const hadOpenModal = [
-      el['calendar-detail-modal'],
-      el['plan-modal'],
-      el['work-modal'],
-      el['material-modal'],
-      el['task-option-modal']
-    ].some(node => node && !node.classList.contains('hidden'));
-
     closeAllModals();
     switchPage('calendar', { skipHistory: true });
     window.scrollTo({ top: 0, behavior: 'auto' });
-
-    if (hadOpenModal || state.currentPage !== 'calendar') {
-      return;
-    }
-
-    try {
-      window.location.replace('about:blank');
-      return;
-    } catch (e) {
-      console.warn(e);
-    }
-
-    if (window.history.length > 1) {
-      history.back();
-      return;
-    }
-
-    try {
-      window.close();
-    } catch (e) {
-      console.warn(e);
-    }
   }
 
   function bindCalendarButtons() {

@@ -85,6 +85,18 @@
     .money-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
     .money-table{width:100%;}
     .money-table th,.money-table td{padding:10px; border-bottom:1px solid #e5e7eb; text-align:left;}
+    .money-mobile-date{font-size:15px; font-weight:800; color:#0f172a; margin-bottom:10px;}
+    .money-mobile-cards{display:flex; flex-direction:column; gap:10px;}
+    .money-mobile-card{border:1px solid #e5e7eb; border-radius:14px; background:#fff; padding:12px;}
+    .money-mobile-card-head{display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:8px;}
+    .money-mobile-card-head strong{font-size:15px; color:#111827;}
+    .money-mobile-card-head span{font-size:12px; font-weight:700; color:#475569; background:#f1f5f9; border-radius:999px; padding:4px 8px; white-space:nowrap;}
+    .money-mobile-card-amount{font-size:16px; font-weight:800; color:#0f172a; margin-bottom:10px;}
+    .money-mobile-card-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px;}
+    .money-mobile-card-grid div,.money-mobile-card-note{display:flex; flex-direction:column; gap:4px;}
+    .money-mobile-card-grid b,.money-mobile-card-note b{font-size:12px; color:#64748b;}
+    .money-mobile-card-grid span,.money-mobile-card-note span{font-size:14px; color:#111827; word-break:break-word;}
+    .money-mobile-group-row td{padding:12px 10px; border-bottom:none;}
 
     @media (min-width: 769px){
       .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
@@ -323,6 +335,11 @@
       .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
       .money-filter .btn{width:100%;}
       .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+      .money-table-wrap.money-mobile-view{overflow:visible; border:none; background:transparent;}
+      .money-table-wrap.money-mobile-view .money-table{display:table; width:100%; table-layout:auto;}
+      .money-table-wrap.money-mobile-view .money-table tbody{display:block;}
+      .money-table-wrap.money-mobile-view .money-table tr{display:block;}
+      .money-table-wrap.money-mobile-view .money-table td{display:block; width:100%;}
       #material-search-input{min-width:0 !important; width:100%;}
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}

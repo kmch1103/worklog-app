@@ -99,6 +99,7 @@
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
 
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
+      'task-name-search','task-name-datalist','recent-task-picks','pest-search-input','recent-material-picks',
 
       'recommended-materials-wrap','recommended-materials-box','material-list-search',
 
@@ -214,6 +215,15 @@
     on(el['material-search-input'], 'input', (e) => {
       renderMaterialSearchResults(e.target.value || '');
     });
+    on(el['task-name-search'], 'input', (e) => {
+      syncTaskNameSearchToSelect(e.target.value || '');
+    });
+    on(el['task-name-search'], 'change', (e) => {
+      syncTaskNameSearchToSelect(e.target.value || '');
+    });
+    on(el['pest-search-input'], 'input', (e) => {
+      filterChipOptions('pests', e.target.value || '');
+    });
     on(el['btn-apply-material-method'], 'click', applyDefaultMaterialMethodToAll);
 
     on(el['btn-add-labor-row'], 'click', () => addLaborRow());
@@ -221,7 +231,9 @@
     on(el['start_date'], 'change', updateEndDateFromRepeatDays);
     on(el['repeat_days'], 'input', updateEndDateFromRepeatDays);
 
-    on(el['task_category'], 'change', () => renderTaskOptionsByCategory(el['task_category']?.value || ''));
+    on(el['task_category'], 'change', () => {
+      renderTaskOptionsByCategory(el['task_category']?.value || '');
+    });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['work_hours'], 'input', () => syncWorkTimeFields('hours'));
@@ -821,6 +833,8 @@
     updateEndDateFromRepeatDays();
     renderFavoriteWorkSelect();
     syncFavoriteWorkButtons();
+    renderRecentQuickPicks();
+    syncTaskNameDatalist(el.task_category?.value || '');
 
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
@@ -837,6 +851,8 @@
     fillWorkForm(work);
     renderFavoriteWorkSelect();
     syncFavoriteWorkButtons();
+    renderRecentQuickPicks();
+    syncTaskNameDatalist(el.task_category?.value || '');
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'work');
@@ -957,6 +973,7 @@
     if (el.task_category) el.task_category.value = template.task_category || '';
     renderTaskOptionsByCategory(template.task_category || '');
     if (el.task_name) el.task_name.value = template.task_name || '';
+    if (el['task-name-search']) el['task-name-search'].value = template.task_name || '';
     if (el.work_hours) el.work_hours.value = template.work_hours || 0;
     if (el.memo) el.memo.value = template.memo_text || '';
     if (el.start_time) el.start_time.value = template.start_time || '';
@@ -1069,6 +1086,8 @@
     if (el.weather) el.weather.value = '';
     if (el.task_category) el.task_category.value = '';
     if (el.task_name) el.task_name.value = '';
+    if (el['task-name-search']) el['task-name-search'].value = '';
+    if (el['pest-search-input']) el['pest-search-input'].value = '';
     if (el.work_hours) el.work_hours.value = 0;
     if (el.memo) el.memo.value = '';
 
@@ -1239,6 +1258,9 @@
     renderChipOptions('pests', state.options.pests);
     renderChipOptions('machines', state.options.machines);
     renderRecommendedMaterials();
+    renderRecentQuickPicks();
+    syncTaskNameDatalist(el.task_category?.value || '');
+    filterChipOptions('pests', el['pest-search-input']?.value || '');
   }
 
   function renderTaskOptionsByCategory(categoryName, keepCurrentValue = true) {
@@ -1261,7 +1283,144 @@
     if (current && list.some(item => optionName(item) === current)) {
       selectEl.value = current;
     }
+    syncTaskNameDatalist(categoryName || '');
   }
+
+
+function getRecentStorageKey(type) {
+  return `worklog_recent_${type}_v1`;
+}
+
+function getRecentItems(type) {
+  try {
+    const rows = JSON.parse(localStorage.getItem(getRecentStorageKey(type)) || '[]');
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+function setRecentItems(type, items) {
+  try {
+    localStorage.setItem(getRecentStorageKey(type), JSON.stringify(items || []));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function rememberRecentItem(type, value) {
+  const next = String(value || '').trim();
+  if (!next) return;
+  const rows = getRecentItems(type).filter(item => item !== next);
+  rows.unshift(next);
+  setRecentItems(type, rows.slice(0, 5));
+}
+
+function rememberRecentWorkFormValues(payload) {
+  rememberRecentItem('tasks', payload.task_name || '');
+  (state.selectedMaterialsDetailed || []).forEach(item => rememberRecentItem('materials', item.name || ''));
+}
+
+function renderRecentQuickPicks() {
+  renderRecentTaskPicks();
+  renderRecentMaterialPicks();
+}
+
+function renderRecentTaskPicks() {
+  const box = el['recent-task-picks'];
+  if (!box) return;
+  const rows = getRecentItems('tasks');
+  if (!rows.length) {
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = rows.map(name => `<button type="button" class="quick-pick-chip" data-recent-task="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('');
+  box.querySelectorAll('[data-recent-task]').forEach(btn => {
+    btn.addEventListener('click', () => applyRecentTask(btn.dataset.recentTask || ''));
+  });
+}
+
+function renderRecentMaterialPicks() {
+  const box = el['recent-material-picks'];
+  if (!box) return;
+  const rows = getRecentItems('materials');
+  if (!rows.length) {
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = rows.map(name => `<button type="button" class="quick-pick-chip" data-recent-material="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('');
+  box.querySelectorAll('[data-recent-material]').forEach(btn => {
+    btn.addEventListener('click', () => addRecentMaterialByName(btn.dataset.recentMaterial || ''));
+  });
+}
+
+function applyRecentTask(taskName) {
+  const target = String(taskName || '').trim();
+  if (!target) return;
+  const rawTasks = state.optionsRaw?.tasks || [];
+  const taskItem = rawTasks.find(item => optionName(item) === target);
+  const categoryName = taskItem ? getTaskCategoryName(taskItem) : '';
+  if (categoryName && el.task_category) {
+    el.task_category.value = categoryName;
+  }
+  renderTaskOptionsByCategory(categoryName || el.task_category?.value || '', false);
+  if (el.task_name) el.task_name.value = target;
+  if (el['task-name-search']) el['task-name-search'].value = target;
+}
+
+function addRecentMaterialByName(name) {
+  const target = String(name || '').trim().toLowerCase();
+  if (!target) return;
+  let found = state.materials.find(item => String(item.name || '').trim().toLowerCase() === target);
+  if (!found) {
+    found = state.materials.find(item => String(item.name || '').trim().toLowerCase().includes(target));
+  }
+  if (!found) return;
+  addSelectedMaterial(found.id);
+}
+
+function syncTaskNameDatalist(categoryName = '') {
+  const listEl = el['task-name-datalist'];
+  if (!listEl) return;
+  const rawTasks = state.optionsRaw?.tasks || [];
+  const list = categoryName ? rawTasks.filter(item => getTaskCategoryName(item) === categoryName) : rawTasks;
+  listEl.innerHTML = list.map(item => {
+    const name = optionName(item);
+    return `<option value="${escapeHtml(name)}"></option>`;
+  }).join('');
+  if (el.task_name?.value && el['task-name-search']) {
+    el['task-name-search'].value = el.task_name.value;
+  }
+}
+
+function syncTaskNameSearchToSelect(keyword) {
+  const q = String(keyword || '').trim();
+  if (!el.task_name) return;
+  if (!q) {
+    el.task_name.value = '';
+    return;
+  }
+  const option = Array.from(el.task_name.options || []).find(opt => opt.value === q)
+    || Array.from(el.task_name.options || []).find(opt => opt.value && opt.value.includes(q));
+  if (option) {
+    el.task_name.value = option.value;
+  }
+}
+
+function filterChipOptions(type, keyword) {
+  const box = el[`${type}-box`];
+  if (!box) return;
+  const q = String(keyword || '').trim().toLowerCase();
+  box.querySelectorAll('.chip').forEach(chip => {
+    const text = (chip.textContent || '').trim().toLowerCase();
+    chip.style.display = !q || text.includes(q) ? '' : 'none';
+  });
+}
 
   function setSelectOptions(selectEl, items, allowEmpty = false, emptyLabel = '선택') {
     if (!selectEl) return;
@@ -3145,6 +3304,7 @@
       } else {
         await apiPost('/api/works', payload);
       }
+      rememberRecentWorkFormValues(payload);
       await loadWorks();
       await loadMoney();
       closeWorkModal();

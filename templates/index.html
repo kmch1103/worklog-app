@@ -79,6 +79,11 @@
     .season-panel.collapsed .season-panel-body{display:none;}
     .season-panel-summary{display:none; margin-top:10px; color:#475569; font-size:13px; line-height:1.5;}
     .season-panel.collapsed .season-panel-summary{display:block;}
+    .money-dashboard{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
+    .money-dashboard-card{background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; min-width:0;}
+    .money-dashboard-label{display:block; font-size:14px; font-weight:700; color:#475569; margin-bottom:8px;}
+    .money-dashboard-value{font-size:28px; line-height:1.1; font-weight:800; color:#0f172a;}
+    .money-dashboard-unit{font-size:13px; color:#64748b; margin-top:4px;}
     .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
     .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .money-filter input,.money-filter select,.money-filter .btn{width:auto; min-height:40px;}
@@ -99,6 +104,8 @@
     .money-mobile-group-row td{padding:12px 10px; border-bottom:none;}
 
     @media (min-width: 769px){
+      .money-dashboard{grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
+      .money-dashboard-card{padding:14px 16px;}
       .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
       .money-summary > div{background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; font-weight:700; color:#334155; min-width:0;}
       .money-summary > div strong{display:block; margin-top:6px; font-size:28px; line-height:1.1; color:#0f172a;}
@@ -332,6 +339,9 @@
       .season-list{grid-template-columns:1fr;}
       .season-panel-header{align-items:flex-start;}
       .season-panel-toggle{font-size:12px; padding:5px 9px;}
+      .money-dashboard{grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px;}
+      .money-dashboard-card{padding:12px 12px;}
+      .money-dashboard-value{font-size:22px;}
       .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
       .money-filter .btn{width:100%;}
       .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
@@ -479,6 +489,34 @@
         </div>
 
         <div class="panel">
+          <div class="money-dashboard">
+            <div class="money-dashboard-card">
+              <span class="money-dashboard-label">총 지출</span>
+              <div class="money-dashboard-value"><span id="money-dashboard-total">0</span></div>
+              <div class="money-dashboard-unit">원</div>
+            </div>
+            <div class="money-dashboard-card">
+              <span class="money-dashboard-label">자재비</span>
+              <div class="money-dashboard-value"><span id="money-dashboard-material">0</span></div>
+              <div class="money-dashboard-unit">원</div>
+            </div>
+            <div class="money-dashboard-card">
+              <span class="money-dashboard-label">인건비</span>
+              <div class="money-dashboard-value"><span id="money-dashboard-labor">0</span></div>
+              <div class="money-dashboard-unit">원</div>
+            </div>
+            <div class="money-dashboard-card">
+              <span class="money-dashboard-label">기타비</span>
+              <div class="money-dashboard-value"><span id="money-dashboard-other">0</span></div>
+              <div class="money-dashboard-unit">원</div>
+            </div>
+            <div class="money-dashboard-card">
+              <span class="money-dashboard-label">카드 합계</span>
+              <div class="money-dashboard-value"><span id="money-dashboard-card">0</span></div>
+              <div class="money-dashboard-unit">원</div>
+            </div>
+          </div>
+
           <div class="money-summary">
             <div>총 지출: <strong id="money-total">0</strong> 원</div>
             <div>현금: <strong id="money-cash">0</strong> 원</div>

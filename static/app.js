@@ -136,12 +136,27 @@
   }
 
   function handleQuickExit() {
-    closeAllModals();
+    const hadOpenModal = [
+      el['calendar-detail-modal'],
+      el['plan-modal'],
+      el['work-modal'],
+      el['material-modal'],
+      el['task-option-modal']
+    ].some(node => node && !node.classList.contains('hidden'));
 
-    if (state.currentPage !== 'calendar') {
-      switchPage('calendar');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    closeAllModals();
+    switchPage('calendar', { skipHistory: true });
+    window.scrollTo({ top: 0, behavior: 'auto' });
+
+    if (hadOpenModal || state.currentPage !== 'calendar') {
       return;
+    }
+
+    try {
+      window.location.replace('about:blank');
+      return;
+    } catch (e) {
+      console.warn(e);
     }
 
     if (window.history.length > 1) {
@@ -154,8 +169,6 @@
     } catch (e) {
       console.warn(e);
     }
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function bindCalendarButtons() {
@@ -552,7 +565,7 @@
             <div class="calendar-detail-meta">${escapeHtml(plan.details || '')}</div>
             <div class="item-actions">
               <button class="btn" data-plan-edit="${escapeHtml(String(plan.id))}">수정</button>
-              <button class="btn" data-plan-done="${escapeHtml(String(plan.id))}">완료</button>
+              <button class="btn${(plan.status || '') === 'done' ? ' done' : ''}" ${(plan.status || '') === 'done' ? 'disabled' : ''} data-plan-done="${escapeHtml(String(plan.id))}">${(plan.status || '') === 'done' ? '완료됨' : '완료'}</button>
               <button class="btn" data-plan-work="${escapeHtml(String(plan.id))}">실적전환</button>
               <button class="btn" data-plan-delete="${escapeHtml(String(plan.id))}">삭제</button>
             </div>
@@ -614,7 +627,10 @@
     if (!el['calendar-detail-body']) return;
 
     el['calendar-detail-body'].querySelectorAll('[data-plan-edit]').forEach(btn => {
-      btn.addEventListener('click', () => openPlanModalById(btn.dataset.planEdit));
+      btn.addEventListener('click', () => {
+        closeCalendarDetailModal();
+        openPlanModalById(btn.dataset.planEdit);
+      });
     });
 
     el['calendar-detail-body'].querySelectorAll('[data-plan-done]').forEach(btn => {
@@ -738,6 +754,11 @@
     const plan = state.plans.find(p => String(p.id) === String(id));
     if (!plan) return;
 
+    if ((plan.status || '') === 'done') {
+      alert('이미 완료된 계획입니다.');
+      return;
+    }
+
     try {
       await apiPut(`/api/plans/${id}`, {
         plan_date: plan.plan_date || '',
@@ -748,9 +769,10 @@
       await loadPlans();
       renderCalendar();
       if (state.selectedDate) openCalendarDetailModal(state.selectedDate);
+      alert('계획을 완료 처리했습니다.');
     } catch (e) {
       console.error(e);
-      alert('상태 변경 실패');
+      alert(`상태 변경 실패: ${e.message || e}`);
     }
   }
 
@@ -2550,6 +2572,7 @@
     closePlanModal();
     closeWorkModal();
     closeMaterialModal();
+    closeTaskOptionModal();
   }
 
   function normalizePlanDate(value) {

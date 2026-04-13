@@ -2481,6 +2481,10 @@
     const end = el['money-end']?.value || '';
     const typeFilter = el['money-type-filter']?.value || '';
     const methodFilter = el['money-method-filter']?.value || '';
+    const table = wrap.closest('table');
+    const tableWrap = wrap.closest('.money-table-wrap');
+    const thead = table?.querySelector('thead');
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
     const filtered = state.moneyRows.filter(row => {
       if (start && row.date < start) return false;
@@ -2518,44 +2522,63 @@
         : `<div class="empty-msg">외상 내역 없음</div>`;
     }
 
+    if (thead) thead.style.display = isMobile ? 'none' : '';
+    if (tableWrap) tableWrap.classList.toggle('money-mobile-view', isMobile);
+
     if (!filtered.length) {
-      wrap.innerHTML = `<div class="empty-msg">금전 내역 없음</div>`;
+      wrap.innerHTML = isMobile
+        ? `<tr><td colspan="6"><div class="empty-msg">금전 내역 없음</div></td></tr>`
+        : `<div class="empty-msg">금전 내역 없음</div>`;
       return;
     }
 
-    wrap.innerHTML = `
-      <table class="money-table">
-        <thead>
-          <tr>
-            <th>날짜</th>
-            <th>작업</th>
-            <th>구분</th>
-            <th>총금액</th>
-            <th>인건비</th>
-            <th>자재비</th>
-            <th>기타</th>
-            <th>방식</th>
-            <th>비고</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${filtered.map(row => `
-            <tr>
-              <td>${escapeHtml(row.date || '')}</td>
-              <td>${escapeHtml(row.task_name || '')}</td>
-              <td>${escapeHtml(row.type || '')}</td>
-              <td>${formatNumber(row.total_amount || row.total || 0)}</td>
-              <td>${formatNumber(row.labor_total || 0)}</td>
-              <td>${formatNumber(row.material_total || 0)}</td>
-              <td>${formatNumber(row.other_total || 0)}</td>
-              <td>${escapeHtml(row.method_display || row.method || '')}</td>
-              <td>${escapeHtml(row.note || '')}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
+    if (isMobile) {
+      const grouped = filtered.reduce((acc, row) => {
+        const key = row.date || '날짜 없음';
+        (acc[key] ||= []).push(row);
+        return acc;
+      }, {});
+
+      wrap.innerHTML = Object.entries(grouped).map(([date, rows]) => `
+        <tr class="money-mobile-group-row">
+          <td colspan="6">
+            <div class="money-mobile-date">${escapeHtml(date)}</div>
+            <div class="money-mobile-cards">
+              ${rows.map(row => `
+                <div class="money-mobile-card">
+                  <div class="money-mobile-card-head">
+                    <strong>${escapeHtml(row.task_name || '작업명 없음')}</strong>
+                    <span>${escapeHtml(row.method_display || row.method || '-')}</span>
+                  </div>
+                  <div class="money-mobile-card-amount">총금액 ${formatNumber(row.total_amount || row.total || 0)}원</div>
+                  <div class="money-mobile-card-grid">
+                    <div><b>구분</b><span>${escapeHtml(row.type || '-')}</span></div>
+                    <div><b>인건비</b><span>${formatNumber(row.labor_total || 0)}원</span></div>
+                    <div><b>자재비</b><span>${formatNumber(row.material_total || 0)}원</span></div>
+                    <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>
+                  </div>
+                  ${row.note ? `<div class="money-mobile-card-note"><b>비고</b><span>${escapeHtml(row.note || '')}</span></div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+      return;
+    }
+
+    wrap.innerHTML = filtered.map(row => `
+      <tr>
+        <td>${escapeHtml(row.date || '')}</td>
+        <td>${escapeHtml(row.task_name || '')}</td>
+        <td>${escapeHtml(row.type || '')}</td>
+        <td>${formatNumber(row.total_amount || row.total || 0)}</td>
+        <td>${escapeHtml(row.method_display || row.method || '')}</td>
+        <td>${escapeHtml(row.note || '')}</td>
+      </tr>
+    `).join('');
   }
+
 
   function bindHistoryNavigation() {
     window.addEventListener('popstate', (event) => {

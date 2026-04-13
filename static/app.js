@@ -30,6 +30,7 @@
     materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
     mobileCalendarMode: 'current',
     materialListSearchKeyword: '',
+    materialFilterTab: 'all',
     optionTab: 'weather',
     seasons: [],
     editingSeasonId: null,
@@ -118,6 +119,7 @@
 
     el.menuButtons = Array.from(document.querySelectorAll('.menu-btn[data-page]'));
     el.optionTabButtons = Array.from(document.querySelectorAll('.option-tab-btn[data-option-tab]'));
+    el.materialTabButtons = Array.from(document.querySelectorAll('.material-tab-btn[data-material-tab]'));
     el.optionPanels = Array.from(document.querySelectorAll('.option-panel[data-option-panel]'));
   }
 
@@ -239,6 +241,13 @@
     on(el['material-list-search'], 'input', (e) => {
       state.materialListSearchKeyword = (e.target.value || '').trim();
       renderMaterials();
+    });
+
+    (el.materialTabButtons || []).forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.materialFilterTab = btn.dataset.materialTab || 'all';
+        renderMaterials();
+      });
     });
   }
 
@@ -2321,19 +2330,44 @@
 
     const inStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) > 0);
     const outStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) <= 0);
+    const tab = state.materialFilterTab || 'all';
 
-    wrap.innerHTML = `
-      <div class="materials-two-col">
-        <div>
-          <h3>재고 있음</h3>
-          ${renderMaterialSection(inStock)}
+    if (tab === 'in') {
+      wrap.innerHTML = `
+        <div class="materials-single-col">
+          <div>
+            <h3>재고 있음</h3>
+            ${renderMaterialSection(inStock)}
+          </div>
         </div>
-        <div>
-          <h3>재고 없음</h3>
-          ${renderMaterialSection(outStock)}
+      `;
+    } else if (tab === 'out') {
+      wrap.innerHTML = `
+        <div class="materials-single-col">
+          <div>
+            <h3>재고 없음</h3>
+            ${renderMaterialSection(outStock)}
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      wrap.innerHTML = `
+        <div class="materials-two-col">
+          <div>
+            <h3>재고 있음</h3>
+            ${renderMaterialSection(inStock)}
+          </div>
+          <div>
+            <h3>재고 없음</h3>
+            ${renderMaterialSection(outStock)}
+          </div>
+        </div>
+      `;
+    }
+
+    (el.materialTabButtons || []).forEach(btn => {
+      btn.classList.toggle('active', (btn.dataset.materialTab || 'all') === tab);
+    });
 
     wrap.querySelectorAll('[data-material-edit]').forEach(btn => {
       btn.addEventListener('click', () => openMaterialModalById(btn.dataset.materialEdit));

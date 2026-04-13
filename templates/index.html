@@ -116,8 +116,15 @@
     #page-materials .item-actions{gap:6px; margin-top:6px;}
     #page-materials .item-actions .btn{padding:6px 10px; font-size:13px;}
     .item-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+    .btn.done{background:#e2e8f0; color:#475569; cursor:default;}
+    .btn.done:disabled{opacity:1;}
     .empty-msg{color:#64748b; padding:16px 0;}
     .modal-overlay{position:fixed; inset:0; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; z-index:1000;}
+    #calendar-detail-modal{z-index:1000;}
+    #plan-modal{z-index:1100;}
+    #work-modal{z-index:1120;}
+    #material-modal{z-index:1080;}
+    #task-option-modal{z-index:1090;}
     .modal-overlay.hidden{display:none;}
     .modal-box{width:min(760px, calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:auto; background:#fff; border-radius:18px; box-shadow:0 10px 32px rgba(0,0,0,.18);}
     .modal-box-large{width:min(1040px, calc(100vw - 24px));}

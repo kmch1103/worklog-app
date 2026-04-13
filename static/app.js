@@ -2127,23 +2127,21 @@
 
   function updateMobileCalendarMode() {
     const compareWrap = el['calendar-compare-wrap'];
-    const currentWrap = document.querySelector('.calendar-current-wrap');
     const currentBtn = el['btn-mobile-current'];
     const previousBtn = el['btn-mobile-previous'];
 
-    if (!compareWrap || !currentWrap) return;
+    if (!compareWrap) return;
 
     const isMobile = window.innerWidth <= 900;
     if (!isMobile) {
-      currentWrap.style.display = '';
-      compareWrap.style.display = '';
+      compareWrap.classList.remove('mobile-show-current', 'mobile-show-previous');
       if (currentBtn) currentBtn.classList.remove('active');
       if (previousBtn) previousBtn.classList.remove('active');
       return;
     }
 
-    currentWrap.style.display = state.mobileCalendarMode === 'current' ? '' : 'none';
-    compareWrap.style.display = state.mobileCalendarMode === 'previous' ? '' : 'none';
+    compareWrap.classList.remove('mobile-show-current', 'mobile-show-previous');
+    compareWrap.classList.add(state.mobileCalendarMode === 'previous' ? 'mobile-show-previous' : 'mobile-show-current');
 
     if (currentBtn) currentBtn.classList.toggle('active', state.mobileCalendarMode === 'current');
     if (previousBtn) previousBtn.classList.toggle('active', state.mobileCalendarMode === 'previous');

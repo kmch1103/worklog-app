@@ -1608,9 +1608,23 @@
       input.addEventListener('input', () => {
         const idx = Number(input.dataset.materialQty);
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        const nextQty = Number(input.value || 0);
+        state.selectedMaterialsDetailed[idx].qty = nextQty;
+
+        const row = input.closest('.material-row');
+        const totalEl = row ? row.querySelector('.material-total') : null;
+        if (totalEl) {
+          totalEl.textContent = `합계 ${formatNumber((state.selectedMaterialsDetailed[idx].price || 0) * nextQty)}`;
+        }
+
+        updateMoneySummary();
+      });
+
+      input.addEventListener('change', () => {
+        const idx = Number(input.dataset.materialQty);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         renderSelectedMaterialsDetailed();
-        updateMoneySummary();
       });
     });
 

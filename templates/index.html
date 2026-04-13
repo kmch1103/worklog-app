@@ -139,8 +139,10 @@
 
     .money-toggle label{display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; cursor:pointer;}
     .money-toggle input{width:20px; height:20px;}
-    .labor-row{display:grid; grid-template-columns:120px 80px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
+    .labor-row{display:grid; grid-template-columns:110px 70px 100px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
     .labor-row input,.labor-row select{width:100%;}
+    .labor-row .labor-installment{min-width:0;}
+    .hidden{display:none !important;}
     .calendar-detail-group{margin-bottom:16px;}
     .calendar-detail-group h4{margin:0 0 10px; font-size:16px;}
     .calendar-detail-card{border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:12px; margin-bottom:8px;}
@@ -240,6 +242,7 @@
       .grid.two{grid-template-columns:1fr;}
       .materials-two-col{grid-template-columns:1fr; gap:10px;}
       .labor-row{grid-template-columns:1fr 1fr;}
+      .labor-row .labor-installment{grid-column:1 / -1;}
       .work-date-row{display:grid; grid-template-columns:1fr;}
       .work-card{min-width:0;}
       .calendar-day{min-height:84px; padding:8px; border-radius:12px;}

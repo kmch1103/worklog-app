@@ -69,6 +69,16 @@
     .season-card.current{border-color:#2563eb; background:#eff6ff;}
     .season-card-title{font-weight:800; margin-bottom:6px;}
     .season-card-meta{font-size:13px; color:#475569; line-height:1.5;}
+    .season-panel.compact{margin-top:8px;}
+    .season-panel-header{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:0; cursor:pointer; user-select:none;}
+    .season-panel-header h3{margin:0;}
+    .season-panel-toggle{display:inline-flex; align-items:center; gap:6px; border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; color:#334155;}
+    .season-panel-toggle .arrow{transition:transform .18s ease;}
+    .season-panel.collapsed .season-panel-toggle .arrow{transform:rotate(-90deg);}
+    .season-panel-body{margin-top:12px;}
+    .season-panel.collapsed .season-panel-body{display:none;}
+    .season-panel-summary{display:none; margin-top:10px; color:#475569; font-size:13px; line-height:1.5;}
+    .season-panel.collapsed .season-panel-summary{display:block;}
     .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
     .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .money-table{width:100%;}
@@ -284,6 +294,8 @@
       .option-panel.mobile-active{display:block;}
       .season-form-grid{grid-template-columns:1fr;}
       .season-list{grid-template-columns:1fr;}
+      .season-panel-header{align-items:flex-start;}
+      .season-panel-toggle{font-size:12px; padding:5px 9px;}
       .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
       .money-filter .btn{width:100%;}
       .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
@@ -489,20 +501,26 @@
           <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
         </div>
 
-        <div class="panel season-panel">
-          <h3>시즌관리</h3>
-          <div class="season-form-grid">
-            <label class="field"><span>시즌명</span><input type="text" id="season_name"></label>
-            <label class="field"><span>시작일</span><input type="date" id="season_start_date"></label>
-            <label class="field"><span>종료일</span><input type="date" id="season_end_date"></label>
-            <label class="field"><span>현재시즌</span><select id="season_is_current"><option value="0">아니오</option><option value="1">예</option></select></label>
+        <div id="season-panel" class="panel season-panel compact collapsed">
+          <div id="season-panel-header" class="season-panel-header" role="button" tabindex="0" aria-expanded="false">
+            <h3>시즌관리</h3>
+            <button type="button" id="btn-toggle-season-panel" class="season-panel-toggle"><span class="arrow">▾</span><span id="season-panel-toggle-text">펼치기</span></button>
           </div>
-          <label class="field" style="margin-top:12px;"><span>비고</span><input type="text" id="season_note"></label>
-          <div class="item-actions">
-            <button id="btn-save-season" class="btn primary">저장</button>
-            <button id="btn-reset-season" class="btn">초기화</button>
+          <div id="season-panel-summary" class="season-panel-summary">시즌 입력/수정은 펼치기 후 사용할 수 있습니다.</div>
+          <div id="season-panel-body" class="season-panel-body">
+            <div class="season-form-grid">
+              <label class="field"><span>시즌명</span><input type="text" id="season_name"></label>
+              <label class="field"><span>시작일</span><input type="date" id="season_start_date"></label>
+              <label class="field"><span>종료일</span><input type="date" id="season_end_date"></label>
+              <label class="field"><span>현재시즌</span><select id="season_is_current"><option value="0">아니오</option><option value="1">예</option></select></label>
+            </div>
+            <label class="field" style="margin-top:12px;"><span>비고</span><input type="text" id="season_note"></label>
+            <div class="item-actions">
+              <button id="btn-save-season" class="btn primary">저장</button>
+              <button id="btn-reset-season" class="btn">초기화</button>
+            </div>
+            <div id="season-list" class="season-list"></div>
           </div>
-          <div id="season-list" class="season-list"></div>
         
 
         <div class="options-grid">

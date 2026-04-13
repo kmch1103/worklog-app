@@ -290,6 +290,32 @@
       .calendar-day .day-num{font-size:15px;}
       .calendar-day .day-title-item{font-size:10px;}
     }
+  
+    .mobile-quick-exit{display:none;}
+    @media (max-width: 900px){
+      body{padding-bottom:84px;}
+      .mobile-quick-exit{
+        display:flex;
+        position:fixed;
+        right:14px;
+        bottom:14px;
+        z-index:260;
+        align-items:center;
+        justify-content:center;
+        min-width:88px;
+        height:46px;
+        padding:0 16px;
+        border:none;
+        border-radius:999px;
+        background:#dc2626;
+        color:#fff;
+        font-size:15px;
+        font-weight:800;
+        box-shadow:0 10px 24px rgba(0,0,0,.18);
+      }
+      .mobile-quick-exit:active{transform:translateY(1px);}
+    }
+
   </style>
 </head>
 <body>
@@ -910,5 +936,7 @@
 
   <script src="{{ url_for('static', filename='app.js') }}?v=6"></script>
 
+
+  <button id="btn-mobile-quick-exit" class="mobile-quick-exit" type="button">종료</button>
 </body>
 </html>

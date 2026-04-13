@@ -485,6 +485,12 @@
           </div>
 
           <div class="money-filter">
+            <select id="money-period-filter">
+              <option value="">전체 기간</option>
+              <option value="today">오늘</option>
+              <option value="month">이번달</option>
+              <option value="custom">직접 선택</option>
+            </select>
             <input type="date" id="money-start">
             <input type="date" id="money-end">
             <select id="money-season-filter">
@@ -503,12 +509,14 @@
               <option value="">전체</option>
               <option>현금</option>
               <option>계좌이체</option>
+              <option>카드</option>
               <option>카드일시불</option>
               <option>카드할부</option>
               <option>외상</option>
             </select>
 
-            <button id="btn-money-filter" class="btn">검색</button>
+            <input type="text" id="money-keyword-filter" placeholder="작업명/비고 검색">
+            <button id="btn-money-filter" class="btn">새로고침</button>
           </div>
 
           <div class="money-table-wrap">

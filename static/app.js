@@ -44,6 +44,7 @@
   async function init() {
     cacheElements();
     bindMenu();
+    bindQuickExitButton();
     bindCalendarButtons();
     bindMobileCalendarButtons();
     bindWorkButtons();
@@ -65,7 +66,7 @@
   function cacheElements() {
     const ids = [
       'page-calendar','page-works','page-materials','page-money','page-options','page-excel','page-backup',
-      'btn-prev-month','btn-next-month','btn-mobile-current','btn-mobile-previous',
+      'btn-prev-month','btn-next-month','btn-mobile-current','btn-mobile-previous','btn-mobile-quick-exit',
       'calendar-title','calendar-current-title','calendar-grid',
       'calendar-compare-title','calendar-compare-grid','calendar-compare-wrap',
 
@@ -127,6 +128,34 @@
     el.menuButtons.forEach(btn => {
       btn.addEventListener('click', () => switchPage(btn.dataset.page));
     });
+  }
+
+
+  function bindQuickExitButton() {
+    on(el['btn-mobile-quick-exit'], 'click', handleQuickExit);
+  }
+
+  function handleQuickExit() {
+    closeAllModals();
+
+    if (state.currentPage !== 'calendar') {
+      switchPage('calendar');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    if (window.history.length > 1) {
+      history.back();
+      return;
+    }
+
+    try {
+      window.close();
+    } catch (e) {
+      console.warn(e);
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function bindCalendarButtons() {

@@ -27,8 +27,16 @@
     .search-result-item{padding:8px 10px; border:1px solid #d7dbe3; border-radius:10px; cursor:pointer; background:#fff;}
     .material-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
     .material-row input{width:90px;}
-    .material-row select{min-width:120px;}
-    .material-row input[data-material-installment]{width:90px;}
+    .material-method-toolbar{display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin:6px 0 10px;}
+    .material-row-inline{display:grid; grid-template-columns:minmax(150px,1.2fr) 90px auto auto auto minmax(180px,240px) 70px; gap:8px; align-items:center;}
+    .material-row-inline input,.material-row-inline select{width:100%;}
+    .material-row-inline .material-method-wrap{display:flex; gap:6px; align-items:center;}
+    .material-row-inline .material-installment-input{width:72px;}
+    @media (max-width: 900px){
+      .material-row-inline{grid-template-columns:1fr 80px auto auto; align-items:center;}
+      .material-row-inline .material-unit,.material-row-inline .material-price,.material-row-inline .material-total{grid-column:1 / -1;}
+      .material-row-inline .material-method-wrap{grid-column:1 / -1;}
+    }
     .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
     .grid.six{display:grid; grid-template-columns:120px 90px 120px 130px 1fr 70px; gap:8px; align-items:center;}
     .inline-help{font-size:12px; color:#64748b; margin-top:4px;}
@@ -701,6 +709,20 @@
               <input type="text" id="material-search-input" placeholder="자재명 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:220px;">
             </div>
             <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
+            <div class="material-method-toolbar">
+              <label class="field" style="margin:0; min-width:220px;">
+                <span>기본 결제방식</span>
+                <select id="default-material-method">
+                  <option value="">선택</option>
+                  <option value="현금">현금</option>
+                  <option value="계좌이체">계좌이체</option>
+                  <option value="카드일시불">카드일시불</option>
+                  <option value="카드할부">카드할부</option>
+                  <option value="외상">외상</option>
+                </select>
+              </label>
+              <button type="button" id="btn-apply-material-method" class="btn">기본값을 전체 자재에 적용</button>
+            </div>
             <div id="selected-materials-detailed"></div>
           </div>
         </div>
@@ -720,26 +742,7 @@
         </div>
 
         <div id="money-box" class="panel hidden" style="margin-top:8px;">
-          <div class="grid two">
-            <label class="field">
-              <span>결제방식</span>
-              <select id="money_method">
-                <option value="">선택</option>
-                <option value="현금">현금</option>
-                <option value="계좌이체">계좌이체</option>
-                <option value="카드일시불">카드일시불</option>
-                <option value="카드할부">카드할부</option>
-                <option value="외상">외상</option>
-              </select>
-            </label>
-
-            <label class="field" id="money_installment_wrap" style="display:none;">
-              <span>할부 개월</span>
-              <input type="number" id="money_installment_months" value="0" min="0" step="1" placeholder="예: 3">
-            </label>
-          </div>
-
-          <div class="grid two" style="margin-top:12px;">
+          <div class="grid two" style="margin-top:0;">
             <label class="field">
               <span>기타비용</span>
               <input type="number" id="other_cost" value="0" min="0">

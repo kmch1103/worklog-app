@@ -113,7 +113,9 @@
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
-      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
+      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit',
+      'money-dashboard-total','money-dashboard-material','money-dashboard-labor','money-dashboard-other','money-dashboard-card',
+      'money-credit-list',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -2770,8 +2772,17 @@ function filterChipOptions(type, keyword) {
     const cardLump = filtered.reduce((sum, row) => sum + Number(row.card_lump_amount || 0), 0);
     const cardInstall = filtered.reduce((sum, row) => sum + Number(row.card_install_amount || 0), 0);
     const credit = filtered.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0);
+    const materialTotal = filtered.reduce((sum, row) => sum + Number(row.material_total || 0), 0);
+    const laborTotal = filtered.reduce((sum, row) => sum + Number(row.labor_total || 0), 0);
+    const otherTotal = filtered.reduce((sum, row) => sum + Number(row.other_total || 0), 0);
+    const cardTotal = cardLump + cardInstall;
 
     if (el['money-total']) el['money-total'].innerText = formatNumber(total);
+    if (el['money-dashboard-total']) el['money-dashboard-total'].innerText = formatNumber(total);
+    if (el['money-dashboard-material']) el['money-dashboard-material'].innerText = formatNumber(materialTotal);
+    if (el['money-dashboard-labor']) el['money-dashboard-labor'].innerText = formatNumber(laborTotal);
+    if (el['money-dashboard-other']) el['money-dashboard-other'].innerText = formatNumber(otherTotal);
+    if (el['money-dashboard-card']) el['money-dashboard-card'].innerText = formatNumber(cardTotal);
     if (el['money-cash']) el['money-cash'].innerText = formatNumber(cash);
     if (el['money-transfer']) el['money-transfer'].innerText = formatNumber(transfer);
     if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(cardLump);

@@ -237,7 +237,27 @@
     });
     on(el['money_installment_months'], 'input', updateMoneySummary);
     on(el['other_cost'], 'input', updateMoneySummary);
-    on(el['btn-money-filter'], 'click', async () => { await loadMoney(); renderMoney(); });
+
+    on(el['money-period-filter'], 'change', () => {
+      applyMoneyQuickPeriod();
+      renderMoney();
+    });
+    on(el['money-start'], 'change', () => {
+      syncMoneyQuickPeriodFromDates();
+      renderMoney();
+    });
+    on(el['money-end'], 'change', () => {
+      syncMoneyQuickPeriodFromDates();
+      renderMoney();
+    });
+    on(el['money-type-filter'], 'change', renderMoney);
+    on(el['money-method-filter'], 'change', renderMoney);
+    on(el['money-keyword-filter'], 'input', renderMoney);
+    on(el['btn-money-filter'], 'click', async () => {
+      syncMoneyQuickPeriodFromDates();
+      await loadMoney();
+      renderMoney();
+    });
   }
 
   function bindMaterialButtons() {

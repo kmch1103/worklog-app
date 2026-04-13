@@ -34,7 +34,8 @@
     optionTab: 'weather',
     seasons: [],
     editingSeasonId: null,
-    editingTaskOptionId: null
+    editingTaskOptionId: null,
+    seasonPanelCollapsed: true
   };
 
   const el = {};
@@ -101,6 +102,7 @@
 
       'recommended-materials-wrap','recommended-materials-box','material-list-search',
 
+      'season-panel','season-panel-header','btn-toggle-season-panel','season-panel-toggle-text','season-panel-summary','season-panel-body',
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
       'btn-save-season','btn-reset-season','season-list',
 
@@ -269,6 +271,22 @@
         state.optionTab = btn.dataset.optionTab || 'weather';
         renderOptions();
       });
+    });
+
+    on(el['btn-toggle-season-panel'], 'click', (e) => {
+      e.preventDefault();
+      toggleSeasonPanel();
+    });
+    on(el['season-panel-header'], 'click', (e) => {
+      const isToggleButton = e.target && e.target.closest && e.target.closest('#btn-toggle-season-panel');
+      if (isToggleButton) return;
+      toggleSeasonPanel();
+    });
+    on(el['season-panel-header'], 'keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleSeasonPanel();
+      }
     });
 
     on(el['btn-save-season'], 'click', saveSeason);
@@ -1695,6 +1713,41 @@
     renderTaskCategorySelects();
     renderSeasonList();
     renderMoneySeasonOptions();
+    updateSeasonPanelUi();
+  }
+
+  function toggleSeasonPanel(forceValue = null) {
+    if (typeof forceValue === 'boolean') {
+      state.seasonPanelCollapsed = forceValue;
+    } else {
+      state.seasonPanelCollapsed = !state.seasonPanelCollapsed;
+    }
+    updateSeasonPanelUi();
+  }
+
+  function updateSeasonPanelUi() {
+    const panel = el['season-panel'];
+    if (!panel) return;
+
+    panel.classList.toggle('collapsed', !!state.seasonPanelCollapsed);
+
+    if (el['season-panel-header']) {
+      el['season-panel-header'].setAttribute('aria-expanded', String(!state.seasonPanelCollapsed));
+    }
+    if (el['season-panel-toggle-text']) {
+      el['season-panel-toggle-text'].textContent = state.seasonPanelCollapsed ? '펼치기' : '접기';
+    }
+    if (el['season-panel-summary']) {
+      const currentSeason = (state.seasons || []).find(season => Number(season.is_current || 0) === 1);
+      const total = (state.seasons || []).length;
+      if (currentSeason) {
+        el['season-panel-summary'].textContent = `현재시즌: ${currentSeason.season_name || currentSeason.name || ''} · 등록 ${total}개`;
+      } else if (total > 0) {
+        el['season-panel-summary'].textContent = `등록된 시즌 ${total}개 · 펼치기 후 수정할 수 있습니다.`;
+      } else {
+        el['season-panel-summary'].textContent = '시즌 입력/수정은 펼치기 후 사용할 수 있습니다.';
+      }
+    }
   }
 
 
@@ -2075,6 +2128,7 @@
         await apiPost('/api/seasons', payload);
       }
       resetSeasonForm();
+      toggleSeasonPanel(false);
       await loadSeasons();
       renderSeasonList();
     } catch (e) {
@@ -2120,6 +2174,7 @@
         const season = state.seasons.find(s => String(s.id) === String(btn.dataset.seasonEdit));
         if (!season) return;
         state.editingSeasonId = season.id;
+        toggleSeasonPanel(false);
         if (el.season_name) el.season_name.value = season.season_name || season.name || '';
         if (el.season_start_date) el.season_start_date.value = season.start_date || '';
         if (el.season_end_date) el.season_end_date.value = season.end_date || '';

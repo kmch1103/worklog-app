@@ -1316,12 +1316,15 @@
     const wrap = el['labor-rows-wrap'];
     if (!wrap) return;
 
+    const methodValue = String(row?.method || '');
+    const installmentValue = String(row?.installment_months || row?.installment || '');
     const item = {
       type: row?.type || '남자',
       count: Number(row?.count || 0),
       price: Number(row?.price || 0),
       amount: Number(row?.amount || 0),
-      method: row?.method || '',
+      method: methodValue,
+      installment_months: installmentValue,
       note: row?.note || ''
     };
 
@@ -1336,6 +1339,15 @@
       <input type="number" class="labor-count" value="${escapeHtml(String(item.count))}" min="0" step="1">
       <input type="number" class="labor-price" value="${escapeHtml(String(item.price))}" min="0" step="100">
       <input type="number" class="labor-amount" value="${escapeHtml(String(item.amount || item.count * item.price))}" readonly>
+      <select class="labor-method">
+        <option value="" ${item.method === '' ? 'selected' : ''}>결제방식</option>
+        <option value="현금" ${item.method === '현금' ? 'selected' : ''}>현금</option>
+        <option value="계좌이체" ${item.method === '계좌이체' ? 'selected' : ''}>계좌이체</option>
+        <option value="카드일시불" ${item.method === '카드일시불' ? 'selected' : ''}>카드일시불</option>
+        <option value="카드할부" ${item.method === '카드할부' ? 'selected' : ''}>카드할부</option>
+        <option value="외상" ${item.method === '외상' ? 'selected' : ''}>외상</option>
+      </select>
+      <input type="number" class="labor-installment ${item.method === '카드할부' ? '' : 'hidden'}" value="${escapeHtml(item.installment_months)}" min="2" step="1" placeholder="할부개월수">
       <input type="text" class="labor-note" value="${escapeHtml(item.note)}" placeholder="비고">
       <button type="button" class="btn labor-remove">삭제</button>
     `;
@@ -1344,7 +1356,15 @@
     const countEl = div.querySelector('.labor-count');
     const priceEl = div.querySelector('.labor-price');
     const amountEl = div.querySelector('.labor-amount');
+    const methodEl = div.querySelector('.labor-method');
+    const installmentEl = div.querySelector('.labor-installment');
     const noteEl = div.querySelector('.labor-note');
+
+    function syncInstallmentVisibility() {
+      const isCardInstallment = (methodEl.value || '') === '카드할부';
+      installmentEl.classList.toggle('hidden', !isCardInstallment);
+      if (!isCardInstallment) installmentEl.value = '';
+    }
 
     function recalc() {
       const count = Number(countEl.value || 0);
@@ -1355,6 +1375,11 @@
 
     countEl.addEventListener('input', recalc);
     priceEl.addEventListener('input', recalc);
+    methodEl.addEventListener('change', () => {
+      syncInstallmentVisibility();
+      updateMoneySummary();
+    });
+    installmentEl.addEventListener('input', updateMoneySummary);
     noteEl.addEventListener('input', updateMoneySummary);
 
     div.querySelector('.labor-remove').addEventListener('click', () => {
@@ -1362,6 +1387,7 @@
       updateMoneySummary();
     });
 
+    syncInstallmentVisibility();
     recalc();
   }
 
@@ -1373,9 +1399,11 @@
       const count = Number(row.querySelector('.labor-count')?.value || 0);
       const price = Number(row.querySelector('.labor-price')?.value || 0);
       const amount = Number(row.querySelector('.labor-amount')?.value || 0);
+      const method = row.querySelector('.labor-method')?.value || '';
+      const installmentMonths = row.querySelector('.labor-installment')?.value || '';
       const note = row.querySelector('.labor-note')?.value || '';
-      return { type, count, price, amount, method: '', note };
-    }).filter(item => item.count > 0 || item.price > 0 || item.note);
+      return { type, count, price, amount, method, installment_months: installmentMonths, note };
+    }).filter(item => item.count > 0 || item.price > 0 || item.note || item.method || item.installment_months);
   }
 
   function renderMaterialSearchResults(keyword) {

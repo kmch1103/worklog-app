@@ -865,10 +865,10 @@
       crops: getSelectedChips('crops'),
       pests: getSelectedChips('pests'),
       machines: getSelectedChips('machines'),
-      work_hours: Number(el.work_hours?.value || 0),
+      work_hours: normalizedWorkHours,
       memo_text: el.memo?.value || '',
-      start_time: el.start_time?.value || '',
-      end_time: el.end_time?.value || '',
+      start_time: startTime,
+      end_time: endTime,
       materials: JSON.parse(JSON.stringify(state.selectedMaterialsDetailed || [])),
       labor_rows: JSON.parse(JSON.stringify(getLaborRows() || [])),
       money: {
@@ -2796,11 +2796,23 @@
   }
 
   async function saveWork() {
-    if ((!el.end_time?.value || '').trim() === '' && Number(el.work_hours?.value || 0) > 0) {
-      syncWorkTimeFields('hours');
-    } else if ((el.start_time?.value || '').trim() !== '' && (el.end_time?.value || '').trim() !== '') {
+    const rawStartTime = (el.start_time?.value || '').trim();
+    const rawEndTime = (el.end_time?.value || '').trim();
+    let normalizedWorkHours = Number(el.work_hours?.value || 0);
+
+    if (rawStartTime !== '' && rawEndTime !== '') {
       syncWorkTimeFields('time');
+      normalizedWorkHours = Number(el.work_hours?.value || 0);
+    } else if (rawStartTime !== '' && rawEndTime === '' && normalizedWorkHours > 0) {
+      syncWorkTimeFields('hours');
     }
+
+    if (!Number.isFinite(normalizedWorkHours) || normalizedWorkHours < 0) {
+      normalizedWorkHours = 0;
+    }
+
+    const startTime = (el.start_time?.value || '').trim();
+    const endTime = (el.end_time?.value || '').trim();
 
     const crops = getSelectedChipValues('crops').join(', ');
     const pests = getSelectedChipValues('pests').join(', ');
@@ -2841,7 +2853,7 @@
           installment_months: Number(item.installment_months || 0)
         })),
         labor_rows: laborRows,
-        work_hours: Number(el.work_hours?.value || 0),
+        work_hours: normalizedWorkHours,
         money
       }, null, 0)
     };

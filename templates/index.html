@@ -372,6 +372,11 @@
         </div>
         <div class="panel" style="margin-bottom:12px;">
           <input type="text" id="material-list-search" placeholder="자재명 / 단위 / 메모 검색" style="width:100%; max-width:420px;">
+          <div class="materials-filter-tabs">
+            <button type="button" class="btn material-tab-btn active" data-material-tab="all">전체</button>
+            <button type="button" class="btn material-tab-btn" data-material-tab="in">재고있음</button>
+            <button type="button" class="btn material-tab-btn" data-material-tab="out">재고없음</button>
+          </div>
         </div>
         <div id="materials-list"></div>
       </section>

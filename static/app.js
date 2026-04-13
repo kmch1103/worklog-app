@@ -95,7 +95,7 @@
       'new-weather','new-crops','new-task-categories','new-task-category','new-tasks','new-pests','new-pests-recommend','new-machines',
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
 
-      'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
+      'material-search-input','material-search-results','selected-materials-detailed',
 
       'recommended-materials-wrap','recommended-materials-box','material-list-search',
 
@@ -198,7 +198,6 @@
     on(el['material-search-input'], 'input', (e) => {
       renderMaterialSearchResults(e.target.value || '');
     });
-    on(el['btn-apply-material-method'], 'click', applyDefaultMaterialMethodToAll);
 
     on(el['btn-add-labor-row'], 'click', () => addLaborRow());
 
@@ -217,7 +216,8 @@
     });
 
     on(el['money_method'], 'change', () => {
-        updateMoneySummary();
+      toggleInstallmentField();
+      updateMoneySummary();
     });
     on(el['money_installment_months'], 'input', updateMoneySummary);
     on(el['other_cost'], 'input', updateMoneySummary);
@@ -865,7 +865,7 @@
       crops: getSelectedChips('crops'),
       pests: getSelectedChips('pests'),
       machines: getSelectedChips('machines'),
-      work_hours: Number(el.work_hours?.value || 0),
+      work_hours: Number((el.work_hours?.value || '').trim() || 0),
       memo_text: el.memo?.value || '',
       start_time: el.start_time?.value || '',
       end_time: el.end_time?.value || '',
@@ -1046,8 +1046,7 @@
           unit: m.unit || '',
           price: Number(m.price || m.unit_price || 0),
           qty: Number(m.qty || 0),
-          method: m.method || '',
-          installment_months: Number(m.installment_months || 0)
+          method: m.method || '현금'
         }))
       : [];
     renderSelectedMaterialsDetailed();
@@ -1060,8 +1059,11 @@
     if (meta.money) {
       if (el.has_money) el.has_money.checked = true;
       toggleMoneyBox(true);
+      if (el.money_method) el.money_method.value = meta.money.method || '';
+      if (el.money_installment_months) el.money_installment_months.value = Number(meta.money.installment_months || 0);
       if (el.money_note) el.money_note.value = meta.money.note || '';
       if (el.other_cost) el.other_cost.value = meta.money.other_total || 0;
+      toggleInstallmentField();
     } else {
       resetMoneyFields();
     }
@@ -1321,7 +1323,8 @@
       count: Number(row?.count || 0),
       price: Number(row?.price || 0),
       amount: Number(row?.amount || 0),
-      method: row?.method || '',
+      method: row?.method || '현금',
+      installment_months: Number(row?.installment_months || 0),
       note: row?.note || ''
     };
 
@@ -1336,6 +1339,12 @@
       <input type="number" class="labor-count" value="${escapeHtml(String(item.count))}" min="0" step="1">
       <input type="number" class="labor-price" value="${escapeHtml(String(item.price))}" min="0" step="100">
       <input type="number" class="labor-amount" value="${escapeHtml(String(item.amount || item.count * item.price))}" readonly>
+      <span class="labor-method-wrap">
+        <select class="labor-method">
+          ${getMaterialMethodOptionsHtml(item.method || '현금')}
+        </select>
+        ${item.method === '카드할부' ? `<input type="number" class="labor-installment" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" placeholder="개월">` : ''}
+      </span>
       <input type="text" class="labor-note" value="${escapeHtml(item.note)}" placeholder="비고">
       <button type="button" class="btn labor-remove">삭제</button>
     `;
@@ -1344,7 +1353,27 @@
     const countEl = div.querySelector('.labor-count');
     const priceEl = div.querySelector('.labor-price');
     const amountEl = div.querySelector('.labor-amount');
+    const methodEl = div.querySelector('.labor-method');
     const noteEl = div.querySelector('.labor-note');
+
+    function ensureInstallmentInput() {
+      let existing = div.querySelector('.labor-installment');
+      if ((methodEl.value || '') === '카드할부') {
+        if (!existing) {
+          existing = document.createElement('input');
+          existing.type = 'number';
+          existing.min = '0';
+          existing.step = '1';
+          existing.placeholder = '개월';
+          existing.className = 'labor-installment';
+          existing.value = String(item.installment_months || 0);
+          methodEl.insertAdjacentElement('afterend', existing);
+          existing.addEventListener('input', updateMoneySummary);
+        }
+      } else if (existing) {
+        existing.remove();
+      }
+    }
 
     function recalc() {
       const count = Number(countEl.value || 0);
@@ -1356,12 +1385,17 @@
     countEl.addEventListener('input', recalc);
     priceEl.addEventListener('input', recalc);
     noteEl.addEventListener('input', updateMoneySummary);
+    methodEl.addEventListener('change', () => {
+      ensureInstallmentInput();
+      updateMoneySummary();
+    });
 
     div.querySelector('.labor-remove').addEventListener('click', () => {
       div.remove();
       updateMoneySummary();
     });
 
+    ensureInstallmentInput();
     recalc();
   }
 
@@ -1373,8 +1407,10 @@
       const count = Number(row.querySelector('.labor-count')?.value || 0);
       const price = Number(row.querySelector('.labor-price')?.value || 0);
       const amount = Number(row.querySelector('.labor-amount')?.value || 0);
+      const method = row.querySelector('.labor-method')?.value || '현금';
+      const installment_months = method === '카드할부' ? Number(row.querySelector('.labor-installment')?.value || 0) : 0;
       const note = row.querySelector('.labor-note')?.value || '';
-      return { type, count, price, amount, method: '', note };
+      return { type, count, price, amount, method, installment_months, note };
     }).filter(item => item.count > 0 || item.price > 0 || item.note);
   }
 
@@ -1420,8 +1456,7 @@
         unit: source.unit || '',
         price: Number(source.unit_price || source.price || 0),
         qty: 1,
-        method: getDefaultMaterialMethod(),
-        installment_months: 0
+        method: ''
       });
     }
 
@@ -1447,40 +1482,6 @@
     return null;
   }
 
-
-  function getDefaultMaterialMethod() {
-    return (el['default-material-method']?.value || '').trim();
-  }
-
-  function getMaterialMethodOptionsHtml(selectedValue = '') {
-    const options = [
-      ['','선택'],
-      ['현금','현금'],
-      ['계좌이체','계좌이체'],
-      ['카드일시불','카드일시불'],
-      ['카드할부','카드할부'],
-      ['외상','외상']
-    ];
-    return options.map(([value,label]) => {
-      const selected = value === selectedValue ? ' selected' : '';
-      return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
-    }).join('');
-  }
-
-  function applyDefaultMaterialMethodToAll() {
-    const method = getDefaultMaterialMethod();
-    if (!method) {
-      alert('기본 결제방식을 선택하세요.');
-      return;
-    }
-    state.selectedMaterialsDetailed = state.selectedMaterialsDetailed.map(item => ({
-      ...item,
-      method,
-      installment_months: method === '카드할부' ? Number(item.installment_months || 0) : 0
-    }));
-    renderSelectedMaterialsDetailed();
-  }
-
   function renderSelectedMaterialsDetailed() {
     const box = el['selected-materials-detailed'];
     if (!box) return;
@@ -1490,23 +1491,16 @@
       return;
     }
 
-    box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => {
-      const method = item.method || '';
-      const showInstallment = method === '카드할부';
-      return `
-      <div class="material-row material-row-inline">
-        <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong></span>
+    box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => `
+      <div class="material-row">
+        <span style="min-width:140px;"><strong>${escapeHtml(item.name || '')}</strong></span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
-        <span class="material-unit">${escapeHtml(item.unit || '')}</span>
-        <span class="material-price">단가 ${formatNumber(item.price || 0)}</span>
-        <span class="material-total">합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
-        <span class="material-method-wrap">
-          <select data-material-method="${idx}" class="material-method-select">${getMaterialMethodOptionsHtml(method)}</select>
-          ${showInstallment ? `<input type="number" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" data-material-installment="${idx}" class="material-installment-input" placeholder="개월">` : ''}
-        </span>
+        <span>${escapeHtml(item.unit || '')}</span>
+        <span>단가 ${formatNumber(item.price || 0)}</span>
+        <span>합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
         <button type="button" class="btn" data-material-remove="${idx}">삭제</button>
       </div>
-    `;}).join('');
+    `).join('');
 
     box.querySelectorAll('[data-material-qty]').forEach(input => {
       input.addEventListener('input', () => {
@@ -1515,26 +1509,6 @@
         state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         renderSelectedMaterialsDetailed();
         updateMoneySummary();
-      });
-    });
-
-    box.querySelectorAll('[data-material-method]').forEach(select => {
-      select.addEventListener('change', () => {
-        const idx = Number(select.dataset.materialMethod);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].method = select.value || '';
-        if ((select.value || '') !== '카드할부') {
-          state.selectedMaterialsDetailed[idx].installment_months = 0;
-        }
-        renderSelectedMaterialsDetailed();
-      });
-    });
-
-    box.querySelectorAll('[data-material-installment]').forEach(input => {
-      input.addEventListener('input', () => {
-        const idx = Number(input.dataset.materialInstallment);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].installment_months = Number(input.value || 0);
       });
     });
 
@@ -1596,8 +1570,7 @@
             unit: '',
             price: 0,
             qty: 1,
-            method: getDefaultMaterialMethod(),
-            installment_months: 0
+            method: ''
           });
         }
 
@@ -2123,10 +2096,12 @@
 
   function resetMoneyFields() {
     if (el.has_money) el.has_money.checked = false;
-
+    if (el.money_method) el.money_method.value = '';
+    if (el.money_installment_months) el.money_installment_months.value = 0;
     if (el.money_note) el.money_note.value = '';
     if (el.other_cost) el.other_cost.value = 0;
     toggleMoneyBox(false);
+    toggleInstallmentField();
     updateMoneySummary();
   }
 
@@ -2134,6 +2109,7 @@
     const box = el['money-box'];
     if (!box) return;
     box.classList.toggle('hidden', !show);
+    toggleInstallmentField();
   }
 
   function toggleInstallmentField() {
@@ -2807,12 +2783,15 @@
     const machines = getSelectedChipValues('machines').join(', ');
 
     const laborRows = getLaborRows();
+    const moneyMethod = (el.money_method?.value || '').trim();
     const money = el.has_money?.checked ? {
       type: buildMoneyType(),
       total_amount: getLaborTotal() + getMaterialTotal() + getOtherTotal(),
       labor_total: getLaborTotal(),
       material_total: getMaterialTotal(),
       other_total: getOtherTotal(),
+      method: moneyMethod,
+      installment_months: moneyMethod === '카드할부' ? Number(el.money_installment_months?.value || 0) : 0,
       note: (el.money_note?.value || '').trim()
     } : null;
 
@@ -2825,7 +2804,7 @@
       crops,
       pests,
       machines,
-      work_hours: Number(el.work_hours?.value || 0),
+      work_hours: Number((el.work_hours?.value || '').trim() || 0),
       memo: JSON.stringify({
         memo_text: (el.memo?.value || '').trim(),
         repeat_days: Number(el.repeat_days?.value || 1),

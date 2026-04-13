@@ -341,6 +341,10 @@
       .money-table-wrap.money-mobile-view .money-table tr{display:block;}
       .money-table-wrap.money-mobile-view .money-table td{display:block; width:100%;}
       #material-search-input{min-width:0 !important; width:100%;}
+      #recent-task-picks, #recent-material-picks{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px;}
+      .quick-pick-chip{display:inline-flex; align-items:center; gap:4px; padding:6px 10px; border:1px solid #d9e3ff; background:#f7f9ff; color:#23408e; border-radius:999px; font-size:13px; cursor:pointer;}
+      .quick-pick-chip:hover{background:#eef3ff;}
+
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
     @media (max-width: 420px){
@@ -805,7 +809,13 @@
             <span>세부작업</span>
             <select id="task_name"></select>
           </label>
+          <label class="field">
+            <span>세부작업 빠른찾기</span>
+            <input type="text" id="task-name-search" list="task-name-datalist" placeholder="세부작업 검색 또는 빠른 선택">
+            <datalist id="task-name-datalist"></datalist>
+          </label>
         </div>
+        <div class="field hidden" id="recent-task-picks"></div>
 
         <div class="field">
           <span>작물</span>
@@ -814,6 +824,7 @@
 
         <div class="field">
           <span>병충해</span>
+          <input type="text" id="pest-search-input" placeholder="병충해 빠른 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; margin:8px 0 10px; width:100%;">
           <div id="pests-box" class="checks"></div>
         </div>
 
@@ -828,6 +839,7 @@
             <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
               <input type="text" id="material-search-input" placeholder="자재명 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:220px;">
             </div>
+            <div id="recent-material-picks" class="hidden" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
             <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
             <div class="material-method-toolbar">
               <label class="field" style="margin:0; min-width:220px;">

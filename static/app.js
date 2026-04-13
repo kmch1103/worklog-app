@@ -112,7 +112,7 @@
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-season-filter','money-type-filter','money-method-filter',
-      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
+      'btn-money-filter','money-list','money-mobile-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -2475,6 +2475,7 @@
 
   function renderMoney() {
     const wrap = el['money-list'];
+    const mobileWrap = el['money-mobile-list'];
     if (!wrap) return;
 
     const start = el['money-start']?.value || '';
@@ -2507,57 +2508,95 @@
     const creditRows = filtered.filter(row => row.method === '외상');
     if (el['money-credit-list']) {
       el['money-credit-list'].innerHTML = creditRows.length
-        ? `<table class="money-table"><thead><tr><th>날짜</th><th>작업</th><th>금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
+        ? `<div class="money-table-wrap"><table class="money-table"><thead><tr><th style="width:110px;">날짜</th><th style="width:180px;">작업</th><th class="money-num" style="width:110px;">금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
             <tr>
               <td>${escapeHtml(row.date || '')}</td>
               <td>${escapeHtml(row.task_name || '')}</td>
-              <td>${formatNumber(row.total_amount || row.total || 0)}</td>
-              <td>${escapeHtml(row.note || '')}</td>
+              <td class="money-num">${formatNumber(row.total_amount || row.total || 0)}</td>
+              <td class="money-note">${escapeHtml(row.note || '')}</td>
             </tr>
-          `).join('')}</tbody></table>`
+          `).join('')}</tbody></table></div>`
         : `<div class="empty-msg">외상 내역 없음</div>`;
     }
 
     if (!filtered.length) {
-      wrap.innerHTML = `<div class="empty-msg">금전 내역 없음</div>`;
+      wrap.innerHTML = `<tr><td colspan="9"><div class="empty-msg">금전 내역 없음</div></td></tr>`;
+      if (mobileWrap) mobileWrap.innerHTML = `<div class="empty-msg">금전 내역 없음</div>`;
       return;
     }
 
-    wrap.innerHTML = `
-      <table class="money-table">
-        <thead>
-          <tr>
-            <th>날짜</th>
-            <th>작업</th>
-            <th>구분</th>
-            <th>총금액</th>
-            <th>인건비</th>
-            <th>자재비</th>
-            <th>기타</th>
-            <th>방식</th>
-            <th>비고</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${filtered.map(row => `
-            <tr>
-              <td>${escapeHtml(row.date || '')}</td>
-              <td>${escapeHtml(row.task_name || '')}</td>
-              <td>${escapeHtml(row.type || '')}</td>
-              <td>${formatNumber(row.total_amount || row.total || 0)}</td>
-              <td>${formatNumber(row.labor_total || 0)}</td>
-              <td>${formatNumber(row.material_total || 0)}</td>
-              <td>${formatNumber(row.other_total || 0)}</td>
-              <td>${escapeHtml(row.method_display || row.method || '')}</td>
-              <td>${escapeHtml(row.note || '')}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
+    wrap.innerHTML = filtered.map(row => `
+      <tr>
+        <td>${escapeHtml(row.date || '')}</td>
+        <td>${escapeHtml(row.task_name || '')}</td>
+        <td>${escapeHtml(row.type || '')}</td>
+        <td class="money-num">${formatNumber(row.total_amount || row.total || 0)}</td>
+        <td class="money-num">${formatNumber(row.labor_total || 0)}</td>
+        <td class="money-num">${formatNumber(row.material_total || 0)}</td>
+        <td class="money-num">${formatNumber(row.other_total || 0)}</td>
+        <td>${escapeHtml(row.method_display || row.method || '')}</td>
+        <td class="money-note">${escapeHtml(row.note || '')}</td>
+      </tr>
+    `).join('');
+
+    if (!mobileWrap) return;
+
+    const grouped = filtered.reduce((acc, row) => {
+      const key = row.date || '날짜 없음';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+
+    const orderedDates = Object.keys(grouped).sort((a, b) => (a < b ? 1 : -1));
+
+    mobileWrap.innerHTML = orderedDates.map(date => {
+      const rows = grouped[date];
+      return `
+        <div class="money-day-group">
+          <h3 class="money-day-title">${escapeHtml(date)}</h3>
+          <div class="money-card-list">
+            ${rows.map(row => `
+              <div class="money-card">
+                <div class="money-card-top">
+                  <div class="money-card-task">${escapeHtml(row.task_name || '작업명 없음')}</div>
+                  <div class="money-card-type">${escapeHtml(row.type || '')}</div>
+                </div>
+                <div class="money-card-grid">
+                  <div class="money-card-item">
+                    <div class="money-card-label">총금액</div>
+                    <div class="money-card-value">${formatNumber(row.total_amount || row.total || 0)} 원</div>
+                  </div>
+                  <div class="money-card-item">
+                    <div class="money-card-label">방식</div>
+                    <div class="money-card-value">${escapeHtml(row.method_display || row.method || '-')}</div>
+                  </div>
+                  <div class="money-card-item">
+                    <div class="money-card-label">인건비</div>
+                    <div class="money-card-value">${formatNumber(row.labor_total || 0)} 원</div>
+                  </div>
+                  <div class="money-card-item">
+                    <div class="money-card-label">자재비</div>
+                    <div class="money-card-value">${formatNumber(row.material_total || 0)} 원</div>
+                  </div>
+                  <div class="money-card-item">
+                    <div class="money-card-label">기타</div>
+                    <div class="money-card-value">${formatNumber(row.other_total || 0)} 원</div>
+                  </div>
+                  <div class="money-card-item">
+                    <div class="money-card-label">비고</div>
+                    <div class="money-card-value">${escapeHtml(row.note || '-')}</div>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
-  function bindHistoryNavigation() {
+  function bindHistoryNavigationfunction bindHistoryNavigation() {
     window.addEventListener('popstate', (event) => {
       const page = event.state?.page || state.currentPage || 'calendar';
       const modal = event.state?.modal || '';

@@ -79,21 +79,30 @@
     .season-panel.collapsed .season-panel-body{display:none;}
     .season-panel-summary{display:none; margin-top:10px; color:#475569; font-size:13px; line-height:1.5;}
     .season-panel.collapsed .season-panel-summary{display:block;}
-    .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
-    .money-summary > div{background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; font-weight:700; color:#334155; min-width:0;}
-    .money-summary > div strong{display:block; margin-top:6px; font-size:28px; line-height:1.1; color:#0f172a;}
-    .money-filter{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:14px; align-items:stretch;}
-    .money-filter input,.money-filter select,.money-filter .btn{width:100%; min-height:46px;}
-    .money-table-wrap{border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; background:#fff;}
-    .money-table{width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;}
-    .money-table thead th{background:#f8fafc; color:#334155; font-size:14px; font-weight:800; position:sticky; top:0; z-index:1;}
-    .money-table th,.money-table td{padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; word-break:keep-all;}
-    .money-table td:nth-child(4), .money-table th:nth-child(4){text-align:right; width:120px;}
-    .money-table td:nth-child(1), .money-table th:nth-child(1){width:120px;}
-    .money-table td:nth-child(3), .money-table th:nth-child(3){width:100px;}
-    .money-table td:nth-child(5), .money-table th:nth-child(5){width:110px;}
-    .money-table tbody tr:hover{background:#fafcff;}
-    .money-table .money-amount{font-weight:800; color:#0f172a;}
+    .money-summary{display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;}
+    .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+    .money-filter input,.money-filter select,.money-filter .btn{width:auto; min-height:40px;}
+    .money-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+    .money-table{width:100%;}
+    .money-table th,.money-table td{padding:10px; border-bottom:1px solid #e5e7eb; text-align:left;}
+
+    @media (min-width: 769px){
+      .money-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
+      .money-summary > div{background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; font-weight:700; color:#334155; min-width:0;}
+      .money-summary > div strong{display:block; margin-top:6px; font-size:28px; line-height:1.1; color:#0f172a;}
+      .money-filter{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:14px; align-items:stretch;}
+      .money-filter input,.money-filter select,.money-filter .btn{width:100%; min-height:46px;}
+      .money-table-wrap{border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; background:#fff;}
+      .money-table{border-collapse:separate; border-spacing:0; table-layout:fixed;}
+      .money-table thead th{background:#f8fafc; color:#334155; font-size:14px; font-weight:800; position:sticky; top:0; z-index:1;}
+      .money-table th,.money-table td{padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; word-break:keep-all;}
+      .money-table td:nth-child(4), .money-table th:nth-child(4){text-align:right; width:120px;}
+      .money-table td:nth-child(1), .money-table th:nth-child(1){width:120px;}
+      .money-table td:nth-child(3), .money-table th:nth-child(3){width:100px;}
+      .money-table td:nth-child(5), .money-table th:nth-child(5){width:110px;}
+      .money-table tbody tr:hover{background:#fafcff;}
+      .money-table .money-amount{font-weight:800; color:#0f172a;}
+    }
     .calendar-grid{display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; align-items:stretch;}
     .calendar-week-header{display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; margin-bottom:8px; text-align:center; font-weight:700; color:#475569;}
     .calendar-week-header > div{padding:6px 0;}
@@ -311,13 +320,9 @@
       .season-list{grid-template-columns:1fr;}
       .season-panel-header{align-items:flex-start;}
       .season-panel-toggle{font-size:12px; padding:5px 9px;}
-      .money-summary{grid-template-columns:1fr 1fr; gap:10px;}
-      .money-summary > div{padding:12px;}
-      .money-summary > div strong{font-size:20px;}
       .money-filter{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
       .money-filter .btn{width:100%;}
-      .money-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
-      .money-table{min-width:760px;}
+      .money-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
       #material-search-input{min-width:0 !important; width:100%;}
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}

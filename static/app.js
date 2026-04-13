@@ -111,7 +111,7 @@
       'has_money','money-box','money_method','money_installment_wrap','money_installment_months','money_note','other_cost',
       'money_labor_total','money_material_total','money_total_amount',
 
-      'money-start','money-end','money-season-filter','money-type-filter','money-method-filter',
+      'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
@@ -2473,6 +2473,62 @@
     `).join('');
   }
 
+
+  function applyMoneyQuickPeriod() {
+    const period = el['money-period-filter']?.value || '';
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    if (!el['money-start'] || !el['money-end']) return;
+
+    if (period === 'today') {
+      const date = `${yyyy}-${mm}-${dd}`;
+      el['money-start'].value = date;
+      el['money-end'].value = date;
+      return;
+    }
+    if (period === 'month') {
+      const start = `${yyyy}-${mm}-01`;
+      const lastDay = String(new Date(yyyy, today.getMonth() + 1, 0).getDate()).padStart(2, '0');
+      const end = `${yyyy}-${mm}-${lastDay}`;
+      el['money-start'].value = start;
+      el['money-end'].value = end;
+      return;
+    }
+    if (!period) {
+      el['money-start'].value = '';
+      el['money-end'].value = '';
+    }
+  }
+
+  function syncMoneyQuickPeriodFromDates() {
+    const start = el['money-start']?.value || '';
+    const end = el['money-end']?.value || '';
+    if (!el['money-period-filter']) return;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    const monthStart = `${yyyy}-${mm}-01`;
+    const monthEnd = `${yyyy}-${mm}-${String(new Date(yyyy, today.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+
+    if (!start && !end) {
+      el['money-period-filter'].value = '';
+    } else if (start === todayStr && end === todayStr) {
+      el['money-period-filter'].value = 'today';
+    } else if (start === monthStart && end === monthEnd) {
+      el['money-period-filter'].value = 'month';
+    } else {
+      el['money-period-filter'].value = 'custom';
+    }
+  }
+
+  function normalizeMoneyMethodFilterValue(value) {
+    return value || '';
+  }
+
   function renderMoney() {
     const wrap = el['money-list'];
     if (!wrap) return;
@@ -2480,7 +2536,8 @@
     const start = el['money-start']?.value || '';
     const end = el['money-end']?.value || '';
     const typeFilter = el['money-type-filter']?.value || '';
-    const methodFilter = el['money-method-filter']?.value || '';
+    const methodFilter = normalizeMoneyMethodFilterValue(el['money-method-filter']?.value || '');
+    const keyword = (el['money-keyword-filter']?.value || '').trim().toLowerCase();
     const table = wrap.closest('table');
     const tableWrap = wrap.closest('.money-table-wrap');
     const thead = table?.querySelector('thead');
@@ -2490,7 +2547,27 @@
       if (start && row.date < start) return false;
       if (end && row.date > end) return false;
       if (typeFilter && row.type !== typeFilter) return false;
-      if (methodFilter && row.method !== methodFilter) return false;
+      if (methodFilter) {
+        const rowMethod = row.method || '';
+        const isCardMethod = rowMethod === '카드일시불' || rowMethod === '카드할부';
+        if (methodFilter === '카드') {
+          if (!isCardMethod) return false;
+        } else if (rowMethod !== methodFilter) {
+          return false;
+        }
+      }
+      if (keyword) {
+        const text = [
+          row.date,
+          row.task_name,
+          row.type,
+          row.method,
+          row.method_display,
+          row.note,
+          row.work_memo
+        ].join(' ').toLowerCase();
+        if (!text.includes(keyword)) return false;
+      }
       return true;
     });
 

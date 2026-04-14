@@ -36,6 +36,7 @@
     seasons: [],
     editingSeasonId: null,
     editingTaskOptionId: null,
+    editingIncomeId: null,
     seasonPanelCollapsed: true
   };
 
@@ -115,7 +116,7 @@
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
-      'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','btn-open-income-modal','income-modal','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
+      'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -282,16 +283,24 @@
     on(el['btn-save-income'], 'click', saveIncome);
   }
 
-  function openIncomeModal() {
-    if (el['income_date']) el['income_date'].value = fmtDate(new Date());
-    if (el['income_type']) el['income_type'].value = '판매수익';
-    if (el['income_amount']) el['income_amount'].value = '';
-    if (el['income_method']) el['income_method'].value = '현금';
-    if (el['income_note']) el['income_note'].value = '';
+  function openIncomeModal(income = null) {
+    state.editingIncomeId = income && income.id ? income.id : null;
+    if (el['income-modal-title']) {
+      el['income-modal-title'].textContent = state.editingIncomeId ? '수익 수정' : '수익 입력';
+    }
+    if (el['income_date']) el['income_date'].value = income?.income_date || fmtDate(new Date());
+    if (el['income_type']) el['income_type'].value = income?.income_type || '판매수익';
+    if (el['income_amount']) el['income_amount'].value = income?.amount || '';
+    if (el['income_method']) el['income_method'].value = income?.method || '현금';
+    if (el['income_note']) el['income_note'].value = income?.note || '';
     removeHidden(el['income-modal']);
   }
 
   function closeIncomeModal() {
+    state.editingIncomeId = null;
+    if (el['income-modal-title']) {
+      el['income-modal-title'].textContent = '수익 입력';
+    }
     addHidden(el['income-modal']);
   }
 
@@ -318,15 +327,56 @@
     }
 
     try {
-      await apiPost('/api/incomes', payload);
+      if (state.editingIncomeId) {
+        await apiPut(`/api/incomes/${state.editingIncomeId}`, payload);
+      } else {
+        await apiPost('/api/incomes', payload);
+      }
       await loadMoney();
       renderMoney();
       closeIncomeModal();
-      alert('수익을 저장했습니다.');
+      alert(state.editingIncomeId ? '수익을 수정했습니다.' : '수익을 저장했습니다.');
     } catch (e) {
       console.error(e);
       alert(`수익 저장 실패: ${e.message || e}`);
     }
+  }
+
+  async function editIncomeById(incomeId) {
+    const row = (state.incomeRows || []).find(item => String(item.id) === String(incomeId));
+    if (!row) {
+      alert('수익 내역을 찾지 못했습니다.');
+      return;
+    }
+    openIncomeModal(row);
+  }
+
+  async function deleteIncomeById(incomeId) {
+    const row = (state.incomeRows || []).find(item => String(item.id) === String(incomeId));
+    if (!row) {
+      alert('수익 내역을 찾지 못했습니다.');
+      return;
+    }
+    if (!confirm('이 수익 내역을 삭제할까요?')) return;
+
+    try {
+      await apiDelete(`/api/incomes/${incomeId}`);
+      await loadMoney();
+      renderMoney();
+      alert('수익을 삭제했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`수익 삭제 실패: ${e.message || e}`);
+    }
+  }
+
+  function bindIncomeRowActions() {
+    document.querySelectorAll('[data-income-edit]').forEach(btn => {
+      btn.addEventListener('click', () => editIncomeById(btn.dataset.incomeEdit));
+    });
+    document.querySelectorAll('[data-income-delete]').forEach(btn => {
+      btn.addEventListener('click', () => deleteIncomeById(btn.dataset.incomeDelete));
+    });
   }
 
   function bindMaterialButtons() {
@@ -2945,6 +2995,7 @@ function filterChipOptions(type, keyword) {
       const amount = Number(row.amount || 0);
       const method = row.method || '';
       return {
+        id: row.id,
         row_kind: 'income',
         date: row.income_date || '',
         task_name: row.income_type || '수익',
@@ -3042,7 +3093,7 @@ function filterChipOptions(type, keyword) {
 
     if (!filtered.length) {
       wrap.innerHTML = isMobile
-        ? `<tr><td colspan="6"><div class="empty-msg">금전 내역 없음</div></td></tr>`
+        ? `<tr><td colspan="7"><div class="empty-msg">금전 내역 없음</div></td></tr>`
         : `<div class="empty-msg">금전 내역 없음</div>`;
       return;
     }
@@ -3073,12 +3124,14 @@ function filterChipOptions(type, keyword) {
                     <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>
                   </div>
                   ${row.note ? `<div class="money-mobile-card-note"><b>비고</b><span>${escapeHtml(row.note || '')}</span></div>` : ''}
+                  ${row.row_kind === 'income' ? `<div class="money-mobile-card-actions"><button class="btn" data-income-edit="${escapeHtml(String(row.id || ''))}">수정</button><button class="btn" data-income-delete="${escapeHtml(String(row.id || ''))}">삭제</button></div>` : ''}
                 </div>
               `).join('')}
             </div>
           </td>
         </tr>
       `).join('');
+      bindIncomeRowActions();
       return;
     }
 
@@ -3090,8 +3143,15 @@ function filterChipOptions(type, keyword) {
         <td>${row.row_kind === 'income' ? '+' : ''}${formatNumber(row.total_amount || 0)}</td>
         <td>${escapeHtml(row.method_display || row.method || '')}</td>
         <td>${escapeHtml(row.note || '')}</td>
+        <td>
+          ${row.row_kind === 'income'
+            ? `<div class="money-row-actions"><button class="btn" data-income-edit="${escapeHtml(String(row.id || ''))}">수정</button><button class="btn" data-income-delete="${escapeHtml(String(row.id || ''))}">삭제</button></div>`
+            : ''}
+        </td>
       </tr>
     `).join('');
+
+    bindIncomeRowActions();
   }
 
 

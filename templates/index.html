@@ -90,9 +90,16 @@
     .money-monthly-panel{margin:14px 0; border:1px solid #e2e8f0; border-radius:16px; background:#fff; padding:16px;}
     .money-monthly-panel h3{margin:0 0 10px; font-size:18px;}
     .money-monthly-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
-    .money-monthly-table{width:100%; border-collapse:separate; border-spacing:0;}
-    .money-monthly-table th,.money-monthly-table td{padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left;}
+    .money-monthly-table{width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;}
+    .money-monthly-table col.col-month{width:18%;}
+    .money-monthly-table col.col-income,
+    .money-monthly-table col.col-expense,
+    .money-monthly-table col.col-net{width:27.33%;}
+    .money-monthly-table th,.money-monthly-table td{padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:middle;}
     .money-monthly-table th{background:#f8fafc; color:#334155; font-size:14px; font-weight:800;}
+    .money-monthly-table th:nth-child(2),
+    .money-monthly-table th:nth-child(3),
+    .money-monthly-table th:nth-child(4),
     .money-monthly-table td:nth-child(2),
     .money-monthly-table td:nth-child(3),
     .money-monthly-table td:nth-child(4){text-align:right;}
@@ -571,6 +578,12 @@
             <h3>월별 정산</h3>
             <div class="money-monthly-table-wrap">
               <table class="money-monthly-table">
+                <colgroup>
+                  <col class="col-month">
+                  <col class="col-income">
+                  <col class="col-expense">
+                  <col class="col-net">
+                </colgroup>
                 <thead>
                   <tr>
                     <th>월</th>

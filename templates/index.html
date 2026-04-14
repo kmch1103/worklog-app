@@ -47,7 +47,7 @@
     .option-subtext{font-size:12px; color:#64748b;}
     .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
     .recommended-materials-empty{font-size:13px; color:#64748b;}
-    .options-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; align-items:start;}
+    .options-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:start;}
     .option-panel{min-width:0;}
     .option-panel h3{font-size:26px; margin-bottom:12px;}
     .option-panel .inline-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;}
@@ -60,7 +60,7 @@
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .btn[disabled]{opacity:.5; cursor:not-allowed;}
     .season-panel{margin-top:16px;}
-    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
+    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
     @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
     .season-form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
@@ -190,6 +190,7 @@
       .task-entry-stack{display:grid; grid-template-columns:1fr; gap:12px;}
       .task-search-field input{min-height:46px; font-size:16px;}
       .task-select-field select{min-height:46px;}
+      .task-category-field select{min-height:46px;}
       .task-inline-help{margin-top:-2px; margin-bottom:4px;}
     }
 
@@ -626,6 +627,15 @@
             <div id="options-tasks" class="option-list"></div>
           </div>
 
+          <div class="panel option-panel mobile-active" data-option-panel="machines">
+            <h3>사용기계</h3>
+            <div class="inline-form">
+              <input type="text" id="new-machines" placeholder="새 사용기계">
+              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
+            </div>
+            <div id="options-machines" class="option-list"></div>
+          </div>
+
           <div class="panel option-panel mobile-active" data-option-panel="pests">
             <h3>병충해</h3>
             <div class="inline-form">
@@ -634,15 +644,6 @@
               <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
             </div>
             <div id="options-pests" class="option-list"></div>
-          </div>
-
-          <div class="panel option-panel mobile-active" data-option-panel="machines">
-            <h3>사용기계</h3>
-            <div class="inline-form">
-              <input type="text" id="new-machines" placeholder="새 사용기계">
-              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
-            </div>
-            <div id="options-machines" class="option-list"></div>
           </div>
         </div>
 
@@ -799,16 +800,17 @@
         </div>
         <div class="inline-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
 
-        <div class="grid two task-grid">
+        <div>
           <label class="field">
             <span>날씨</span>
             <select id="weather"></select>
           </label>
-          <label class="field">
-            <span>작업분류</span>
-            <select id="task_category"></select>
-          </label>
         </div>
+
+        <label class="field task-category-field">
+          <span>작업분류</span>
+          <select id="task_category"></select>
+        </label>
 
         <div class="task-entry-stack">
           <label class="field task-search-field">

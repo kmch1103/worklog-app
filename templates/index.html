@@ -47,11 +47,14 @@
     .option-subtext{font-size:12px; color:#64748b;}
     .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
     .recommended-materials-empty{font-size:13px; color:#64748b;}
-    .options-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; align-items:start;}
+    .options-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:start;}
     .option-panel{min-width:0;}
     .option-panel h3{font-size:26px; margin-bottom:12px;}
     .option-panel .inline-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;}
     .option-panel[data-option-panel="pests"] .inline-form{grid-template-columns:1fr;}
+    .option-panel[data-option-panel="tasks"] .inline-form{grid-template-columns:1fr;}
+    #work-modal .modal-header{flex-wrap:nowrap; align-items:flex-start;}
+    #work-modal-title{white-space:nowrap; word-break:keep-all; flex:0 0 auto; min-width:max-content; margin-right:12px;}
     .option-panel .inline-form input{min-width:0; width:100%;}
     .option-item{align-items:flex-start;}
     .option-item .btn{padding:8px 10px; white-space:nowrap;}
@@ -60,7 +63,7 @@
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .btn[disabled]{opacity:.5; cursor:not-allowed;}
     .season-panel{margin-top:16px;}
-    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
+    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
     @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
     .season-form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
@@ -564,8 +567,8 @@
           <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
           <button class="btn option-tab-btn" data-option-tab="task_categories">작업분류</button>
           <button class="btn option-tab-btn" data-option-tab="tasks">세부작업</button>
-          <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
           <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
+          <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
         </div>
 
         <div id="season-panel" class="panel season-panel compact collapsed">
@@ -621,13 +624,20 @@
           <div class="panel option-panel mobile-active" data-option-panel="tasks">
             <h3>세부작업</h3>
             <div class="inline-form">
-              <div class="grid two" style="width:100%;">
-                <select id="new-task-category"></select>
-                <input type="text" id="new-tasks" placeholder="새 세부작업">
-              </div>
+              <select id="new-task-category"></select>
+              <input type="text" id="new-tasks" placeholder="새 세부작업">
               <button class="btn primary" onclick="saveOption('tasks', 'new-tasks', 'new-task-category')">추가</button>
             </div>
             <div id="options-tasks" class="option-list"></div>
+          </div>
+
+          <div class="panel option-panel mobile-active" data-option-panel="machines">
+            <h3>사용기계</h3>
+            <div class="inline-form">
+              <input type="text" id="new-machines" placeholder="새 사용기계">
+              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
+            </div>
+            <div id="options-machines" class="option-list"></div>
           </div>
 
           <div class="panel option-panel mobile-active" data-option-panel="pests">
@@ -638,15 +648,6 @@
               <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
             </div>
             <div id="options-pests" class="option-list"></div>
-          </div>
-
-          <div class="panel option-panel mobile-active" data-option-panel="machines">
-            <h3>사용기계</h3>
-            <div class="inline-form">
-              <input type="text" id="new-machines" placeholder="새 사용기계">
-              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
-            </div>
-            <div id="options-machines" class="option-list"></div>
           </div>
         </div>
 

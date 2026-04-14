@@ -91,7 +91,7 @@
       'labor_cost','work_hours','memo',
       'btn-save-work','btn-cancel-work','works-list',
 
-      'material_name','material_unit','material_stock','material_price','material_memo',
+      'material_name','material_unit','material_stock','material_price','material_price_last_year','material_price_this_year','material_memo',
       'btn-save-material','btn-open-material-modal','btn-close-material-modal','btn-cancel-material',
       'material-modal','material-modal-title','material-search-box','material-search-keyword','materials-list',
 
@@ -113,9 +113,7 @@
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
-      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit',
-      'money-dashboard-total','money-dashboard-material','money-dashboard-labor','money-dashboard-other','money-dashboard-card',
-      'money-credit-list',
+      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -2474,6 +2472,8 @@ function filterChipOptions(type, keyword) {
     if (el.material_unit) el.material_unit.value = item.unit || state.materialUnits[0] || '';
     if (el.material_stock) el.material_stock.value = item.stock_qty ?? item.stock ?? 0;
     if (el.material_price) el.material_price.value = item.unit_price ?? item.price ?? 0;
+    if (el.material_price_last_year) el.material_price_last_year.value = item.price_last_year ?? 0;
+    if (el.material_price_this_year) el.material_price_this_year.value = (item.price_this_year ?? item.unit_price ?? item.price ?? 0);
     if (el.material_memo) el.material_memo.value = item.memo || '';
 
     removeHidden(el['material-modal']);
@@ -2492,6 +2492,8 @@ function filterChipOptions(type, keyword) {
     if (el.material_unit) el.material_unit.value = state.materialUnits[0] || '';
     if (el.material_stock) el.material_stock.value = '0';
     if (el.material_price) el.material_price.value = '0';
+    if (el.material_price_last_year) el.material_price_last_year.value = '0';
+    if (el.material_price_this_year) el.material_price_this_year.value = '0';
     if (el.material_memo) el.material_memo.value = '';
     if (el['material-search-keyword']) el['material-search-keyword'].value = '';
     if (el['material-search-box']) el['material-search-box'].innerHTML = '';
@@ -2526,6 +2528,8 @@ function filterChipOptions(type, keyword) {
         el.material_name.value = item.name || '';
         el.material_unit.value = item.unit || '';
         el.material_price.value = item.unit_price || item.price || 0;
+        if (el.material_price_last_year) el.material_price_last_year.value = item.price_last_year ?? 0;
+        if (el.material_price_this_year) el.material_price_this_year.value = (item.price_this_year ?? item.unit_price ?? item.price ?? 0);
       });
     });
   }
@@ -2536,8 +2540,14 @@ function filterChipOptions(type, keyword) {
       unit: el.material_unit?.value || '',
       stock_qty: Number(el.material_stock?.value || 0),
       unit_price: Number(el.material_price?.value || 0),
+      price_last_year: Number(el.material_price_last_year?.value || 0),
+      price_this_year: Number(el.material_price_this_year?.value || 0),
       memo: (el.material_memo?.value || '').trim()
     };
+
+    if (!payload.unit_price && payload.price_this_year > 0) {
+      payload.unit_price = payload.price_this_year;
+    }
 
     if (!payload.name) {
       alert('자재명을 입력하세요.');
@@ -2595,7 +2605,7 @@ function filterChipOptions(type, keyword) {
     const q = (state.materialListSearchKeyword || '').trim().toLowerCase();
 
     const filtered = state.materials.filter(item => {
-      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''}`.toLowerCase();
+      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''} ${item.price_last_year || ''} ${item.price_this_year || ''}`.toLowerCase();
       return text.includes(q);
     });
 
@@ -2658,7 +2668,11 @@ function filterChipOptions(type, keyword) {
       <div class="day-item">
         <div><strong>${escapeHtml(item.name || '')}</strong></div>
         <div>재고: ${formatNumber(item.stock_qty || item.stock || 0)} ${escapeHtml(item.unit || '')}</div>
-        <div>단가: ${formatNumber(item.unit_price || item.price || 0)}</div>
+        <div>현재단가: ${formatNumber(item.unit_price || item.price || 0)}</div>
+        <div>작년단가: ${formatNumber(item.price_last_year || 0)}</div>
+        <div>올해단가: ${formatNumber(item.price_this_year || item.unit_price || item.price || 0)}</div>
+        <div>차이: ${formatPriceDiff(item.price_last_year || 0, item.price_this_year || item.unit_price || item.price || 0)}</div>
+        <div>증감률: ${formatRateDiff(item.price_last_year || 0, item.price_this_year || item.unit_price || item.price || 0)}</div>
         <div>메모: ${escapeHtml(item.memo || '')}</div>
         <div class="item-actions">
           <button type="button" class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
@@ -2772,17 +2786,8 @@ function filterChipOptions(type, keyword) {
     const cardLump = filtered.reduce((sum, row) => sum + Number(row.card_lump_amount || 0), 0);
     const cardInstall = filtered.reduce((sum, row) => sum + Number(row.card_install_amount || 0), 0);
     const credit = filtered.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0);
-    const materialTotal = filtered.reduce((sum, row) => sum + Number(row.material_total || 0), 0);
-    const laborTotal = filtered.reduce((sum, row) => sum + Number(row.labor_total || 0), 0);
-    const otherTotal = filtered.reduce((sum, row) => sum + Number(row.other_total || 0), 0);
-    const cardTotal = cardLump + cardInstall;
 
     if (el['money-total']) el['money-total'].innerText = formatNumber(total);
-    if (el['money-dashboard-total']) el['money-dashboard-total'].innerText = formatNumber(total);
-    if (el['money-dashboard-material']) el['money-dashboard-material'].innerText = formatNumber(materialTotal);
-    if (el['money-dashboard-labor']) el['money-dashboard-labor'].innerText = formatNumber(laborTotal);
-    if (el['money-dashboard-other']) el['money-dashboard-other'].innerText = formatNumber(otherTotal);
-    if (el['money-dashboard-card']) el['money-dashboard-card'].innerText = formatNumber(cardTotal);
     if (el['money-cash']) el['money-cash'].innerText = formatNumber(cash);
     if (el['money-transfer']) el['money-transfer'].innerText = formatNumber(transfer);
     if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(cardLump);
@@ -2938,6 +2943,23 @@ function filterChipOptions(type, keyword) {
 
   function formatNumber(value) {
     return Number(value || 0).toLocaleString('ko-KR');
+  }
+
+  function formatPriceDiff(lastYear, thisYear) {
+    const diff = Number(thisYear || 0) - Number(lastYear || 0);
+    const sign = diff > 0 ? '+' : '';
+    return `${sign}${formatNumber(diff)}`;
+  }
+
+  function formatRateDiff(lastYear, thisYear) {
+    const base = Number(lastYear || 0);
+    const current = Number(thisYear || 0);
+    if (base <= 0) {
+      return current > 0 ? '신규' : '0%';
+    }
+    const rate = ((current - base) / base) * 100;
+    const sign = rate > 0 ? '+' : '';
+    return `${sign}${rate.toFixed(1)}%`;
   }
 
   function formatWorkTimeText(meta, work) {

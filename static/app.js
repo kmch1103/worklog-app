@@ -116,7 +116,7 @@
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
-      'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
+      'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','money-scope-label','money-scope-month-count','money-scope-row-count','money-monthly-list','money-monthly-empty','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -2953,6 +2953,68 @@ function filterChipOptions(type, keyword) {
     }
   }
 
+
+  function getSelectedMoneyScopeLabel() {
+    const seasonValue = el['money-season-filter']?.value || '';
+    if (seasonValue === 'current') return '현재시즌';
+    if (seasonValue && seasonValue !== 'all') {
+      const season = (state.seasons || []).find(item => String(item.id) === String(seasonValue));
+      if (season) return season.season_name || '선택시즌';
+    }
+
+    const start = el['money-start']?.value || '';
+    const end = el['money-end']?.value || '';
+    if (start && end) return `${start} ~ ${end}`;
+    if (start) return `${start} 이후`;
+    if (end) return `${end} 이전`;
+    return '전체';
+  }
+
+  function renderMonthlySettlement(rows) {
+    const body = el['money-monthly-list'];
+    const empty = el['money-monthly-empty'];
+    if (!body) return;
+
+    const grouped = {};
+    (rows || []).forEach(row => {
+      const date = row.date || '';
+      if (!date || date.length < 7) return;
+      const monthKey = date.slice(0, 7);
+      if (!grouped[monthKey]) {
+        grouped[monthKey] = { income: 0, expense: 0 };
+      }
+      if (row.row_kind === 'income') {
+        grouped[monthKey].income += Number(row.total_amount || 0);
+      } else {
+        grouped[monthKey].expense += Number(row.total_amount || 0);
+      }
+    });
+
+    const monthKeys = Object.keys(grouped).sort().reverse();
+    if (!monthKeys.length) {
+      body.innerHTML = '';
+      if (empty) empty.classList.remove('hidden');
+      if (el['money-scope-month-count']) el['money-scope-month-count'].textContent = '월 수: 0';
+      return;
+    }
+
+    if (empty) empty.classList.add('hidden');
+    if (el['money-scope-month-count']) el['money-scope-month-count'].textContent = `월 수: ${monthKeys.length}`;
+
+    body.innerHTML = monthKeys.map(monthKey => {
+      const item = grouped[monthKey];
+      const net = item.income - item.expense;
+      return `
+        <tr>
+          <td>${escapeHtml(monthKey)}</td>
+          <td>${formatNumber(item.income)}</td>
+          <td>${formatNumber(item.expense)}</td>
+          <td>${net > 0 ? '+' : ''}${formatNumber(net)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   function normalizeMoneyMethodFilterValue(value) {
     return value || '';
   }
@@ -3073,6 +3135,9 @@ function filterChipOptions(type, keyword) {
     if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(cardLump);
     if (el['money-card-install']) el['money-card-install'].innerText = formatNumber(cardInstall);
     if (el['money-credit']) el['money-credit'].innerText = formatNumber(credit);
+    if (el['money-scope-label']) el['money-scope-label'].textContent = `정산범위: ${getSelectedMoneyScopeLabel()}`;
+    if (el['money-scope-row-count']) el['money-scope-row-count'].textContent = `건수: ${filtered.length}`;
+    renderMonthlySettlement(filtered);
 
     const creditRows = filtered.filter(row => row.method === '외상');
     if (el['money-credit-list']) {
@@ -3107,7 +3172,7 @@ function filterChipOptions(type, keyword) {
 
       wrap.innerHTML = Object.entries(grouped).map(([date, rows]) => `
         <tr class="money-mobile-group-row">
-          <td colspan="6">
+          <td colspan="7">
             <div class="money-mobile-date">${escapeHtml(date)}</div>
             <div class="money-mobile-cards">
               ${rows.map(row => `

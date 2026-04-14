@@ -1401,5 +1401,49 @@ def get_money():
     return jsonify(result)
 
 
+
+
+# =========================
+# EXCEL EXPORT
+# =========================
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+
+@app.route("/api/export_excel", methods=["GET"])
+def export_excel():
+    conn = db()
+    works = conn.execute("SELECT * FROM works ORDER BY start_date DESC").fetchall()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "작업일지"
+
+    headers = ["날짜","작업","작물","병충해","기계","작업시간"]
+    ws.append(headers)
+
+    for row in works:
+        ws.append([
+            row["start_date"],
+            row["task_name"],
+            row["crops"],
+            row["pests"],
+            row["machines"],
+            row["work_hours"]
+        ])
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="작업일지.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 if __name__ == "__main__":
     app.run(debug=True)

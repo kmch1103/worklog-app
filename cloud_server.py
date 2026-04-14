@@ -294,50 +294,47 @@ def import_old_db_into_current(uploaded_db_path):
 
 
 
-def parse_work_memo(raw_text):
+def parse_memo_json(raw_value):
+    if isinstance(raw_value, dict):
+        return raw_value
+    raw_text = (raw_value or '').strip()
+    if not raw_text:
+        return {}
     try:
-        data = json.loads(raw_text or "{}")
-        return data if isinstance(data, dict) else {}
+        parsed = json.loads(raw_text)
+        return parsed if isinstance(parsed, dict) else {}
     except Exception:
         return {}
 
 
-def iter_material_stock_changes(materials):
-    for item in (materials or []):
-        name = normalize_name(item.get("name"))
-        if not name:
-            continue
-        qty = safe_float(item.get("qty"), 0)
-        action = normalize_name(item.get("action")) or "사용"
-        if qty == 0:
-            continue
-        if action == "구입":
-            delta = qty
-        elif action == "반품":
-            delta = -qty
-        else:
-            delta = -qty
-        yield name, delta, normalize_name(item.get("unit")), safe_float(item.get("price"), 0)
+def apply_material_stock_change(conn, materials, mode='apply'):
+    cur = conn.cursor()
 
+    for item in materials or []:
+        name = normalize_name(item.get('name'))
+        qty = safe_float(item.get('qty'), 0)
+        action = normalize_name(item.get('action') or item.get('behavior') or item.get('type') or '사용')
 
-def apply_material_stock_changes(cur, materials, reverse=False):
-    for name, delta, unit, price in iter_material_stock_changes(materials):
-        applied_delta = -delta if reverse else delta
-        row = cur.execute("SELECT id, stock_qty, unit, unit_price FROM materials WHERE name = ?", (name,)).fetchone()
-        if row:
-            next_qty = safe_float(row["stock_qty"], 0) + applied_delta
-            next_unit = unit or normalize_name(row["unit"])
-            next_price = price if price > 0 else safe_float(row["unit_price"], 0)
-            cur.execute(
-                "UPDATE materials SET stock_qty = ?, unit = ?, unit_price = ? WHERE id = ?",
-                (next_qty, next_unit, next_price, row["id"])
-            )
+        if not name or qty == 0:
+            continue
+
+        stock_delta = 0
+        if action == '구입':
+            stock_delta = qty
+        elif action == '사용':
+            stock_delta = -qty
+        elif action == '반품':
+            stock_delta = -qty
         else:
-            cur.execute(
-                "INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo) VALUES (?, ?, ?, ?, 0, 0, '')",
-                (name, unit, applied_delta, price)
-            )
-        sync_material_option(cur, name)
+            continue
+
+        if mode == 'revert':
+            stock_delta = -stock_delta
+
+        cur.execute(
+            'UPDATE materials SET stock_qty = COALESCE(stock_qty, 0) + ? WHERE name = ?',
+            (stock_delta, name)
+        )
 
 def current_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -515,6 +512,10 @@ def create_work():
 
     conn = db()
     try:
+        memo_text = data.get("memo", "")
+        memo_obj = parse_memo_json(memo_text)
+        apply_material_stock_change(conn, memo_obj.get("materials", []), mode='apply')
+
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO works (
@@ -532,10 +533,8 @@ def create_work():
             data.get("pests", ""),
             data.get("machines", ""),
             float(data.get("work_hours") or 0),
-            data.get("memo", "")
+            memo_text
         ))
-        memo_obj = parse_work_memo(data.get("memo", ""))
-        apply_material_stock_changes(cur, memo_obj.get("materials") or [], reverse=False)
         conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -562,12 +561,16 @@ def update_work(work_id):
 
     conn = db()
     try:
-        cur = conn.cursor()
-        old_row = cur.execute("SELECT memo FROM works WHERE id = ?", (work_id,)).fetchone()
+        old_row = conn.execute("SELECT memo FROM works WHERE id = ?", (work_id,)).fetchone()
         if old_row:
-            old_memo = parse_work_memo(old_row["memo"])
-            apply_material_stock_changes(cur, old_memo.get("materials") or [], reverse=True)
+            old_memo = parse_memo_json(old_row["memo"])
+            apply_material_stock_change(conn, old_memo.get("materials", []), mode='revert')
 
+        memo_text = data.get("memo", "")
+        memo_obj = parse_memo_json(memo_text)
+        apply_material_stock_change(conn, memo_obj.get("materials", []), mode='apply')
+
+        cur = conn.cursor()
         cur.execute("""
             UPDATE works
             SET start_date = ?,
@@ -591,11 +594,9 @@ def update_work(work_id):
             data.get("pests", ""),
             data.get("machines", ""),
             float(data.get("work_hours") or 0),
-            data.get("memo", ""),
+            memo_text,
             work_id
         ))
-        new_memo = parse_work_memo(data.get("memo", ""))
-        apply_material_stock_changes(cur, new_memo.get("materials") or [], reverse=False)
         conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -609,15 +610,20 @@ def update_work(work_id):
 @app.route("/api/works/<int:work_id>", methods=["DELETE"])
 def delete_work(work_id):
     conn = db()
-    cur = conn.cursor()
-    row = cur.execute("SELECT memo FROM works WHERE id = ?", (work_id,)).fetchone()
-    if row:
-        memo_obj = parse_work_memo(row["memo"])
-        apply_material_stock_changes(cur, memo_obj.get("materials") or [], reverse=True)
-    cur.execute("DELETE FROM works WHERE id = ?", (work_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
+    try:
+        old_row = conn.execute("SELECT memo FROM works WHERE id = ?", (work_id,)).fetchone()
+        if old_row:
+            old_memo = parse_memo_json(old_row["memo"])
+            apply_material_stock_change(conn, old_memo.get("materials", []), mode='revert')
+
+        conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"작업 삭제 오류: {e}"}), 500
+    finally:
+        conn.close()
 
 
 # =========================

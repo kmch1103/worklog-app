@@ -86,6 +86,17 @@
     .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .money-filter input,.money-filter select,.money-filter .btn{width:auto; min-height:40px;}
     .money-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+
+    .money-monthly-panel{margin:14px 0; border:1px solid #e2e8f0; border-radius:16px; background:#fff; padding:16px;}
+    .money-monthly-panel h3{margin:0 0 10px; font-size:18px;}
+    .money-monthly-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+    .money-monthly-table{width:100%; border-collapse:separate; border-spacing:0;}
+    .money-monthly-table th,.money-monthly-table td{padding:12px 14px; border-bottom:1px solid #e5e7eb; text-align:left;}
+    .money-monthly-table th{background:#f8fafc; color:#334155; font-size:14px; font-weight:800;}
+    .money-monthly-table td:nth-child(2),
+    .money-monthly-table td:nth-child(3),
+    .money-monthly-table td:nth-child(4){text-align:right;}
+    .money-monthly-empty{color:#64748b; padding-top:8px;}
     .money-table{width:100%;}
     .income-modal-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;}
     .income-note-field{grid-column:1 / -1;}
@@ -553,6 +564,25 @@
 
             <input type="text" id="money-keyword-filter" placeholder="작업명/비고 검색">
             <button id="btn-money-filter" class="btn">새로고침</button>
+          </div>
+
+
+          <div class="money-monthly-panel">
+            <h3>월별 정산</h3>
+            <div class="money-monthly-table-wrap">
+              <table class="money-monthly-table">
+                <thead>
+                  <tr>
+                    <th>월</th>
+                    <th>수익</th>
+                    <th>지출</th>
+                    <th>순이익</th>
+                  </tr>
+                </thead>
+                <tbody id="money-monthly-list"></tbody>
+              </table>
+            </div>
+            <div id="money-monthly-empty" class="money-monthly-empty hidden">표시할 월별 정산 데이터가 없습니다.</div>
           </div>
 
           <div class="money-table-wrap">

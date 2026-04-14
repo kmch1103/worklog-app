@@ -3524,3 +3524,29 @@ function filterChipOptions(type, keyword) {
     node.addEventListener(event, handler);
   }
 })();
+
+async function loadIncomes(){
+  return await apiGet('/api/incomes');
+}
+
+function openIncomeModal(){
+  document.getElementById('income-modal').classList.remove('hidden');
+}
+
+function closeIncomeModal(){
+  document.getElementById('income-modal').classList.add('hidden');
+}
+
+async function saveIncome(){
+  const data = {
+    date: document.getElementById('income-date').value,
+    category: document.getElementById('income-category').value,
+    amount: document.getElementById('income-amount').value,
+    method: document.getElementById('income-method').value,
+    note: document.getElementById('income-note').value
+  };
+  await apiPost('/api/incomes', data);
+  closeIncomeModal();
+  await loadMoney();
+  renderMoney();
+}

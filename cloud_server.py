@@ -426,6 +426,25 @@ def init_db():
     ensure_column(cur, "seasons", "note", "TEXT DEFAULT ''")
     ensure_column(cur, "seasons", "created_at", "TEXT DEFAULT ''")
 
+    # incomes
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS incomes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        income_date TEXT,
+        income_type TEXT DEFAULT '',
+        amount REAL DEFAULT 0,
+        method TEXT DEFAULT '',
+        note TEXT DEFAULT '',
+        created_at TEXT DEFAULT ''
+    )
+    """)
+    ensure_column(cur, "incomes", "income_date", "TEXT")
+    ensure_column(cur, "incomes", "income_type", "TEXT DEFAULT ''")
+    ensure_column(cur, "incomes", "amount", "REAL DEFAULT 0")
+    ensure_column(cur, "incomes", "method", "TEXT DEFAULT ''")
+    ensure_column(cur, "incomes", "note", "TEXT DEFAULT ''")
+    ensure_column(cur, "incomes", "created_at", "TEXT DEFAULT ''")
+
     conn.commit()
     conn.close()
 
@@ -1102,6 +1121,81 @@ def backup_season(season_id):
     return jsonify(payload)
 
 
+
+# =========================
+# INCOMES
+# =========================
+@app.route("/api/incomes", methods=["GET"])
+def get_incomes():
+    conn = db()
+    season_id = (request.args.get("season_id") or "").strip()
+    season = get_season_row(conn, season_id)
+
+    sql = "SELECT * FROM incomes"
+    params = ()
+    if season:
+        sql += " WHERE income_date BETWEEN ? AND ?"
+        params = (season["start_date"], season["end_date"])
+
+    rows = conn.execute(sql + " ORDER BY income_date DESC, id DESC", params).fetchall()
+    conn.close()
+    return jsonify(rows_to_dicts(rows))
+
+
+@app.route("/api/incomes", methods=["POST"])
+def create_income():
+    data = request.get_json(force=True) or {}
+
+    income_date = (data.get("income_date") or data.get("date") or "").strip()
+    income_type = (data.get("income_type") or data.get("type") or "").strip()
+    amount = safe_float(data.get("amount"), 0)
+    method = (data.get("method") or "").strip()
+    note = (data.get("note") or "").strip()
+
+    if not income_date:
+        return jsonify({"ok": False, "error": "수익 날짜가 없습니다."}), 400
+    if not income_type:
+        return jsonify({"ok": False, "error": "수익 구분이 없습니다."}), 400
+    if amount <= 0:
+        return jsonify({"ok": False, "error": "수익 금액이 올바르지 않습니다."}), 400
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO incomes (income_date, income_type, amount, method, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            income_date,
+            income_type,
+            amount,
+            method,
+            note,
+            current_timestamp()
+        ))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"수익 저장 오류: {e}"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/incomes/<int:income_id>", methods=["DELETE"])
+def delete_income(income_id):
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM incomes WHERE id = ?", (income_id,))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"수익 삭제 오류: {e}"}), 500
+    finally:
+        conn.close()
+
 # =========================
 # IMPORT OLD DB
 # =========================
@@ -1194,53 +1288,3 @@ def get_money():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
-# =========================
-# INCOME TABLE
-# =========================
-def init_income_table():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS incomes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT,
-        category TEXT,
-        amount REAL,
-        method TEXT,
-        note TEXT
-    )
-    """)
-    conn.commit()
-    conn.close()
-
-init_income_table()
-
-
-@app.route("/api/incomes", methods=["GET"])
-def get_incomes():
-    conn = db()
-    rows = conn.execute("SELECT * FROM incomes ORDER BY date DESC, id DESC").fetchall()
-    conn.close()
-    return jsonify(rows_to_dicts(rows))
-
-
-@app.route("/api/incomes", methods=["POST"])
-def create_income():
-    data = request.get_json(force=True)
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO incomes (date, category, amount, method, note)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        data.get("date"),
-        data.get("category"),
-        float(data.get("amount") or 0),
-        data.get("method"),
-        data.get("note")
-    ))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})

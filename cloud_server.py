@@ -292,50 +292,6 @@ def import_old_db_into_current(uploaded_db_path):
 
 
 
-
-
-def parse_memo_json(raw_value):
-    if isinstance(raw_value, dict):
-        return raw_value
-    raw_text = (raw_value or '').strip()
-    if not raw_text:
-        return {}
-    try:
-        parsed = json.loads(raw_text)
-        return parsed if isinstance(parsed, dict) else {}
-    except Exception:
-        return {}
-
-
-def apply_material_stock_change(conn, materials, mode='apply'):
-    cur = conn.cursor()
-
-    for item in materials or []:
-        name = normalize_name(item.get('name'))
-        qty = safe_float(item.get('qty'), 0)
-        action = normalize_name(item.get('action') or item.get('behavior') or item.get('type') or '사용')
-
-        if not name or qty == 0:
-            continue
-
-        stock_delta = 0
-        if action == '구입':
-            stock_delta = qty
-        elif action == '사용':
-            stock_delta = -qty
-        elif action == '반품':
-            stock_delta = -qty
-        else:
-            continue
-
-        if mode == 'revert':
-            stock_delta = -stock_delta
-
-        cur.execute(
-            'UPDATE materials SET stock_qty = COALESCE(stock_qty, 0) + ? WHERE name = ?',
-            (stock_delta, name)
-        )
-
 def current_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -512,10 +468,6 @@ def create_work():
 
     conn = db()
     try:
-        memo_text = data.get("memo", "")
-        memo_obj = parse_memo_json(memo_text)
-        apply_material_stock_change(conn, memo_obj.get("materials", []), mode='apply')
-
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO works (
@@ -533,7 +485,7 @@ def create_work():
             data.get("pests", ""),
             data.get("machines", ""),
             float(data.get("work_hours") or 0),
-            memo_text
+            data.get("memo", "")
         ))
         conn.commit()
         return jsonify({"ok": True})
@@ -561,15 +513,6 @@ def update_work(work_id):
 
     conn = db()
     try:
-        old_row = conn.execute("SELECT memo FROM works WHERE id = ?", (work_id,)).fetchone()
-        if old_row:
-            old_memo = parse_memo_json(old_row["memo"])
-            apply_material_stock_change(conn, old_memo.get("materials", []), mode='revert')
-
-        memo_text = data.get("memo", "")
-        memo_obj = parse_memo_json(memo_text)
-        apply_material_stock_change(conn, memo_obj.get("materials", []), mode='apply')
-
         cur = conn.cursor()
         cur.execute("""
             UPDATE works
@@ -594,7 +537,7 @@ def update_work(work_id):
             data.get("pests", ""),
             data.get("machines", ""),
             float(data.get("work_hours") or 0),
-            memo_text,
+            data.get("memo", ""),
             work_id
         ))
         conn.commit()
@@ -610,20 +553,10 @@ def update_work(work_id):
 @app.route("/api/works/<int:work_id>", methods=["DELETE"])
 def delete_work(work_id):
     conn = db()
-    try:
-        old_row = conn.execute("SELECT memo FROM works WHERE id = ?", (work_id,)).fetchone()
-        if old_row:
-            old_memo = parse_memo_json(old_row["memo"])
-            apply_material_stock_change(conn, old_memo.get("materials", []), mode='revert')
-
-        conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
-        conn.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"ok": False, "error": f"작업 삭제 오류: {e}"}), 500
-    finally:
-        conn.close()
+    conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 # =========================
@@ -1261,3 +1194,53 @@ def get_money():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+# =========================
+# INCOME TABLE
+# =========================
+def init_income_table():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS incomes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        category TEXT,
+        amount REAL,
+        method TEXT,
+        note TEXT
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+init_income_table()
+
+
+@app.route("/api/incomes", methods=["GET"])
+def get_incomes():
+    conn = db()
+    rows = conn.execute("SELECT * FROM incomes ORDER BY date DESC, id DESC").fetchall()
+    conn.close()
+    return jsonify(rows_to_dicts(rows))
+
+
+@app.route("/api/incomes", methods=["POST"])
+def create_income():
+    data = request.get_json(force=True)
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO incomes (date, category, amount, method, note)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        data.get("date"),
+        data.get("category"),
+        float(data.get("amount") or 0),
+        data.get("method"),
+        data.get("note")
+    ))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})

@@ -28,18 +28,13 @@
     .material-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
     .material-row input{width:90px;}
     .material-method-toolbar{display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin:6px 0 10px;}
-    .material-row-inline{display:grid; grid-template-columns:minmax(150px,1.2fr) 90px 110px auto auto 120px minmax(180px,240px) 70px; gap:8px; align-items:center;}
+    .material-row-inline{display:grid; grid-template-columns:minmax(150px,1.2fr) 90px auto auto auto minmax(180px,240px) 70px; gap:8px; align-items:center;}
     .material-row-inline input,.material-row-inline select{width:100%;}
     .material-row-inline .material-method-wrap{display:flex; gap:6px; align-items:center;}
     .material-row-inline .material-installment-input{width:72px;}
-    .material-action-select{min-width:100px;}
-    .material-cost-toggle{display:inline-flex; align-items:center; gap:6px; font-size:13px; white-space:nowrap;}
-    .material-cost-toggle input{width:16px; height:16px;}
-    .money-cost-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
-    .readonly-money.negative{color:#b91c1c;}
     @media (max-width: 900px){
-      .material-row-inline{grid-template-columns:1fr 80px 1fr auto; align-items:center;}
-      .material-row-inline .material-unit,.material-row-inline .material-price,.material-row-inline .material-total,.material-row-inline .material-action-wrap,.material-row-inline .material-cost-wrap{grid-column:1 / -1;}
+      .material-row-inline{grid-template-columns:1fr 80px auto auto; align-items:center;}
+      .material-row-inline .material-unit,.material-row-inline .material-price,.material-row-inline .material-total{grid-column:1 / -1;}
       .material-row-inline .material-method-wrap{grid-column:1 / -1;}
     }
     .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
@@ -865,7 +860,6 @@
             </div>
             <div id="recent-material-picks" class="hidden" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
             <div id="material-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
-            <div class="inline-help" style="margin-bottom:8px;">자재별로 구입 / 사용 / 반품을 선택하고, 비용반영 여부를 따로 지정할 수 있습니다.</div>
             <div class="material-method-toolbar">
               <label class="field" style="margin:0; min-width:220px;">
                 <span>기본 결제방식</span>
@@ -901,29 +895,24 @@
         <div id="money-box" class="panel hidden" style="margin-top:8px;">
           <div class="grid two" style="margin-top:0;">
             <label class="field">
-              <span>기타비</span>
-              <input type="number" id="other_cost" value="0" min="0" step="100">
-              <div class="inline-help">택배비, 운반비, 수리비처럼 자재/인건비와 별도인 비용</div>
+              <span>기타비용</span>
+              <input type="number" id="other_cost" value="0" min="0">
             </label>
 
             <label class="field">
               <span>금전비고</span>
-              <input type="text" id="money_note" placeholder="예: 택배비 포함, 자재 반품 환불, 외상처 상세">
+              <input type="text" id="money_note" placeholder="예: 농약값, 일당, 수리비 / 외상처 상세">
             </label>
           </div>
 
-          <div class="money-cost-grid" style="margin-top:12px;">
-            <div class="field">
-              <span>자재비 합계</span>
-              <div class="readonly-money" id="money_material_total">0</div>
-            </div>
+          <div class="grid three" style="margin-top:12px;">
             <div class="field">
               <span>인건비 합계</span>
               <div class="readonly-money" id="money_labor_total">0</div>
             </div>
             <div class="field">
-              <span>기타비 합계</span>
-              <div class="readonly-money" id="money_other_total">0</div>
+              <span>자재비 합계</span>
+              <div class="readonly-money" id="money_material_total">0</div>
             </div>
             <div class="field">
               <span>총 비용</span>

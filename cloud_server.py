@@ -1,10 +1,13 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 import sqlite3
 import json
 import os
 import tempfile
 import uuid
 from datetime import datetime
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 app = Flask(__name__)
 DB = "worklog.db"
@@ -1331,6 +1334,194 @@ def update_income(income_id):
         return jsonify({"ok": False, "error": f"수익 수정 오류: {e}"}), 500
     finally:
         conn.close()
+
+
+def build_excel_export_data(conn, season_id=''):
+    season = get_season_row(conn, season_id)
+    works_sql, works_params = apply_season_filter_sql("SELECT * FROM works", season, "start_date")
+    work_rows = rows_to_dicts(conn.execute(works_sql + " ORDER BY start_date DESC, id DESC", works_params).fetchall())
+
+    income_sql = "SELECT * FROM incomes"
+    income_params = ()
+    if season:
+        income_sql += " WHERE income_date BETWEEN ? AND ?"
+        income_params = (season["start_date"], season["end_date"])
+    income_rows = rows_to_dicts(conn.execute(income_sql + " ORDER BY income_date DESC, id DESC", income_params).fetchall())
+
+    work_sheet_rows = []
+    money_rows = []
+
+    for item in work_rows:
+        memo = parse_memo_json(item.get("memo") or "")
+        materials = memo.get("materials") or []
+        labor_rows = memo.get("labor_rows") or []
+        money = memo.get("money") or {}
+
+        material_text = ", ".join([
+            f"{(m.get('name') or '').strip()} {safe_float(m.get('qty'), 0):g}{(m.get('unit') or '').strip()}".strip()
+            for m in materials if (m.get('name') or '').strip()
+        ])
+        labor_text = ", ".join([
+            f"{(r.get('type') or '').strip()} {int(safe_float(r.get('count'), 0))}명 x {safe_float(r.get('price'), 0):,.0f}"
+            for r in labor_rows if (r.get('type') or '').strip() or safe_float(r.get('count'), 0) or safe_float(r.get('price'), 0)
+        ])
+
+        work_sheet_rows.append({
+            "날짜": item.get("start_date", ""),
+            "종료일": item.get("end_date", ""),
+            "작업분류": item.get("task_category", ""),
+            "세부작업": item.get("task_name", ""),
+            "작물": item.get("crops", ""),
+            "병충해": item.get("pests", ""),
+            "사용기계": item.get("machines", ""),
+            "작업시간": safe_float(item.get("work_hours"), 0),
+            "날씨": item.get("weather", ""),
+            "사용자재": material_text,
+            "인건비내역": labor_text,
+            "기타비": safe_float((money.get("other_total") or 0), 0),
+            "비용구분": money.get("type", ""),
+            "비용합계": safe_float((money.get("total_amount") or money.get("amount") or 0), 0),
+            "메모": memo.get("memo_text", "")
+        })
+
+        if money:
+            money_rows.append({
+                "날짜": item.get("start_date", ""),
+                "이름": item.get("task_name", ""),
+                "구분": money.get("type", ""),
+                "금액": safe_float((money.get("total_amount") or money.get("amount") or 0), 0),
+                "방식": money.get("method", ""),
+                "비고": money.get("note", ""),
+                "행종류": "지출"
+            })
+
+    for income in income_rows:
+        money_rows.append({
+            "날짜": income.get("income_date", ""),
+            "이름": income.get("income_type", ""),
+            "구분": "수익",
+            "금액": safe_float(income.get("amount"), 0),
+            "방식": income.get("method", ""),
+            "비고": income.get("note", ""),
+            "행종류": "수익"
+        })
+
+    monthly_map = {}
+    for row in money_rows:
+        date_value = row.get("날짜", "")
+        if not date_value or len(date_value) < 7:
+            continue
+        month_key = date_value[:7]
+        if month_key not in monthly_map:
+            monthly_map[month_key] = {"수익": 0, "지출": 0}
+        if row.get("행종류") == "수익":
+            monthly_map[month_key]["수익"] += safe_float(row.get("금액"), 0)
+        else:
+            monthly_map[month_key]["지출"] += safe_float(row.get("금액"), 0)
+
+    monthly_rows = []
+    for month_key in sorted(monthly_map.keys(), reverse=True):
+        income_total = monthly_map[month_key]["수익"]
+        expense_total = monthly_map[month_key]["지출"]
+        monthly_rows.append({
+            "월": month_key,
+            "수익": income_total,
+            "지출": expense_total,
+            "순이익": income_total - expense_total
+        })
+
+    season_rows = []
+    for season_row in rows_to_dicts(conn.execute("SELECT * FROM seasons ORDER BY start_date DESC, id DESC").fetchall()):
+        start_date = season_row.get("start_date", "")
+        end_date = season_row.get("end_date", "")
+        income_total = sum(
+            safe_float(r.get("amount"), 0)
+            for r in income_rows
+            if start_date <= (r.get("income_date") or "") <= end_date
+        )
+        expense_total = sum(
+            safe_float(r.get("금액"), 0)
+            for r in money_rows
+            if r.get("행종류") != "수익" and start_date <= (r.get("날짜") or "") <= end_date
+        )
+        season_rows.append({
+            "시즌명": season_row.get("season_name", ""),
+            "시작일": start_date,
+            "종료일": end_date,
+            "수익": income_total,
+            "지출": expense_total,
+            "순이익": income_total - expense_total,
+            "비고": season_row.get("note", "")
+        })
+
+    money_rows_sorted = sorted(money_rows, key=lambda x: (x.get("날짜", ""), x.get("행종류", "")), reverse=True)
+    return {
+        "season": season_payload(season),
+        "works": work_sheet_rows,
+        "money": money_rows_sorted,
+        "monthly": monthly_rows,
+        "season_summary": season_rows
+    }
+
+
+def write_sheet_rows(ws, title, headers, rows):
+    ws.title = title
+    ws.append(headers)
+    header_fill = PatternFill(fill_type="solid", fgColor="EAF2FF")
+    header_font = Font(bold=True)
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for row in rows:
+        ws.append([row.get(h, "") for h in headers])
+
+    for col_cells in ws.columns:
+        max_length = 0
+        col_letter = col_cells[0].column_letter
+        for cell in col_cells:
+            value = "" if cell.value is None else str(cell.value)
+            if len(value) > max_length:
+                max_length = len(value)
+        ws.column_dimensions[col_letter].width = min(max(max_length + 2, 10), 40)
+
+
+def build_excel_file(export_data):
+    wb = Workbook()
+    ws1 = wb.active
+    write_sheet_rows(
+        ws1,
+        "작업일지",
+        ["날짜", "종료일", "작업분류", "세부작업", "작물", "병충해", "사용기계", "작업시간", "날씨", "사용자재", "인건비내역", "기타비", "비용구분", "비용합계", "메모"],
+        export_data["works"]
+    )
+
+    ws2 = wb.create_sheet("금전내역")
+    write_sheet_rows(
+        ws2,
+        "금전내역",
+        ["날짜", "이름", "구분", "금액", "방식", "비고", "행종류"],
+        export_data["money"]
+    )
+
+    ws3 = wb.create_sheet("월별정산")
+    write_sheet_rows(
+        ws3,
+        "월별정산",
+        ["월", "수익", "지출", "순이익"],
+        export_data["monthly"]
+    )
+
+    ws4 = wb.create_sheet("시즌정산")
+    write_sheet_rows(
+        ws4,
+        "시즌정산",
+        ["시즌명", "시작일", "종료일", "수익", "지출", "순이익", "비고"],
+        export_data["season_summary"]
+    )
+
+    return wb
 
 
 # =========================

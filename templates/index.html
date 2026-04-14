@@ -47,11 +47,14 @@
     .option-subtext{font-size:12px; color:#64748b;}
     .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
     .recommended-materials-empty{font-size:13px; color:#64748b;}
-    .options-grid{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; align-items:start;}
+    .options-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:start;}
     .option-panel{min-width:0;}
     .option-panel h3{font-size:26px; margin-bottom:12px;}
     .option-panel .inline-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start;}
     .option-panel[data-option-panel="pests"] .inline-form{grid-template-columns:1fr;}
+    .option-panel[data-option-panel="tasks"] .inline-form{grid-template-columns:1fr;}
+    #work-modal .modal-header{flex-wrap:nowrap; align-items:flex-start;}
+    #work-modal-title{white-space:nowrap; word-break:keep-all; flex:0 0 auto; min-width:max-content; margin-right:12px;}
     .option-panel .inline-form input{min-width:0; width:100%;}
     .option-item{align-items:flex-start;}
     .option-item .btn{padding:8px 10px; white-space:nowrap;}
@@ -60,7 +63,7 @@
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .btn[disabled]{opacity:.5; cursor:not-allowed;}
     .season-panel{margin-top:16px;}
-    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
+    @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
     @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
     .season-form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
@@ -83,14 +86,12 @@
     .money-filter{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .money-filter input,.money-filter select,.money-filter .btn{width:auto; min-height:40px;}
     .money-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
-
-    .money-header-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .money-table{width:100%;}
     .income-modal-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;}
     .income-note-field{grid-column:1 / -1;}
     @media (max-width: 700px){
       .income-modal-grid{grid-template-columns:1fr;}
     }
-    .money-table{width:100%;}
     .money-table th,.money-table td{padding:10px; border-bottom:1px solid #e5e7eb; text-align:left;}
     .money-mobile-date{font-size:15px; font-weight:800; color:#0f172a; margin-bottom:10px;}
     .money-mobile-cards{display:flex; flex-direction:column; gap:10px;}
@@ -493,7 +494,7 @@
       <section id="page-money" class="page">
         <div class="page-header">
           <h2>금전관리</h2>
-          <div class="money-header-actions">
+          <div class="page-header-actions">
             <button id="btn-open-income-modal" class="btn">수익 입력</button>
           </div>
         </div>
@@ -577,8 +578,8 @@
           <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
           <button class="btn option-tab-btn" data-option-tab="task_categories">작업분류</button>
           <button class="btn option-tab-btn" data-option-tab="tasks">세부작업</button>
-          <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
           <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
+          <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
         </div>
 
         <div id="season-panel" class="panel season-panel compact collapsed">
@@ -634,13 +635,20 @@
           <div class="panel option-panel mobile-active" data-option-panel="tasks">
             <h3>세부작업</h3>
             <div class="inline-form">
-              <div class="grid two" style="width:100%;">
-                <select id="new-task-category"></select>
-                <input type="text" id="new-tasks" placeholder="새 세부작업">
-              </div>
+              <select id="new-task-category"></select>
+              <input type="text" id="new-tasks" placeholder="새 세부작업">
               <button class="btn primary" onclick="saveOption('tasks', 'new-tasks', 'new-task-category')">추가</button>
             </div>
             <div id="options-tasks" class="option-list"></div>
+          </div>
+
+          <div class="panel option-panel mobile-active" data-option-panel="machines">
+            <h3>사용기계</h3>
+            <div class="inline-form">
+              <input type="text" id="new-machines" placeholder="새 사용기계">
+              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
+            </div>
+            <div id="options-machines" class="option-list"></div>
           </div>
 
           <div class="panel option-panel mobile-active" data-option-panel="pests">
@@ -651,15 +659,6 @@
               <button class="btn primary" onclick="saveOption('pests', 'new-pests')">추가</button>
             </div>
             <div id="options-pests" class="option-list"></div>
-          </div>
-
-          <div class="panel option-panel mobile-active" data-option-panel="machines">
-            <h3>사용기계</h3>
-            <div class="inline-form">
-              <input type="text" id="new-machines" placeholder="새 사용기계">
-              <button class="btn primary" onclick="saveOption('machines', 'new-machines')">추가</button>
-            </div>
-            <div id="options-machines" class="option-list"></div>
           </div>
         </div>
 
@@ -1069,7 +1068,6 @@
   </div>
 
 
-  <!-- 수익 입력 팝업 -->
   <div id="income-modal" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-header">
@@ -1078,39 +1076,40 @@
       </div>
       <div class="modal-body">
         <div class="income-modal-grid">
-          <label class="field">
-            <span>날짜</span>
+          <label>
+            <div>날짜</div>
             <input type="date" id="income_date">
           </label>
-          <label class="field">
-            <span>수익구분</span>
+          <label>
+            <div>수익구분</div>
             <select id="income_type">
               <option value="판매수익">판매수익</option>
               <option value="택배수익">택배수익</option>
               <option value="기타수익">기타수익</option>
             </select>
           </label>
-          <label class="field">
-            <span>금액</span>
+          <label>
+            <div>금액</div>
             <input type="number" id="income_amount" min="0" step="1">
           </label>
-          <label class="field">
-            <span>결제방식</span>
+          <label>
+            <div>결제방식</div>
             <select id="income_method">
               <option value="현금">현금</option>
               <option value="계좌이체">계좌이체</option>
-              <option value="카드">카드</option>
+              <option value="카드일시불">카드일시불</option>
+              <option value="카드할부">카드할부</option>
               <option value="외상">외상</option>
             </select>
           </label>
-          <label class="field income-note-field">
-            <span>비고</span>
+          <label class="income-note-field">
+            <div>비고</div>
             <textarea id="income_note" rows="3"></textarea>
           </label>
         </div>
       </div>
       <div class="modal-footer">
-        <button id="btn-save-income" class="btn primary">저장</button>
+        <button id="btn-save-income" class="btn">저장</button>
         <button id="btn-cancel-income" class="btn">취소</button>
       </div>
     </div>

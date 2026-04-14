@@ -3139,6 +3139,7 @@ function filterChipOptions(type, keyword) {
     if (el['money-scope-row-count']) el['money-scope-row-count'].textContent = `건수: ${filtered.length}`;
     renderMonthlySettlement(filtered);
 
+    renderMonthlySettlement(filtered);
     const creditRows = filtered.filter(row => row.method === '외상');
     if (el['money-credit-list']) {
       el['money-credit-list'].innerHTML = creditRows.length

@@ -99,7 +99,7 @@
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
 
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
-      'task-name-search','task-name-datalist','recent-task-picks','pest-search-input','recent-material-picks',
+      'task-name-search','task-name-datalist','recent-task-picks','task-name-options','pest-search-input','recent-material-picks',
 
       'recommended-materials-wrap','recommended-materials-box','material-list-search',
 
@@ -233,7 +233,6 @@
 
     on(el['task_category'], 'change', () => {
       renderTaskOptionsByCategory(el['task_category']?.value || '');
-      updateTaskSearchPlaceholder();
     });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
@@ -975,6 +974,7 @@
     renderTaskOptionsByCategory(template.task_category || '');
     if (el.task_name) el.task_name.value = template.task_name || '';
     if (el['task-name-search']) el['task-name-search'].value = template.task_name || '';
+    renderTaskQuickOptions(template.task_category || '', template.task_name || '');
     if (el.work_hours) el.work_hours.value = template.work_hours || 0;
     if (el.memo) el.memo.value = template.memo_text || '';
     if (el.start_time) el.start_time.value = template.start_time || '';
@@ -1088,6 +1088,7 @@
     if (el.task_category) el.task_category.value = '';
     if (el.task_name) el.task_name.value = '';
     if (el['task-name-search']) el['task-name-search'].value = '';
+    if (el['task-name-options']) el['task-name-options'].innerHTML = '';
     if (el['pest-search-input']) el['pest-search-input'].value = '';
     if (el.work_hours) el.work_hours.value = 0;
     if (el.memo) el.memo.value = '';
@@ -1119,6 +1120,8 @@
     if (el.task_category) el.task_category.value = work.task_category || '';
     renderTaskOptionsByCategory(work.task_category || '');
     if (el.task_name) el.task_name.value = work.task_name || '';
+    if (el['task-name-search']) el['task-name-search'].value = work.task_name || '';
+    renderTaskQuickOptions(work.task_category || '', work.task_name || '');
     if (el.work_hours) el.work_hours.value = work.work_hours || meta.work_hours || 0;
     if (el.memo) el.memo.value = meta.memo_text || '';
 
@@ -1261,7 +1264,6 @@
     renderRecommendedMaterials();
     renderRecentQuickPicks();
     syncTaskNameDatalist(el.task_category?.value || '');
-    updateTaskSearchPlaceholder();
     filterChipOptions('pests', el['pest-search-input']?.value || '');
   }
 
@@ -1284,8 +1286,15 @@
     selectEl.innerHTML = options.join('');
     if (current && list.some(item => optionName(item) === current)) {
       selectEl.value = current;
+    } else if (!keepCurrentValue) {
+      selectEl.value = '';
     }
+
     syncTaskNameDatalist(categoryName || '');
+    if (selectEl.value && el['task-name-search']) {
+      el['task-name-search'].value = selectEl.value;
+    }
+    renderTaskQuickOptions(categoryName || '', el['task-name-search']?.value || selectEl.value || '');
   }
 
 
@@ -1339,7 +1348,12 @@ function renderRecentTaskPicks() {
     return;
   }
   box.classList.remove('hidden');
-  box.innerHTML = rows.map(name => `<button type="button" class="quick-pick-chip" data-recent-task="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('');
+  box.innerHTML = `
+    <div class="task-quick-section-title">최근 사용 세부작업</div>
+    <div class="task-chip-wrap">
+      ${rows.map(name => `<button type="button" class="quick-pick-chip" data-recent-task="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}
+    </div>
+  `;
   box.querySelectorAll('[data-recent-task]').forEach(btn => {
     btn.addEventListener('click', () => applyRecentTask(btn.dataset.recentTask || ''));
   });
@@ -1371,8 +1385,7 @@ function applyRecentTask(taskName) {
     el.task_category.value = categoryName;
   }
   renderTaskOptionsByCategory(categoryName || el.task_category?.value || '', false);
-  if (el.task_name) el.task_name.value = target;
-  if (el['task-name-search']) el['task-name-search'].value = target;
+  selectTaskNameValue(target, true);
 }
 
 function addRecentMaterialByName(name) {
@@ -1400,13 +1413,88 @@ function syncTaskNameDatalist(categoryName = '') {
   }
 }
 
-function updateTaskSearchPlaceholder() {
-  const input = el['task-name-search'];
-  if (!input) return;
-  const categoryName = el.task_category?.value || '';
-  input.placeholder = categoryName
-    ? `${categoryName} 세부작업 검색 또는 빠른 선택`
-    : '세부작업명을 입력하면 바로 찾을 수 있어요';
+function selectTaskNameValue(value, syncSearch = false) {
+  const target = String(value || '').trim();
+  if (!el.task_name) return;
+  if (!target) {
+    el.task_name.value = '';
+    if (syncSearch && el['task-name-search']) el['task-name-search'].value = '';
+    renderTaskQuickOptions(el.task_category?.value || '', '');
+    return;
+  }
+
+  let option = Array.from(el.task_name.options || []).find(opt => opt.value === target);
+  if (!option) {
+    option = document.createElement('option');
+    option.value = target;
+    option.textContent = target;
+    option.dataset.custom = '1';
+    el.task_name.appendChild(option);
+  }
+  el.task_name.value = target;
+  if (syncSearch && el['task-name-search']) {
+    el['task-name-search'].value = target;
+  }
+  renderTaskQuickOptions(el.task_category?.value || '', target);
+}
+
+function renderTaskQuickOptions(categoryName = '', keyword = '') {
+  const box = el['task-name-options'];
+  if (!box) return;
+
+  const rawTasks = state.optionsRaw?.tasks || [];
+  const q = String(keyword || '').trim().toLowerCase();
+  const currentValue = String(el.task_name?.value || '').trim();
+
+  let list = categoryName
+    ? rawTasks.filter(item => getTaskCategoryName(item) === categoryName)
+    : rawTasks.slice();
+
+  if (q) {
+    list = list.filter(item => optionName(item).toLowerCase().includes(q));
+  }
+
+  const uniqueNames = [];
+  const seen = new Set();
+  list.forEach(item => {
+    const name = optionName(item);
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    uniqueNames.push(name);
+  });
+
+  const limited = uniqueNames.slice(0, 24);
+  const chips = [];
+
+  if (q && !seen.has(String(keyword || '').trim())) {
+    chips.push(`
+      <button type="button" class="task-option-chip direct-input" data-task-option-value="${escapeHtml(String(keyword || '').trim())}">
+        직접입력: ${escapeHtml(String(keyword || '').trim())}
+      </button>
+    `);
+  }
+
+  limited.forEach(name => {
+    const activeClass = currentValue === name ? ' active' : '';
+    chips.push(`
+      <button type="button" class="task-option-chip${activeClass}" data-task-option-value="${escapeHtml(name)}">
+        ${escapeHtml(name)}
+      </button>
+    `);
+  });
+
+  if (!chips.length) {
+    box.innerHTML = `<div class="task-option-empty">표시할 세부작업이 없습니다. 검색어를 바꾸거나 직접입력하세요.</div>`;
+    return;
+  }
+
+  box.innerHTML = chips.join('');
+  box.querySelectorAll('[data-task-option-value]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const value = btn.dataset.taskOptionValue || '';
+      selectTaskNameValue(value, true);
+    });
+  });
 }
 
 function syncTaskNameSearchToSelect(keyword) {
@@ -1414,23 +1502,19 @@ function syncTaskNameSearchToSelect(keyword) {
   if (!el.task_name) return;
   if (!q) {
     el.task_name.value = '';
-    return;
-  }
-  const options = Array.from(el.task_name.options || []).filter(opt => opt.value);
-  const exact = options.find(opt => opt.value === q);
-  if (exact) {
-    el.task_name.value = exact.value;
+    renderTaskQuickOptions(el.task_category?.value || '', '');
     return;
   }
 
-  const lowerQ = q.toLowerCase();
-  const partial = options.find(opt => String(opt.value || '').toLowerCase().includes(lowerQ));
-  if (partial) {
-    el.task_name.value = partial.value;
-    return;
-  }
+  const option = Array.from(el.task_name.options || []).find(opt => opt.value === q)
+    || Array.from(el.task_name.options || []).find(opt => opt.value && opt.value.includes(q));
 
-  el.task_name.value = '';
+  if (option) {
+    el.task_name.value = option.value;
+  } else {
+    selectTaskNameValue(q, false);
+  }
+  renderTaskQuickOptions(el.task_category?.value || '', q);
 }
 
 function filterChipOptions(type, keyword) {

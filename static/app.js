@@ -54,6 +54,7 @@
     bindMaterialButtons();
     bindIncomeButtons();
     bindOptionButtons();
+    bindExcelButtons();
     bindCalendarDetailModal();
 
     bindHistoryNavigation();
@@ -117,7 +118,7 @@
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','money-scope-label','money-scope-month-count','money-scope-row-count','money-monthly-list','money-monthly-empty','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
-      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
+      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season'
     ];
 
     ids.forEach(id => {
@@ -401,6 +402,28 @@
         state.materialFilterTab = btn.dataset.materialTab || 'all';
         renderMaterials();
       });
+    });
+  }
+
+
+  function bindExcelButtons() {
+    on(el['btn-download-excel-all'], 'click', () => {
+      window.location.href = '/api/export_excel';
+    });
+    on(el['btn-download-excel-current-season'], 'click', async () => {
+      try {
+        const current = await apiGet('/api/seasons/current');
+        if (current && current.id) {
+          window.location.href = `/api/export_excel?season_id=${encodeURIComponent(current.id)}`;
+        } else {
+          alert('현재시즌이 설정되어 있지 않아 전체 엑셀로 내려받습니다.');
+          window.location.href = '/api/export_excel';
+        }
+      } catch (e) {
+        console.error(e);
+        alert('현재시즌 확인 중 오류가 발생했습니다. 전체 엑셀로 내려받습니다.');
+        window.location.href = '/api/export_excel';
+      }
     });
   }
 

@@ -3003,12 +3003,14 @@ function filterChipOptions(type, keyword) {
 
     body.innerHTML = monthKeys.map(monthKey => {
       const item = grouped[monthKey];
-      const net = item.income - item.expense;
+      const incomeAmount = Number(item.income || 0);
+      const expenseAmount = Number(item.expense || 0);
+      const net = incomeAmount - expenseAmount;
       return `
         <tr>
           <td>${escapeHtml(monthKey)}</td>
-          <td>${formatNumber(item.income)}</td>
-          <td>${formatNumber(item.expense)}</td>
+          <td>${formatNumber(incomeAmount)}</td>
+          <td>${formatNumber(expenseAmount)}</td>
           <td>${net > 0 ? '+' : ''}${formatNumber(net)}</td>
         </tr>
       `;

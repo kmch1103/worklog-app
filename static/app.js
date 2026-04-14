@@ -283,16 +283,10 @@
   }
 
   function openIncomeModal() {
-    if (el['income_date'] && !el['income_date'].value) {
-      el['income_date'].value = fmtDate(new Date());
-    }
-    if (el['income_type'] && !el['income_type'].value) {
-      el['income_type'].value = '판매수익';
-    }
+    if (el['income_date']) el['income_date'].value = fmtDate(new Date());
+    if (el['income_type']) el['income_type'].value = '판매수익';
     if (el['income_amount']) el['income_amount'].value = '';
-    if (el['income_method'] && !el['income_method'].value) {
-      el['income_method'].value = '현금';
-    }
+    if (el['income_method']) el['income_method'].value = '현금';
     if (el['income_note']) el['income_note'].value = '';
     removeHidden(el['income-modal']);
   }
@@ -2928,31 +2922,48 @@ function filterChipOptions(type, keyword) {
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
     const expenseRows = (state.moneyRows || []).map(row => ({
-      ...row,
       row_kind: 'expense',
       date: row.date || '',
-      display_name: row.task_name || '',
-      display_type: row.type || '',
-      display_amount: Number(row.total_amount || row.total || 0),
+      task_name: row.task_name || '',
+      type: row.type || '',
+      total_amount: Number(row.total_amount || row.total || 0),
+      labor_total: Number(row.labor_total || 0),
+      material_total: Number(row.material_total || 0),
+      other_total: Number(row.other_total || 0),
+      method: row.method || '',
       method_display: row.method_display || row.method || '',
-      credit_source: row.method || ''
+      note: row.note || '',
+      cash_amount: Number(row.cash_amount || 0),
+      transfer_amount: Number(row.transfer_amount || 0),
+      card_lump_amount: Number(row.card_lump_amount || 0),
+      card_install_amount: Number(row.card_install_amount || 0),
+      credit_amount: Number(row.credit_amount || 0),
+      work_memo: row.work_memo || ''
     }));
 
-    const incomeRows = (state.incomeRows || []).map(row => ({
-      ...row,
-      row_kind: 'income',
-      date: row.income_date || row.date || '',
-      task_name: row.income_type || row.category || '수익',
-      type: '수익',
-      total_amount: Number(row.amount || 0),
-      method: row.method || '',
-      method_display: row.method || '',
-      note: row.note || '',
-      display_name: row.income_type || row.category || '수익',
-      display_type: '수익',
-      display_amount: Number(row.amount || 0),
-      credit_source: row.method || ''
-    }));
+    const incomeRows = (state.incomeRows || []).map(row => {
+      const amount = Number(row.amount || 0);
+      const method = row.method || '';
+      return {
+        row_kind: 'income',
+        date: row.income_date || '',
+        task_name: row.income_type || '수익',
+        type: '수익',
+        total_amount: amount,
+        labor_total: 0,
+        material_total: 0,
+        other_total: amount,
+        method,
+        method_display: method,
+        note: row.note || '',
+        cash_amount: method === '현금' ? amount : 0,
+        transfer_amount: method === '계좌이체' ? amount : 0,
+        card_lump_amount: method === '카드일시불' ? amount : 0,
+        card_install_amount: method === '카드할부' ? amount : 0,
+        credit_amount: method === '외상' ? amount : 0,
+        work_memo: ''
+      };
+    });
 
     const mergedRows = expenseRows.concat(incomeRows);
 
@@ -2968,7 +2979,7 @@ function filterChipOptions(type, keyword) {
       }
       if (methodFilter) {
         const rowMethod = row.method || '';
-        const isCardMethod = rowMethod === '카드일시불' || rowMethod === '카드할부' || rowMethod === '카드';
+        const isCardMethod = rowMethod === '카드일시불' || rowMethod === '카드할부';
         if (methodFilter === '카드') {
           if (!isCardMethod) return false;
         } else if (rowMethod !== methodFilter) {
@@ -2992,37 +3003,34 @@ function filterChipOptions(type, keyword) {
 
     const incomeTotal = filtered
       .filter(row => row.row_kind === 'income')
-      .reduce((sum, row) => sum + Number(row.display_amount || 0), 0);
-
+      .reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
     const expenseTotal = filtered
-      .filter(row => row.row_kind !== 'income')
-      .reduce((sum, row) => sum + Number(row.display_amount || 0), 0);
+      .filter(row => row.row_kind === 'expense')
+      .reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
 
-    const cash = filtered.reduce((sum, row) => sum + (row.method === '현금' ? Number(row.display_amount || 0) : 0), 0);
-    const transfer = filtered.reduce((sum, row) => sum + (row.method === '계좌이체' ? Number(row.display_amount || 0) : 0), 0);
-    const cardLump = filtered.reduce((sum, row) => sum + (row.method === '카드일시불' ? Number(row.display_amount || 0) : 0), 0);
-    const cardLump = filtered.reduce((sum, row) => sum + 0, 0);
-    const cardInstall = filtered.reduce((sum, row) => sum + ((row.method === '카드할부' ? Number(row.display_amount || 0) : 0)), 0);
-    const credit = filtered.reduce((sum, row) => sum + (row.method === '외상' ? Number(row.display_amount || 0) : 0), 0);
+    const cash = filtered.reduce((sum, row) => sum + Number(row.cash_amount || 0), 0);
+    const transfer = filtered.reduce((sum, row) => sum + Number(row.transfer_amount || 0), 0);
+    const cardLump = filtered.reduce((sum, row) => sum + Number(row.card_lump_amount || 0), 0);
+    const cardInstall = filtered.reduce((sum, row) => sum + Number(row.card_install_amount || 0), 0);
+    const credit = filtered.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0);
 
     if (el['money-income-total']) el['money-income-total'].innerText = formatNumber(incomeTotal);
     if (el['money-total']) el['money-total'].innerText = formatNumber(expenseTotal);
     if (el['money-net-profit']) el['money-net-profit'].innerText = formatNumber(incomeTotal - expenseTotal);
     if (el['money-cash']) el['money-cash'].innerText = formatNumber(cash);
     if (el['money-transfer']) el['money-transfer'].innerText = formatNumber(transfer);
-    if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(filtered.reduce((sum, row) => sum + (row.method === '카드일시불' ? Number(row.display_amount || 0) : 0), 0));
+    if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(cardLump);
     if (el['money-card-install']) el['money-card-install'].innerText = formatNumber(cardInstall);
     if (el['money-credit']) el['money-credit'].innerText = formatNumber(credit);
 
     const creditRows = filtered.filter(row => row.method === '외상');
     if (el['money-credit-list']) {
       el['money-credit-list'].innerHTML = creditRows.length
-        ? `<table class="money-table"><thead><tr><th>날짜</th><th>작업</th><th>구분</th><th>금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
+        ? `<table class="money-table"><thead><tr><th>날짜</th><th>작업</th><th>금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
             <tr>
               <td>${escapeHtml(row.date || '')}</td>
-              <td>${escapeHtml(row.display_name || '')}</td>
-              <td>${escapeHtml(row.display_type || '')}</td>
-              <td>${formatNumber(row.display_amount || 0)}</td>
+              <td>${escapeHtml(row.task_name || '')}</td>
+              <td>${formatNumber(row.total_amount || 0)}</td>
               <td>${escapeHtml(row.note || '')}</td>
             </tr>
           `).join('')}</tbody></table>`
@@ -3054,16 +3062,15 @@ function filterChipOptions(type, keyword) {
               ${rows.map(row => `
                 <div class="money-mobile-card">
                   <div class="money-mobile-card-head">
-                    <strong>${escapeHtml(row.display_name || '이름 없음')}</strong>
+                    <strong>${escapeHtml(row.task_name || '작업명 없음')}</strong>
                     <span>${escapeHtml(row.method_display || row.method || '-')}</span>
                   </div>
-                  <div class="money-mobile-card-amount">${row.row_kind === 'income' ? '+' : ''}${formatNumber(row.display_amount || 0)}원</div>
+                  <div class="money-mobile-card-amount">${row.row_kind === 'income' ? '+' : ''}총금액 ${formatNumber(row.total_amount || 0)}원</div>
                   <div class="money-mobile-card-grid">
-                    <div><b>구분</b><span>${escapeHtml(row.display_type || '-')}</span></div>
-                    <div><b>방식</b><span>${escapeHtml(row.method_display || row.method || '-')}</span></div>
-                    ${row.row_kind === 'income' ? '' : `<div><b>인건비</b><span>${formatNumber(row.labor_total || 0)}원</span></div>
+                    <div><b>구분</b><span>${escapeHtml(row.type || '-')}</span></div>
+                    <div><b>인건비</b><span>${formatNumber(row.labor_total || 0)}원</span></div>
                     <div><b>자재비</b><span>${formatNumber(row.material_total || 0)}원</span></div>
-                    <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>`}
+                    <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>
                   </div>
                   ${row.note ? `<div class="money-mobile-card-note"><b>비고</b><span>${escapeHtml(row.note || '')}</span></div>` : ''}
                 </div>
@@ -3078,9 +3085,9 @@ function filterChipOptions(type, keyword) {
     wrap.innerHTML = filtered.map(row => `
       <tr>
         <td>${escapeHtml(row.date || '')}</td>
-        <td>${escapeHtml(row.display_name || '')}</td>
-        <td>${escapeHtml(row.display_type || '')}</td>
-        <td>${row.row_kind === 'income' ? '+' : ''}${formatNumber(row.display_amount || 0)}</td>
+        <td>${escapeHtml(row.task_name || '')}</td>
+        <td>${escapeHtml(row.type || '')}</td>
+        <td>${row.row_kind === 'income' ? '+' : ''}${formatNumber(row.total_amount || 0)}</td>
         <td>${escapeHtml(row.method_display || row.method || '')}</td>
         <td>${escapeHtml(row.note || '')}</td>
       </tr>
@@ -3088,7 +3095,7 @@ function filterChipOptions(type, keyword) {
   }
 
 
-  function bindHistoryNavigation() { {
+  function bindHistoryNavigation() {
     window.addEventListener('popstate', (event) => {
       const page = event.state?.page || state.currentPage || 'calendar';
       const modal = event.state?.modal || '';

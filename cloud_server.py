@@ -1288,6 +1288,51 @@ def delete_income(income_id):
         conn.close()
 
 
+@app.route("/api/incomes/<int:income_id>", methods=["PUT"])
+def update_income(income_id):
+    data = request.get_json(force=True) or {}
+
+    income_date = (data.get("income_date") or "").strip()
+    income_type = (data.get("income_type") or "").strip()
+    amount = safe_float(data.get("amount"), 0)
+    method = (data.get("method") or "").strip()
+    note = (data.get("note") or "").strip()
+
+    if not income_date:
+        return jsonify({"ok": False, "error": "수익 날짜가 없습니다."}), 400
+    if not income_type:
+        return jsonify({"ok": False, "error": "수익 구분이 없습니다."}), 400
+    if amount <= 0:
+        return jsonify({"ok": False, "error": "수익 금액이 올바르지 않습니다."}), 400
+
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE incomes
+            SET income_date = ?,
+                income_type = ?,
+                amount = ?,
+                method = ?,
+                note = ?
+            WHERE id = ?
+        """, (
+            income_date,
+            income_type,
+            amount,
+            method,
+            note,
+            income_id
+        ))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": f"수익 수정 오류: {e}"}), 500
+    finally:
+        conn.close()
+
+
 # =========================
 # MONEY
 # =========================

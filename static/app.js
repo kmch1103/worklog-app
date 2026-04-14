@@ -233,6 +233,7 @@
 
     on(el['task_category'], 'change', () => {
       renderTaskOptionsByCategory(el['task_category']?.value || '');
+      updateTaskSearchPlaceholder();
     });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
@@ -1260,6 +1261,7 @@
     renderRecommendedMaterials();
     renderRecentQuickPicks();
     syncTaskNameDatalist(el.task_category?.value || '');
+    updateTaskSearchPlaceholder();
     filterChipOptions('pests', el['pest-search-input']?.value || '');
   }
 
@@ -1398,6 +1400,15 @@ function syncTaskNameDatalist(categoryName = '') {
   }
 }
 
+function updateTaskSearchPlaceholder() {
+  const input = el['task-name-search'];
+  if (!input) return;
+  const categoryName = el.task_category?.value || '';
+  input.placeholder = categoryName
+    ? `${categoryName} 세부작업 검색 또는 빠른 선택`
+    : '세부작업명을 입력하면 바로 찾을 수 있어요';
+}
+
 function syncTaskNameSearchToSelect(keyword) {
   const q = String(keyword || '').trim();
   if (!el.task_name) return;
@@ -1405,11 +1416,21 @@ function syncTaskNameSearchToSelect(keyword) {
     el.task_name.value = '';
     return;
   }
-  const option = Array.from(el.task_name.options || []).find(opt => opt.value === q)
-    || Array.from(el.task_name.options || []).find(opt => opt.value && opt.value.includes(q));
-  if (option) {
-    el.task_name.value = option.value;
+  const options = Array.from(el.task_name.options || []).filter(opt => opt.value);
+  const exact = options.find(opt => opt.value === q);
+  if (exact) {
+    el.task_name.value = exact.value;
+    return;
   }
+
+  const lowerQ = q.toLowerCase();
+  const partial = options.find(opt => String(opt.value || '').toLowerCase().includes(lowerQ));
+  if (partial) {
+    el.task_name.value = partial.value;
+    return;
+  }
+
+  el.task_name.value = '';
 }
 
 function filterChipOptions(type, keyword) {

@@ -110,7 +110,7 @@
       'labor-rows-wrap','btn-add-labor-row',
 
       'has_money','money-box','money_method','money_installment_wrap','money_installment_months','money_note','other_cost',
-      'money_labor_total','money_material_total','money_other_total','money_total_amount',
+      'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
@@ -942,16 +942,6 @@
   }
 
   function buildWorkTemplateFromForm() {
-    const rawStartTime = (el.start_time?.value || '').trim();
-    const rawEndTime = (el.end_time?.value || '').trim();
-    let normalizedWorkHours = Number(el.work_hours?.value || 0);
-    if (rawStartTime !== '' && rawEndTime !== '') {
-      const [sh, sm] = rawStartTime.split(':').map(Number);
-      const [eh, em] = rawEndTime.split(':').map(Number);
-      const diff = (eh * 60 + em) - (sh * 60 + sm);
-      if (diff >= 0) normalizedWorkHours = diff / 60;
-    }
-
     return {
       weather: el.weather?.value || '',
       task_category: el.task_category?.value || '',
@@ -961,8 +951,8 @@
       machines: getSelectedChips('machines'),
       work_hours: normalizedWorkHours,
       memo_text: el.memo?.value || '',
-      start_time: rawStartTime,
-      end_time: rawEndTime,
+      start_time: startTime,
+      end_time: endTime,
       materials: JSON.parse(JSON.stringify(state.selectedMaterialsDetailed || [])),
       labor_rows: JSON.parse(JSON.stringify(getLaborRows() || [])),
       money: {
@@ -1147,8 +1137,6 @@
           unit: m.unit || '',
           price: Number(m.price || m.unit_price || 0),
           qty: Number(m.qty || 0),
-          action: m.action || '사용',
-          include_cost: m.include_cost === false ? false : true,
           method: m.method || '',
           installment_months: Number(m.installment_months || 0)
         }))
@@ -1627,16 +1615,10 @@ function filterChipOptions(type, keyword) {
     return rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   }
 
-  function getMaterialSign(action) {
-    if (action === '반품') return -1;
-    return 1;
-  }
-
   function getMaterialTotal() {
     let total = 0;
     state.selectedMaterialsDetailed.forEach(m => {
-      if (m.include_cost === false) return;
-      total += getMaterialSign(m.action) * ((m.price || 0) * (m.qty || 0));
+      total += (m.price || 0) * (m.qty || 0);
     });
     return total;
   }
@@ -1652,9 +1634,8 @@ function filterChipOptions(type, keyword) {
     const total = labor + material + other;
 
     if (el.money_labor_total) el.money_labor_total.innerText = formatNumber(labor);
-    if (el.money_material_total) { el.money_material_total.innerText = formatNumber(material); el.money_material_total.classList.toggle('negative', material < 0); }
-    if (el.money_other_total) el.money_other_total.innerText = formatNumber(other);
-    if (el.money_total_amount) { el.money_total_amount.innerText = formatNumber(total); el.money_total_amount.classList.toggle('negative', total < 0); }
+    if (el.money_material_total) el.money_material_total.innerText = formatNumber(material);
+    if (el.money_total_amount) el.money_total_amount.innerText = formatNumber(total);
   }
 
   function resetLaborRows() {
@@ -1799,8 +1780,6 @@ function filterChipOptions(type, keyword) {
         unit: source.unit || '',
         price: Number(source.unit_price || source.price || 0),
         qty: 1,
-        action: '사용',
-        include_cost: false,
         method: getDefaultMaterialMethod(),
         installment_months: 0
       });
@@ -1874,29 +1853,13 @@ function filterChipOptions(type, keyword) {
     box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => {
       const method = item.method || '';
       const showInstallment = method === '카드할부';
-      const action = item.action || '사용';
-      const includeCost = item.include_cost === false ? false : true;
-      const signedTotal = getMaterialSign(action) * ((item.price || 0) * (item.qty || 0));
       return `
       <div class="material-row material-row-inline">
         <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong></span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
-        <span class="material-action-wrap">
-          <select data-material-action="${idx}" class="material-action-select">
-            <option value="구입" ${action === '구입' ? 'selected' : ''}>구입</option>
-            <option value="사용" ${action === '사용' ? 'selected' : ''}>사용</option>
-            <option value="반품" ${action === '반품' ? 'selected' : ''}>반품</option>
-          </select>
-        </span>
         <span class="material-unit">${escapeHtml(item.unit || '')}</span>
         <span class="material-price">단가 ${formatNumber(item.price || 0)}</span>
-        <span class="material-total">합계 ${formatNumber(signedTotal)}</span>
-        <span class="material-cost-wrap">
-          <label class="material-cost-toggle">
-            <input type="checkbox" data-material-include-cost="${idx}" ${includeCost ? 'checked' : ''}>
-            <span>비용반영</span>
-          </label>
-        </span>
+        <span class="material-total">합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
         <span class="material-method-wrap">
           <select data-material-method="${idx}" class="material-method-select">${getMaterialMethodOptionsHtml(method)}</select>
           ${showInstallment ? `<input type="number" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" data-material-installment="${idx}" class="material-installment-input" placeholder="개월">` : ''}
@@ -1915,8 +1878,7 @@ function filterChipOptions(type, keyword) {
         const row = input.closest('.material-row');
         const totalEl = row ? row.querySelector('.material-total') : null;
         if (totalEl) {
-          const item = state.selectedMaterialsDetailed[idx];
-          totalEl.textContent = `합계 ${formatNumber(getMaterialSign(item.action || '사용') * ((item.price || 0) * nextQty))}`;
+          totalEl.textContent = `합계 ${formatNumber((state.selectedMaterialsDetailed[idx].price || 0) * nextQty)}`;
         }
 
         updateMoneySummary();
@@ -1927,28 +1889,6 @@ function filterChipOptions(type, keyword) {
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         renderSelectedMaterialsDetailed();
-      });
-    });
-
-    box.querySelectorAll('[data-material-action]').forEach(select => {
-      select.addEventListener('change', () => {
-        const idx = Number(select.dataset.materialAction);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].action = select.value || '사용';
-        if (select.value === '구입' || select.value === '반품') {
-          state.selectedMaterialsDetailed[idx].include_cost = true;
-        }
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
-      });
-    });
-
-    box.querySelectorAll('[data-material-include-cost]').forEach(input => {
-      input.addEventListener('change', () => {
-        const idx = Number(input.dataset.materialIncludeCost);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].include_cost = !!input.checked;
-        updateMoneySummary();
       });
     });
 
@@ -2030,8 +1970,6 @@ function filterChipOptions(type, keyword) {
             unit: '',
             price: 0,
             qty: 1,
-            action: '사용',
-            include_cost: false,
             method: getDefaultMaterialMethod(),
             installment_months: 0
           });
@@ -2594,6 +2532,7 @@ function filterChipOptions(type, keyword) {
 
   function resetMoneyFields() {
     if (el.has_money) el.has_money.checked = false;
+
     if (el.money_note) el.money_note.value = '';
     if (el.other_cost) el.other_cost.value = 0;
     toggleMoneyBox(false);
@@ -3478,8 +3417,6 @@ function filterChipOptions(type, keyword) {
           unit: item.unit || '',
           price: Number(item.price || 0),
           qty: Number(item.qty || 0),
-          action: item.action || '사용',
-          include_cost: item.include_cost === false ? false : true,
           method: item.method || '',
           installment_months: Number(item.installment_months || 0)
         })),

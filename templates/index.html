@@ -187,6 +187,10 @@
       #page-works .page-header-actions{position:sticky; top:0; z-index:30; background:#f8fafc; padding:8px 0 10px;}
       #page-works .page-header-actions .btn{width:100%; justify-content:center;}
       .grid.two.task-grid{grid-template-columns:1fr;}
+      .task-entry-stack{display:grid; grid-template-columns:1fr; gap:12px;}
+      .task-search-field input{min-height:46px; font-size:16px;}
+      .task-select-field select{min-height:46px;}
+      .task-inline-help{margin-top:-2px; margin-bottom:4px;}
     }
 
     .money-toggle label{display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; cursor:pointer;}
@@ -344,6 +348,7 @@
       #recent-task-picks, #recent-material-picks{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px;}
       .quick-pick-chip{display:inline-flex; align-items:center; gap:4px; padding:6px 10px; border:1px solid #d9e3ff; background:#f7f9ff; color:#23408e; border-radius:999px; font-size:13px; cursor:pointer;}
       .quick-pick-chip:hover{background:#eef3ff;}
+    .task-recent-wrap{margin-top:8px;}
 
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
@@ -552,10 +557,10 @@
         <div class="option-mobile-tabs">
           <button class="btn option-tab-btn active" data-option-tab="weather">날씨</button>
           <button class="btn option-tab-btn" data-option-tab="crops">작물</button>
+          <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
           <button class="btn option-tab-btn" data-option-tab="task_categories">작업분류</button>
           <button class="btn option-tab-btn" data-option-tab="tasks">세부작업</button>
           <button class="btn option-tab-btn" data-option-tab="pests">병충해</button>
-          <button class="btn option-tab-btn" data-option-tab="machines">사용기계</button>
         </div>
 
         <div id="season-panel" class="panel season-panel compact collapsed">
@@ -598,6 +603,7 @@
             </div>
             <div id="options-crops" class="option-list"></div>
           </div>
+
 
           <div class="panel option-panel mobile-active" data-option-panel="task_categories">
             <h3>작업분류</h3>
@@ -804,18 +810,19 @@
           </label>
         </div>
 
-        <div class="grid two">
-          <label class="field">
-            <span>세부작업</span>
-            <select id="task_name"></select>
-          </label>
-          <label class="field">
+        <div class="task-entry-stack">
+          <label class="field task-search-field">
             <span>세부작업 빠른찾기</span>
-            <input type="text" id="task-name-search" list="task-name-datalist" placeholder="세부작업 검색 또는 빠른 선택">
+            <input type="text" id="task-name-search" list="task-name-datalist" placeholder="세부작업명을 입력하면 바로 찾을 수 있어요">
             <datalist id="task-name-datalist"></datalist>
           </label>
+          <div class="inline-help task-inline-help">작업분류를 먼저 고르면 해당 분류의 세부작업만 보여집니다.</div>
+          <label class="field task-select-field">
+            <span>세부작업 선택</span>
+            <select id="task_name"></select>
+          </label>
         </div>
-        <div class="field hidden" id="recent-task-picks"></div>
+        <div class="field hidden task-recent-wrap" id="recent-task-picks"></div>
 
         <div class="field">
           <span>작물</span>

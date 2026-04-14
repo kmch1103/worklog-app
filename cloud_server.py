@@ -223,8 +223,8 @@ def import_old_db_into_current(uploaded_db_path):
                 continue
 
             cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
-                VALUES (?, ?, ?, ?, '')
+                INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
+                VALUES (?, ?, ?, ?, 0, 0, '')
             """, (name, unit, stock_qty, unit_price))
             sync_material_option(cur, name)
 
@@ -381,6 +381,8 @@ def init_db():
         unit TEXT DEFAULT '',
         stock_qty REAL DEFAULT 0,
         unit_price REAL DEFAULT 0,
+        price_last_year REAL DEFAULT 0,
+        price_this_year REAL DEFAULT 0,
         memo TEXT DEFAULT ''
     )
     """)
@@ -388,6 +390,8 @@ def init_db():
     ensure_column(cur, "materials", "unit", "TEXT DEFAULT ''")
     ensure_column(cur, "materials", "stock_qty", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "unit_price", "REAL DEFAULT 0")
+    ensure_column(cur, "materials", "price_last_year", "REAL DEFAULT 0")
+    ensure_column(cur, "materials", "price_this_year", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
 
     # option tables
@@ -813,7 +817,7 @@ def delete_option(option_type, option_id):
 def get_materials():
     conn = db()
     rows = conn.execute("""
-        SELECT id, name, unit, stock_qty, unit_price, memo
+        SELECT id, name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo
         FROM materials
         ORDER BY
           CASE WHEN COALESCE(stock_qty, 0) > 0 THEN 0 ELSE 1 END,
@@ -831,7 +835,12 @@ def create_material():
     unit = normalize_name(data.get("unit"))
     stock_qty = float(data.get("stock_qty") or 0)
     unit_price = float(data.get("unit_price") or 0)
+    price_last_year = float(data.get("price_last_year") or 0)
+    price_this_year = float(data.get("price_this_year") or 0)
     memo = normalize_name(data.get("memo"))
+
+    if unit_price <= 0 and price_this_year > 0:
+        unit_price = price_this_year
 
     if not name:
         return jsonify({"ok": False, "error": "name required"}), 400
@@ -847,14 +856,14 @@ def create_material():
     if row:
         cur.execute("""
             UPDATE materials
-            SET unit = ?, stock_qty = ?, unit_price = ?, memo = ?
+            SET unit = ?, stock_qty = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
             WHERE id = ?
-        """, (unit, stock_qty, unit_price, memo, row["id"]))
+        """, (unit, stock_qty, unit_price, price_last_year, price_this_year, memo, row["id"]))
     else:
         cur.execute("""
-            INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
-            VALUES (?, ?, ?, ?, ?)
-        """, (name, unit, stock_qty, unit_price, memo))
+            INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo))
 
     sync_material_option(cur, name)
 
@@ -871,7 +880,12 @@ def update_material(material_id):
     unit = normalize_name(data.get("unit"))
     stock_qty = float(data.get("stock_qty") or 0)
     unit_price = float(data.get("unit_price") or 0)
+    price_last_year = float(data.get("price_last_year") or 0)
+    price_this_year = float(data.get("price_this_year") or 0)
     memo = normalize_name(data.get("memo"))
+
+    if unit_price <= 0 and price_this_year > 0:
+        unit_price = price_this_year
 
     if not name:
       return jsonify({"ok": False, "error": "name required"}), 400
@@ -886,9 +900,9 @@ def update_material(material_id):
 
     cur.execute("""
         UPDATE materials
-        SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, memo = ?
+        SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
         WHERE id = ?
-    """, (name, unit, stock_qty, unit_price, memo, material_id))
+    """, (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo, material_id))
 
     if old_row:
         old_name = old_row["name"]

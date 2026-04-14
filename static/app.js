@@ -12,6 +12,7 @@
     plans: [],
     materials: [],
     moneyRows: [],
+    incomeRows: [],
     options: {
       weather: [],
       crops: [],
@@ -50,6 +51,7 @@
     bindMobileCalendarButtons();
     bindWorkButtons();
     bindMaterialButtons();
+    bindIncomeButtons();
     bindOptionButtons();
     bindCalendarDetailModal();
 
@@ -113,7 +115,7 @@
       'money_labor_total','money_material_total','money_total_amount',
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
-      'btn-money-filter','money-list','money-total','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list',
+      'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','btn-open-income-modal','income-modal','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
       'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name'
     ];
 
@@ -272,6 +274,67 @@
     });
   }
 
+
+  function bindIncomeButtons() {
+    on(el['btn-open-income-modal'], 'click', openIncomeModal);
+    on(el['btn-close-income-modal'], 'click', closeIncomeModal);
+    on(el['btn-cancel-income'], 'click', closeIncomeModal);
+    on(el['btn-save-income'], 'click', saveIncome);
+  }
+
+  function openIncomeModal() {
+    if (el['income_date'] && !el['income_date'].value) {
+      el['income_date'].value = fmtDate(new Date());
+    }
+    if (el['income_type'] && !el['income_type'].value) {
+      el['income_type'].value = '판매수익';
+    }
+    if (el['income_amount']) el['income_amount'].value = '';
+    if (el['income_method'] && !el['income_method'].value) {
+      el['income_method'].value = '현금';
+    }
+    if (el['income_note']) el['income_note'].value = '';
+    removeHidden(el['income-modal']);
+  }
+
+  function closeIncomeModal() {
+    addHidden(el['income-modal']);
+  }
+
+  async function saveIncome() {
+    const payload = {
+      income_date: (el['income_date']?.value || '').trim(),
+      income_type: (el['income_type']?.value || '').trim(),
+      amount: Number(el['income_amount']?.value || 0),
+      method: (el['income_method']?.value || '').trim(),
+      note: (el['income_note']?.value || '').trim()
+    };
+
+    if (!payload.income_date) {
+      alert('수익 날짜를 입력하세요.');
+      return;
+    }
+    if (!payload.income_type) {
+      alert('수익 구분을 선택하세요.');
+      return;
+    }
+    if (!(payload.amount > 0)) {
+      alert('수익 금액을 입력하세요.');
+      return;
+    }
+
+    try {
+      await apiPost('/api/incomes', payload);
+      await loadMoney();
+      renderMoney();
+      closeIncomeModal();
+      alert('수익을 저장했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`수익 저장 실패: ${e.message || e}`);
+    }
+  }
+
   function bindMaterialButtons() {
     on(el['btn-open-material-modal'], 'click', () => openMaterialModal());
     on(el['btn-close-material-modal'], 'click', closeMaterialModal);
@@ -412,10 +475,17 @@
     try {
       const seasonId = el['money-season-filter']?.value || '';
       const url = seasonId ? `/api/money?season_id=${encodeURIComponent(seasonId)}` : '/api/money';
-      state.moneyRows = await apiGet(url);
+      const incomeUrl = seasonId ? `/api/incomes?season_id=${encodeURIComponent(seasonId)}` : '/api/incomes';
+      const [moneyRows, incomeRows] = await Promise.all([
+        apiGet(url),
+        apiGet(incomeUrl).catch(() => [])
+      ]);
+      state.moneyRows = Array.isArray(moneyRows) ? moneyRows : [];
+      state.incomeRows = Array.isArray(incomeRows) ? incomeRows : [];
     } catch (e) {
       console.error(e);
       state.moneyRows = [];
+      state.incomeRows = [];
     }
   }
 
@@ -2857,13 +2927,48 @@ function filterChipOptions(type, keyword) {
     const thead = table?.querySelector('thead');
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
-    const filtered = state.moneyRows.filter(row => {
+    const expenseRows = (state.moneyRows || []).map(row => ({
+      ...row,
+      row_kind: 'expense',
+      date: row.date || '',
+      display_name: row.task_name || '',
+      display_type: row.type || '',
+      display_amount: Number(row.total_amount || row.total || 0),
+      method_display: row.method_display || row.method || '',
+      credit_source: row.method || ''
+    }));
+
+    const incomeRows = (state.incomeRows || []).map(row => ({
+      ...row,
+      row_kind: 'income',
+      date: row.income_date || row.date || '',
+      task_name: row.income_type || row.category || '수익',
+      type: '수익',
+      total_amount: Number(row.amount || 0),
+      method: row.method || '',
+      method_display: row.method || '',
+      note: row.note || '',
+      display_name: row.income_type || row.category || '수익',
+      display_type: '수익',
+      display_amount: Number(row.amount || 0),
+      credit_source: row.method || ''
+    }));
+
+    const mergedRows = expenseRows.concat(incomeRows);
+
+    const filtered = mergedRows.filter(row => {
       if (start && row.date < start) return false;
       if (end && row.date > end) return false;
-      if (typeFilter && row.type !== typeFilter) return false;
+      if (typeFilter) {
+        if (typeFilter === '수익') {
+          if (row.row_kind !== 'income') return false;
+        } else if (row.row_kind === 'income' || row.type !== typeFilter) {
+          return false;
+        }
+      }
       if (methodFilter) {
         const rowMethod = row.method || '';
-        const isCardMethod = rowMethod === '카드일시불' || rowMethod === '카드할부';
+        const isCardMethod = rowMethod === '카드일시불' || rowMethod === '카드할부' || rowMethod === '카드';
         if (methodFilter === '카드') {
           if (!isCardMethod) return false;
         } else if (rowMethod !== methodFilter) {
@@ -2885,28 +2990,39 @@ function filterChipOptions(type, keyword) {
       return true;
     });
 
-    const total = filtered.reduce((sum, row) => sum + Number(row.total_amount || row.total || 0), 0);
-    const cash = filtered.reduce((sum, row) => sum + Number(row.cash_amount || 0), 0);
-    const transfer = filtered.reduce((sum, row) => sum + Number(row.transfer_amount || 0), 0);
-    const cardLump = filtered.reduce((sum, row) => sum + Number(row.card_lump_amount || 0), 0);
-    const cardInstall = filtered.reduce((sum, row) => sum + Number(row.card_install_amount || 0), 0);
-    const credit = filtered.reduce((sum, row) => sum + Number(row.credit_amount || 0), 0);
+    const incomeTotal = filtered
+      .filter(row => row.row_kind === 'income')
+      .reduce((sum, row) => sum + Number(row.display_amount || 0), 0);
 
-    if (el['money-total']) el['money-total'].innerText = formatNumber(total);
+    const expenseTotal = filtered
+      .filter(row => row.row_kind !== 'income')
+      .reduce((sum, row) => sum + Number(row.display_amount || 0), 0);
+
+    const cash = filtered.reduce((sum, row) => sum + (row.method === '현금' ? Number(row.display_amount || 0) : 0), 0);
+    const transfer = filtered.reduce((sum, row) => sum + (row.method === '계좌이체' ? Number(row.display_amount || 0) : 0), 0);
+    const cardLump = filtered.reduce((sum, row) => sum + (row.method === '카드일시불' ? Number(row.display_amount || 0) : 0), 0);
+    const cardLump = filtered.reduce((sum, row) => sum + 0, 0);
+    const cardInstall = filtered.reduce((sum, row) => sum + ((row.method === '카드할부' ? Number(row.display_amount || 0) : 0)), 0);
+    const credit = filtered.reduce((sum, row) => sum + (row.method === '외상' ? Number(row.display_amount || 0) : 0), 0);
+
+    if (el['money-income-total']) el['money-income-total'].innerText = formatNumber(incomeTotal);
+    if (el['money-total']) el['money-total'].innerText = formatNumber(expenseTotal);
+    if (el['money-net-profit']) el['money-net-profit'].innerText = formatNumber(incomeTotal - expenseTotal);
     if (el['money-cash']) el['money-cash'].innerText = formatNumber(cash);
     if (el['money-transfer']) el['money-transfer'].innerText = formatNumber(transfer);
-    if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(cardLump);
+    if (el['money-card-lump']) el['money-card-lump'].innerText = formatNumber(filtered.reduce((sum, row) => sum + (row.method === '카드일시불' ? Number(row.display_amount || 0) : 0), 0));
     if (el['money-card-install']) el['money-card-install'].innerText = formatNumber(cardInstall);
     if (el['money-credit']) el['money-credit'].innerText = formatNumber(credit);
 
     const creditRows = filtered.filter(row => row.method === '외상');
     if (el['money-credit-list']) {
       el['money-credit-list'].innerHTML = creditRows.length
-        ? `<table class="money-table"><thead><tr><th>날짜</th><th>작업</th><th>금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
+        ? `<table class="money-table"><thead><tr><th>날짜</th><th>작업</th><th>구분</th><th>금액</th><th>비고</th></tr></thead><tbody>${creditRows.map(row => `
             <tr>
               <td>${escapeHtml(row.date || '')}</td>
-              <td>${escapeHtml(row.task_name || '')}</td>
-              <td>${formatNumber(row.total_amount || row.total || 0)}</td>
+              <td>${escapeHtml(row.display_name || '')}</td>
+              <td>${escapeHtml(row.display_type || '')}</td>
+              <td>${formatNumber(row.display_amount || 0)}</td>
               <td>${escapeHtml(row.note || '')}</td>
             </tr>
           `).join('')}</tbody></table>`
@@ -2938,15 +3054,16 @@ function filterChipOptions(type, keyword) {
               ${rows.map(row => `
                 <div class="money-mobile-card">
                   <div class="money-mobile-card-head">
-                    <strong>${escapeHtml(row.task_name || '작업명 없음')}</strong>
+                    <strong>${escapeHtml(row.display_name || '이름 없음')}</strong>
                     <span>${escapeHtml(row.method_display || row.method || '-')}</span>
                   </div>
-                  <div class="money-mobile-card-amount">총금액 ${formatNumber(row.total_amount || row.total || 0)}원</div>
+                  <div class="money-mobile-card-amount">${row.row_kind === 'income' ? '+' : ''}${formatNumber(row.display_amount || 0)}원</div>
                   <div class="money-mobile-card-grid">
-                    <div><b>구분</b><span>${escapeHtml(row.type || '-')}</span></div>
-                    <div><b>인건비</b><span>${formatNumber(row.labor_total || 0)}원</span></div>
+                    <div><b>구분</b><span>${escapeHtml(row.display_type || '-')}</span></div>
+                    <div><b>방식</b><span>${escapeHtml(row.method_display || row.method || '-')}</span></div>
+                    ${row.row_kind === 'income' ? '' : `<div><b>인건비</b><span>${formatNumber(row.labor_total || 0)}원</span></div>
                     <div><b>자재비</b><span>${formatNumber(row.material_total || 0)}원</span></div>
-                    <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>
+                    <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>`}
                   </div>
                   ${row.note ? `<div class="money-mobile-card-note"><b>비고</b><span>${escapeHtml(row.note || '')}</span></div>` : ''}
                 </div>
@@ -2961,9 +3078,9 @@ function filterChipOptions(type, keyword) {
     wrap.innerHTML = filtered.map(row => `
       <tr>
         <td>${escapeHtml(row.date || '')}</td>
-        <td>${escapeHtml(row.task_name || '')}</td>
-        <td>${escapeHtml(row.type || '')}</td>
-        <td>${formatNumber(row.total_amount || row.total || 0)}</td>
+        <td>${escapeHtml(row.display_name || '')}</td>
+        <td>${escapeHtml(row.display_type || '')}</td>
+        <td>${row.row_kind === 'income' ? '+' : ''}${formatNumber(row.display_amount || 0)}</td>
         <td>${escapeHtml(row.method_display || row.method || '')}</td>
         <td>${escapeHtml(row.note || '')}</td>
       </tr>
@@ -2971,7 +3088,7 @@ function filterChipOptions(type, keyword) {
   }
 
 
-  function bindHistoryNavigation() {
+  function bindHistoryNavigation() { {
     window.addEventListener('popstate', (event) => {
       const page = event.state?.page || state.currentPage || 'calendar';
       const modal = event.state?.modal || '';
@@ -3011,6 +3128,7 @@ function filterChipOptions(type, keyword) {
     closePlanModal();
     closeWorkModal();
     closeMaterialModal();
+    closeIncomeModal();
     closeTaskOptionModal();
   }
 
@@ -3524,29 +3642,3 @@ function filterChipOptions(type, keyword) {
     node.addEventListener(event, handler);
   }
 })();
-
-async function loadIncomes(){
-  return await apiGet('/api/incomes');
-}
-
-function openIncomeModal(){
-  document.getElementById('income-modal').classList.remove('hidden');
-}
-
-function closeIncomeModal(){
-  document.getElementById('income-modal').classList.add('hidden');
-}
-
-async function saveIncome(){
-  const data = {
-    date: document.getElementById('income-date').value,
-    category: document.getElementById('income-category').value,
-    amount: document.getElementById('income-amount').value,
-    method: document.getElementById('income-method').value,
-    note: document.getElementById('income-note').value
-  };
-  await apiPost('/api/incomes', data);
-  closeIncomeModal();
-  await loadMoney();
-  renderMoney();
-}

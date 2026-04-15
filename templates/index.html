@@ -47,6 +47,8 @@
     .option-subtext{font-size:12px; color:#64748b;}
     .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
     .recommended-materials-empty{font-size:13px; color:#64748b;}
+    .recommend-chip-note{font-size:12px; color:#64748b; margin-left:2px;}
+
     .options-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:start;}
     .option-panel{min-width:0;}
     .option-panel h3{font-size:26px; margin-bottom:12px;}
@@ -896,6 +898,12 @@
           <div class="field">
             <span>세부작업 빠른선택</span>
             <div id="task-name-options" class="task-option-box"></div>
+          </div>
+
+          <div class="field hidden" id="task-material-recommend-wrap">
+            <span>세부작업 추천자재</span>
+            <div id="task-material-recommend-box" class="recommended-materials-box"></div>
+            <div class="inline-help">최근 같은 세부작업에서 자주 사용한 자재를 추천합니다. 눌러서 바로 추가할 수 있습니다.</div>
           </div>
 
           <label class="field task-select-field">

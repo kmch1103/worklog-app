@@ -567,6 +567,22 @@
 
 
 
+  function isBlockingModalOpen() {
+    const modalIds = [
+      'work-modal',
+      'plan-modal',
+      'calendar-detail-modal',
+      'material-modal',
+      'task-option-modal',
+      'income-modal'
+    ];
+
+    return modalIds.some(id => {
+      const node = el[id];
+      return !!node && !node.classList.contains('hidden');
+    });
+  }
+
   function stabilizeWorksFloatingButton() {
     const wrap = document.querySelector('#page-works .works-floating-action');
     const btn = el['btn-new-work'];
@@ -578,7 +594,7 @@
     wrap.style.bottom = isMobile ? '14px' : '18px';
     wrap.style.right = isMobile ? '14px' : '20px';
     wrap.style.left = isMobile ? 'auto' : '278px';
-    wrap.style.display = state.currentPage === 'works' ? 'flex' : 'none';
+    wrap.style.display = state.currentPage === 'works' && !isBlockingModalOpen() ? 'flex' : 'none';
     wrap.style.justifyContent = 'flex-end';
     wrap.style.pointerEvents = 'none';
     btn.style.pointerEvents = 'auto';
@@ -3352,11 +3368,13 @@ function filterChipOptions(type, keyword) {
   function removeHidden(node) {
     if (!node) return;
     node.classList.remove('hidden');
+    stabilizeWorksFloatingButton();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
+    stabilizeWorksFloatingButton();
   }
 
   function fmtDate(date) {

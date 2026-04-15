@@ -37,7 +37,8 @@
     editingSeasonId: null,
     editingTaskOptionId: null,
     editingIncomeId: null,
-    seasonPanelCollapsed: true
+    seasonPanelCollapsed: true,
+    moneySelectedMonth: ''
   };
 
   const el = {};
@@ -264,14 +265,17 @@
     on(el['other_cost'], 'input', updateMoneySummary);
 
     on(el['money-period-filter'], 'change', () => {
+      clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       applyMoneyQuickPeriod();
       renderMoney();
     });
     on(el['money-start'], 'change', () => {
+      if (state.moneySelectedMonth) clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       syncMoneyQuickPeriodFromDates();
       renderMoney();
     });
     on(el['money-end'], 'change', () => {
+      if (state.moneySelectedMonth) clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       syncMoneyQuickPeriodFromDates();
       renderMoney();
     });
@@ -279,6 +283,7 @@
     on(el['money-method-filter'], 'change', renderMoney);
     on(el['money-keyword-filter'], 'input', renderMoney);
     on(el['btn-money-filter'], 'click', async () => {
+      if (state.moneySelectedMonth) clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       syncMoneyQuickPeriodFromDates();
       await loadMoney();
       renderMoney();
@@ -466,7 +471,7 @@
     on(el['btn-cancel-task-option'], 'click', closeTaskOptionModal);
     on(el['btn-save-task-option'], 'click', saveTaskOptionEdit);
     on(el['new-task-category'], 'change', () => renderTaskOptionList());
-    on(el['money-season-filter'], 'change', async () => { await loadMoney(); renderMoney(); });
+    on(el['money-season-filter'], 'change', async () => { clearMoneySelectedMonth(); await loadMoney(); renderMoney(); });
   }
 
   function autoFillMaterialName(keyword) {
@@ -3172,6 +3177,7 @@ function filterChipOptions(type, keyword) {
 
 
   function getSelectedMoneyScopeLabel() {
+    if (state.moneySelectedMonth) return `월필터: ${state.moneySelectedMonth}`;
     const seasonValue = el['money-season-filter']?.value || '';
     if (seasonValue === 'current') return '현재시즌';
     if (seasonValue && seasonValue !== 'all') {
@@ -3187,29 +3193,47 @@ function filterChipOptions(type, keyword) {
     return '전체';
   }
 
-  function applyMoneyMonthFilter(monthKey) {
-    const value = String(monthKey || '').trim();
-    if (!value || value.length !== 7) return;
+  function getMonthDateRange(monthKey) {
+    const base = String(monthKey || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(base)) return null;
+    const start = `${base}-01`;
+    const year = Number(base.slice(0, 4));
+    const month = Number(base.slice(5, 7));
+    const endDate = new Date(year, month, 0);
+    const end = `${base}-${String(endDate.getDate()).padStart(2, '0')}`;
+    return { start, end };
+  }
 
-    const [yearText, monthText] = value.split('-');
-    const year = Number(yearText);
-    const month = Number(monthText);
-    if (!Number.isFinite(year) || !Number.isFinite(month)) return;
-
-    const start = `${yearText}-${monthText}-01`;
-    const endDay = String(new Date(year, month, 0).getDate()).padStart(2, '0');
-    const end = `${yearText}-${monthText}-${endDay}`;
-
-    if (el['money-start']) el['money-start'].value = start;
-    if (el['money-end']) el['money-end'].value = end;
-    if (el['money-period-filter']) el['money-period-filter'].value = 'custom';
-
-    renderMoney();
-    switchPage('money');
-    const moneyPage = el['page-money'];
-    if (moneyPage && moneyPage.scrollIntoView) {
-      moneyPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function clearMoneySelectedMonth(options = {}) {
+    state.moneySelectedMonth = '';
+    if (!options.keepDates) {
+      if (el['money-start']) el['money-start'].value = '';
+      if (el['money-end']) el['money-end'].value = '';
     }
+    if (!options.keepQuickPeriod && el['money-period-filter']) {
+      el['money-period-filter'].value = '';
+    }
+  }
+
+  function applyMoneySelectedMonth(monthKey) {
+    const range = getMonthDateRange(monthKey);
+    if (!range) return;
+    state.moneySelectedMonth = monthKey;
+    if (el['money-start']) el['money-start'].value = range.start;
+    if (el['money-end']) el['money-end'].value = range.end;
+    if (el['money-period-filter']) el['money-period-filter'].value = '';
+  }
+
+  function toggleMoneySelectedMonth(monthKey) {
+    const target = String(monthKey || '').trim();
+    if (!target) return;
+    if (state.moneySelectedMonth === target) {
+      clearMoneySelectedMonth();
+    } else {
+      applyMoneySelectedMonth(target);
+    }
+    switchPage('money');
+    renderMoney();
   }
 
   function renderMonthlySettlement(rows) {
@@ -3243,14 +3267,17 @@ function filterChipOptions(type, keyword) {
     if (empty) empty.classList.add('hidden');
     if (el['money-scope-month-count']) el['money-scope-month-count'].textContent = `월 수: ${monthKeys.length}`;
 
+    const selectedMonth = state.moneySelectedMonth || '';
     body.innerHTML = monthKeys.map(monthKey => {
       const item = grouped[monthKey];
       const incomeAmount = Number(item.income || 0);
       const expenseAmount = Number(item.expense || 0);
       const net = incomeAmount - expenseAmount;
+      const isSelected = selectedMonth === monthKey;
+      const buttonLabel = isSelected ? `${monthKey} 해제` : monthKey;
       return `
-        <tr class="money-month-row" data-money-month="${escapeHtml(monthKey)}" style="cursor:pointer;">
-          <td><button type="button" class="btn" data-money-month-btn="${escapeHtml(monthKey)}">${escapeHtml(monthKey)}</button></td>
+        <tr class="${isSelected ? 'money-month-row-selected' : ''}">
+          <td><button type="button" class="btn money-month-filter-btn${isSelected ? ' active' : ''}" data-money-month="${escapeHtml(monthKey)}">${escapeHtml(buttonLabel)}</button></td>
           <td>${formatNumber(incomeAmount)}</td>
           <td>${formatNumber(expenseAmount)}</td>
           <td>${net > 0 ? '+' : ''}${formatNumber(net)}</td>
@@ -3258,18 +3285,8 @@ function filterChipOptions(type, keyword) {
       `;
     }).join('');
 
-    body.querySelectorAll('[data-money-month-btn]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        applyMoneyMonthFilter(btn.dataset.moneyMonthBtn || '');
-      });
-    });
-
-    body.querySelectorAll('[data-money-month]').forEach(row => {
-      row.addEventListener('click', () => {
-        applyMoneyMonthFilter(row.dataset.moneyMonth || '');
-      });
+    body.querySelectorAll('[data-money-month]').forEach(btn => {
+      btn.addEventListener('click', () => toggleMoneySelectedMonth(btn.dataset.moneyMonth || ''));
     });
   }
 

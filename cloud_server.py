@@ -456,7 +456,6 @@ def init_db():
     )
     """)
     ensure_column(cur, "options_tasks", "category_name", "TEXT DEFAULT ''")
-    ensure_column(cur, "options_tasks", "recommended_materials", "TEXT DEFAULT ''")
     ensure_column(cur, "options_pests", "recommended_materials", "TEXT DEFAULT ''")
 
     # seasons
@@ -733,9 +732,7 @@ def get_options():
         result[t] = rows_to_dicts(rows)
 
     task_rows = conn.execute("""
-        SELECT id, name,
-               COALESCE(category_name, '') AS category_name,
-               COALESCE(recommended_materials, '') AS recommended_materials
+        SELECT id, name, COALESCE(category_name, '') AS category_name
         FROM options_tasks
         ORDER BY category_name, name
     """).fetchall()
@@ -770,12 +767,12 @@ def create_option(option_type):
 
     if option_type == "tasks":
         cur.execute(
-            "INSERT OR IGNORE INTO options_tasks (name, category_name, recommended_materials) VALUES (?, ?, ?)",
-            (name, category_name, recommended_materials)
+            "INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)",
+            (name, category_name)
         )
         cur.execute(
-            "UPDATE options_tasks SET category_name = ?, recommended_materials = ? WHERE name = ?",
-            (category_name, recommended_materials, name)
+            "UPDATE options_tasks SET category_name = ? WHERE name = ?",
+            (category_name, name)
         )
     elif option_type == "pests":
         cur.execute(
@@ -833,8 +830,8 @@ def update_option(option_type, option_id):
 
     if option_type == "tasks":
         cur.execute(
-            "UPDATE options_tasks SET name = ?, category_name = ?, recommended_materials = ? WHERE id = ?",
-            (new_name, category_name, recommended_materials, option_id)
+            "UPDATE options_tasks SET name = ?, category_name = ? WHERE id = ?",
+            (new_name, category_name, option_id)
         )
     elif option_type == "pests":
         cur.execute(

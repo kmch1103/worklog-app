@@ -37,8 +37,7 @@
     editingSeasonId: null,
     editingTaskOptionId: null,
     editingIncomeId: null,
-    seasonPanelCollapsed: true,
-    moneySelectedMonth: ''
+    seasonPanelCollapsed: true
   };
 
   const el = {};
@@ -265,17 +264,14 @@
     on(el['other_cost'], 'input', updateMoneySummary);
 
     on(el['money-period-filter'], 'change', () => {
-      clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       applyMoneyQuickPeriod();
       renderMoney();
     });
     on(el['money-start'], 'change', () => {
-      if (state.moneySelectedMonth) clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       syncMoneyQuickPeriodFromDates();
       renderMoney();
     });
     on(el['money-end'], 'change', () => {
-      if (state.moneySelectedMonth) clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       syncMoneyQuickPeriodFromDates();
       renderMoney();
     });
@@ -283,7 +279,6 @@
     on(el['money-method-filter'], 'change', renderMoney);
     on(el['money-keyword-filter'], 'input', renderMoney);
     on(el['btn-money-filter'], 'click', async () => {
-      if (state.moneySelectedMonth) clearMoneySelectedMonth({ keepDates: true, keepQuickPeriod: true });
       syncMoneyQuickPeriodFromDates();
       await loadMoney();
       renderMoney();
@@ -471,7 +466,7 @@
     on(el['btn-cancel-task-option'], 'click', closeTaskOptionModal);
     on(el['btn-save-task-option'], 'click', saveTaskOptionEdit);
     on(el['new-task-category'], 'change', () => renderTaskOptionList());
-    on(el['money-season-filter'], 'change', async () => { clearMoneySelectedMonth(); await loadMoney(); renderMoney(); });
+    on(el['money-season-filter'], 'change', async () => { await loadMoney(); renderMoney(); });
   }
 
   function autoFillMaterialName(keyword) {
@@ -3039,6 +3034,118 @@ function filterChipOptions(type, keyword) {
     }
   }
 
+
+  function getMaterialMinStockStorageKey() {
+    return 'worklog_material_min_stock_v1';
+  }
+
+  function getMaterialMinStockMap() {
+    try {
+      const raw = localStorage.getItem(getMaterialMinStockStorageKey()) || '{}';
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      console.error(e);
+      return {};
+    }
+  }
+
+  function setMaterialMinStockMap(map) {
+    try {
+      localStorage.setItem(getMaterialMinStockStorageKey(), JSON.stringify(map || {}));
+      return true;
+    } catch (e) {
+      console.error(e);
+      alert('최소재고 저장에 실패했습니다.');
+      return false;
+    }
+  }
+
+  function getMaterialMinStock(name) {
+    const key = String(name || '').trim();
+    const map = getMaterialMinStockMap();
+    return Number(map[key] || 0);
+  }
+
+  function saveMaterialMinStock(name, value) {
+    const key = String(name || '').trim();
+    if (!key) return false;
+    const map = getMaterialMinStockMap();
+    const numeric = Math.max(0, Number(value || 0));
+    map[key] = numeric;
+    return setMaterialMinStockMap(map);
+  }
+
+  function getMaterialUsageStats() {
+    const usageMap = new Map();
+    (state.works || []).forEach(work => {
+      const meta = parseMemo(work.memo);
+      const materials = Array.isArray(meta.materials) ? meta.materials : [];
+      materials.forEach(item => {
+        const name = String(item.name || '').trim();
+        if (!name) return;
+        const qty = Number(item.qty || 0) || 1;
+        usageMap.set(name, (usageMap.get(name) || 0) + qty);
+      });
+    });
+
+    return Array.from(usageMap.entries())
+      .map(([name, qty]) => ({ name, qty }))
+      .sort((a, b) => {
+        if (b.qty !== a.qty) return b.qty - a.qty;
+        return a.name.localeCompare(b.name, 'ko');
+      });
+  }
+
+  function renderMaterialStatsPanel(filteredItems) {
+    const usageRows = getMaterialUsageStats();
+    const filteredNames = new Set((filteredItems || []).map(item => String(item.name || '').trim()));
+    const topUsage = usageRows.filter(row => filteredNames.has(row.name)).slice(0, 5);
+    const lowStockRows = (filteredItems || [])
+      .map(item => {
+        const stock = Number(item.stock_qty || item.stock || 0);
+        const minStock = getMaterialMinStock(item.name || '');
+        return { item, stock, minStock };
+      })
+      .filter(row => row.minStock > 0 && row.stock <= row.minStock)
+      .sort((a, b) => a.stock - b.stock)
+      .slice(0, 5);
+
+    return `
+      <div class="panel" style="margin-bottom:12px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px;">
+          <div>
+            <div style="font-weight:800; margin-bottom:8px;">부족 자재</div>
+            ${
+              lowStockRows.length
+                ? lowStockRows.map(row => `
+                    <div class="day-item" style="margin-bottom:8px; border-color:#ef4444; background:#fff5f5;">
+                      <div><strong>${escapeHtml(row.item.name || '')}</strong></div>
+                      <div>현재 ${formatNumber(row.stock)} ${escapeHtml(row.item.unit || '')} / 최소 ${formatNumber(row.minStock)}</div>
+                    </div>
+                  `).join('')
+                : `<div class="empty-msg">부족 자재 없음</div>`
+            }
+          </div>
+          <div>
+            <div style="font-weight:800; margin-bottom:8px;">많이 쓴 자재 TOP</div>
+            ${
+              topUsage.length
+                ? topUsage.map((row, idx) => `
+                    <div class="day-item" style="margin-bottom:8px;">
+                      <div><strong>${idx + 1}. ${escapeHtml(row.name)}</strong></div>
+                      <div>사용량 합계: ${formatNumber(row.qty)}</div>
+                    </div>
+                  `).join('')
+                : `<div class="empty-msg">사용 통계 없음</div>`
+            }
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+
   function renderMaterials() {
     const wrap = el['materials-list'];
     if (!wrap) return;
@@ -3054,8 +3161,11 @@ function filterChipOptions(type, keyword) {
     const outStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) <= 0);
     const tab = state.materialFilterTab || 'all';
 
+    const statsHtml = renderMaterialStatsPanel(filtered);
+
     if (tab === 'in') {
       wrap.innerHTML = `
+        ${statsHtml}
         <div class="materials-single-col">
           <div>
             <h3>재고 있음</h3>
@@ -3065,6 +3175,7 @@ function filterChipOptions(type, keyword) {
       `;
     } else if (tab === 'out') {
       wrap.innerHTML = `
+        ${statsHtml}
         <div class="materials-single-col">
           <div>
             <h3>재고 없음</h3>
@@ -3074,6 +3185,7 @@ function filterChipOptions(type, keyword) {
       `;
     } else {
       wrap.innerHTML = `
+        ${statsHtml}
         <div class="materials-two-col">
           <div>
             <h3>재고 있음</h3>
@@ -3098,6 +3210,17 @@ function filterChipOptions(type, keyword) {
     wrap.querySelectorAll('[data-material-delete]').forEach(btn => {
       btn.addEventListener('click', () => deleteMaterial(btn.dataset.materialDelete));
     });
+
+    wrap.querySelectorAll('[data-min-stock-save]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.minStockSave || '';
+        const input = wrap.querySelector(`[data-min-stock-input="${CSS.escape(name)}"]`);
+        const value = Number(input?.value || 0);
+        if (saveMaterialMinStock(name, value)) {
+          renderMaterials();
+        }
+      });
+    });
   }
 
   function renderMaterialSection(items) {
@@ -3105,22 +3228,41 @@ function filterChipOptions(type, keyword) {
       return `<div class="empty-msg">없음</div>`;
     }
 
-    return items.map(item => `
-      <div class="day-item">
-        <div><strong>${escapeHtml(item.name || '')}</strong></div>
-        <div>재고: ${formatNumber(item.stock_qty || item.stock || 0)} ${escapeHtml(item.unit || '')}</div>
+    return items.map(item => {
+      const stockQty = Number(item.stock_qty || item.stock || 0);
+      const minStock = getMaterialMinStock(item.name || '');
+      const isLowStock = minStock > 0 && stockQty <= minStock;
+      const isOutStock = stockQty <= 0;
+      const borderColor = isOutStock ? '#dc2626' : (isLowStock ? '#f59e0b' : '#dde3ea');
+      const bgColor = isOutStock ? '#fff1f2' : (isLowStock ? '#fff7ed' : '#fff');
+      const statusText = isOutStock ? '재고 없음' : (isLowStock ? '재고 부족' : '정상');
+      const usage = (getMaterialUsageStats().find(row => row.name === String(item.name || '').trim()) || {}).qty || 0;
+
+      return `
+      <div class="day-item" style="border-color:${borderColor}; background:${bgColor};">
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+          <div><strong>${escapeHtml(item.name || '')}</strong></div>
+          <div style="font-size:12px; font-weight:800; color:${isOutStock ? '#dc2626' : (isLowStock ? '#b45309' : '#166534')};">${statusText}</div>
+        </div>
+        <div>재고: ${formatNumber(stockQty)} ${escapeHtml(item.unit || '')}</div>
+        <div>최소재고: ${formatNumber(minStock)} ${escapeHtml(item.unit || '')}</div>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:6px 0;">
+          <input type="number" min="0" step="0.1" value="${escapeHtml(String(minStock))}" data-min-stock-input="${escapeHtml(String(item.name || ''))}" style="width:110px;">
+          <button type="button" class="btn" data-min-stock-save="${escapeHtml(String(item.name || ''))}">최소재고 저장</button>
+        </div>
         <div>현재단가: ${formatNumber(item.unit_price || item.price || 0)}</div>
         <div>작년단가: ${formatNumber(item.price_last_year || 0)}</div>
         <div>올해단가: ${formatNumber(item.price_this_year || item.unit_price || item.price || 0)}</div>
         <div>차이: ${formatPriceDiff(item.price_last_year || 0, item.price_this_year || item.unit_price || item.price || 0)}</div>
         <div>증감률: ${formatRateDiff(item.price_last_year || 0, item.price_this_year || item.unit_price || item.price || 0)}</div>
+        <div>누적 사용량: ${formatNumber(usage)}</div>
         <div>메모: ${escapeHtml(item.memo || '')}</div>
         <div class="item-actions">
           <button type="button" class="btn" data-material-edit="${escapeHtml(String(item.id))}">수정</button>
           <button type="button" class="btn" data-material-delete="${escapeHtml(String(item.id))}">삭제</button>
         </div>
       </div>
-    `).join('');
+    `}).join('');
   }
 
 
@@ -3177,7 +3319,6 @@ function filterChipOptions(type, keyword) {
 
 
   function getSelectedMoneyScopeLabel() {
-    if (state.moneySelectedMonth) return `월필터: ${state.moneySelectedMonth}`;
     const seasonValue = el['money-season-filter']?.value || '';
     if (seasonValue === 'current') return '현재시즌';
     if (seasonValue && seasonValue !== 'all') {
@@ -3191,49 +3332,6 @@ function filterChipOptions(type, keyword) {
     if (start) return `${start} 이후`;
     if (end) return `${end} 이전`;
     return '전체';
-  }
-
-  function getMonthDateRange(monthKey) {
-    const base = String(monthKey || '').trim();
-    if (!/^\d{4}-\d{2}$/.test(base)) return null;
-    const start = `${base}-01`;
-    const year = Number(base.slice(0, 4));
-    const month = Number(base.slice(5, 7));
-    const endDate = new Date(year, month, 0);
-    const end = `${base}-${String(endDate.getDate()).padStart(2, '0')}`;
-    return { start, end };
-  }
-
-  function clearMoneySelectedMonth(options = {}) {
-    state.moneySelectedMonth = '';
-    if (!options.keepDates) {
-      if (el['money-start']) el['money-start'].value = '';
-      if (el['money-end']) el['money-end'].value = '';
-    }
-    if (!options.keepQuickPeriod && el['money-period-filter']) {
-      el['money-period-filter'].value = '';
-    }
-  }
-
-  function applyMoneySelectedMonth(monthKey) {
-    const range = getMonthDateRange(monthKey);
-    if (!range) return;
-    state.moneySelectedMonth = monthKey;
-    if (el['money-start']) el['money-start'].value = range.start;
-    if (el['money-end']) el['money-end'].value = range.end;
-    if (el['money-period-filter']) el['money-period-filter'].value = '';
-  }
-
-  function toggleMoneySelectedMonth(monthKey) {
-    const target = String(monthKey || '').trim();
-    if (!target) return;
-    if (state.moneySelectedMonth === target) {
-      clearMoneySelectedMonth();
-    } else {
-      applyMoneySelectedMonth(target);
-    }
-    switchPage('money');
-    renderMoney();
   }
 
   function renderMonthlySettlement(rows) {
@@ -3267,27 +3365,20 @@ function filterChipOptions(type, keyword) {
     if (empty) empty.classList.add('hidden');
     if (el['money-scope-month-count']) el['money-scope-month-count'].textContent = `월 수: ${monthKeys.length}`;
 
-    const selectedMonth = state.moneySelectedMonth || '';
     body.innerHTML = monthKeys.map(monthKey => {
       const item = grouped[monthKey];
       const incomeAmount = Number(item.income || 0);
       const expenseAmount = Number(item.expense || 0);
       const net = incomeAmount - expenseAmount;
-      const isSelected = selectedMonth === monthKey;
-      const buttonLabel = isSelected ? `${monthKey} 해제` : monthKey;
       return `
-        <tr class="${isSelected ? 'money-month-row-selected' : ''}">
-          <td><button type="button" class="btn money-month-filter-btn${isSelected ? ' active' : ''}" data-money-month="${escapeHtml(monthKey)}">${escapeHtml(buttonLabel)}</button></td>
+        <tr>
+          <td>${escapeHtml(monthKey)}</td>
           <td>${formatNumber(incomeAmount)}</td>
           <td>${formatNumber(expenseAmount)}</td>
           <td>${net > 0 ? '+' : ''}${formatNumber(net)}</td>
         </tr>
       `;
     }).join('');
-
-    body.querySelectorAll('[data-money-month]').forEach(btn => {
-      btn.addEventListener('click', () => toggleMoneySelectedMonth(btn.dataset.moneyMonth || ''));
-    });
   }
 
   function normalizeMoneyMethodFilterValue(value) {

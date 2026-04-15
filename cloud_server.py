@@ -1192,6 +1192,181 @@ def backup_season(season_id):
     return jsonify(payload)
 
 
+
+# =========================
+# BACKUP EXPORT / RESTORE
+# =========================
+@app.route("/api/backup/export", methods=["GET"])
+def export_backup():
+    conn = db()
+    try:
+        payload = {
+            "ok": True,
+            "exported_at": current_timestamp(),
+            "works": rows_to_dicts(conn.execute("SELECT * FROM works ORDER BY start_date ASC, id ASC").fetchall()),
+            "plans": rows_to_dicts(conn.execute("SELECT * FROM plans ORDER BY plan_date ASC, id ASC").fetchall()),
+            "materials": rows_to_dicts(conn.execute("""
+                SELECT id, name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo
+                FROM materials
+                ORDER BY name ASC
+            """).fetchall()),
+            "options": {
+                "weather": rows_to_dicts(conn.execute("SELECT id, name FROM options_weather ORDER BY name ASC").fetchall()),
+                "crops": rows_to_dicts(conn.execute("SELECT id, name FROM options_crops ORDER BY name ASC").fetchall()),
+                "task_categories": rows_to_dicts(conn.execute("SELECT id, name FROM options_task_categories ORDER BY name ASC").fetchall()),
+                "tasks": rows_to_dicts(conn.execute("""
+                    SELECT id, name, COALESCE(category_name, '') AS category_name
+                    FROM options_tasks
+                    ORDER BY category_name ASC, name ASC
+                """).fetchall()),
+                "pests": rows_to_dicts(conn.execute("""
+                    SELECT id, name, COALESCE(recommended_materials, '') AS recommended_materials
+                    FROM options_pests
+                    ORDER BY name ASC
+                """).fetchall()),
+                "machines": rows_to_dicts(conn.execute("SELECT id, name FROM options_machines ORDER BY name ASC").fetchall())
+            },
+            "seasons": rows_to_dicts(conn.execute("SELECT * FROM seasons ORDER BY start_date ASC, id ASC").fetchall()),
+            "incomes": rows_to_dicts(conn.execute("SELECT * FROM incomes ORDER BY income_date ASC, id ASC").fetchall())
+        }
+        return jsonify(payload)
+    finally:
+        conn.close()
+
+
+@app.route("/api/backup/restore", methods=["POST"])
+def restore_backup():
+    data = request.get_json(force=True) or {}
+    conn = db()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM works")
+        cur.execute("DELETE FROM plans")
+        cur.execute("DELETE FROM materials")
+        cur.execute("DELETE FROM options_weather")
+        cur.execute("DELETE FROM options_crops")
+        cur.execute("DELETE FROM options_task_categories")
+        cur.execute("DELETE FROM options_tasks")
+        cur.execute("DELETE FROM options_pests")
+        cur.execute("DELETE FROM options_machines")
+        cur.execute("DELETE FROM options_materials")
+        cur.execute("DELETE FROM seasons")
+        cur.execute("DELETE FROM incomes")
+
+        for item in data.get("options", {}).get("weather", []):
+            name = normalize_name(item.get("name"))
+            if name:
+                cur.execute("INSERT OR IGNORE INTO options_weather (name) VALUES (?)", (name,))
+        for item in data.get("options", {}).get("crops", []):
+            name = normalize_name(item.get("name"))
+            if name:
+                cur.execute("INSERT OR IGNORE INTO options_crops (name) VALUES (?)", (name,))
+        for item in data.get("options", {}).get("task_categories", []):
+            name = normalize_name(item.get("name"))
+            if name:
+                cur.execute("INSERT OR IGNORE INTO options_task_categories (name) VALUES (?)", (name,))
+        for item in data.get("options", {}).get("tasks", []):
+            name = normalize_name(item.get("name"))
+            category_name = normalize_name(item.get("category_name"))
+            if name:
+                cur.execute("INSERT OR IGNORE INTO options_tasks (name, category_name) VALUES (?, ?)", (name, category_name))
+                cur.execute("UPDATE options_tasks SET category_name = ? WHERE name = ?", (category_name, name))
+        for item in data.get("options", {}).get("pests", []):
+            name = normalize_name(item.get("name"))
+            recommended_materials = normalize_name(item.get("recommended_materials"))
+            if name:
+                cur.execute("INSERT OR IGNORE INTO options_pests (name, recommended_materials) VALUES (?, ?)", (name, recommended_materials))
+                cur.execute("UPDATE options_pests SET recommended_materials = ? WHERE name = ?", (recommended_materials, name))
+        for item in data.get("options", {}).get("machines", []):
+            name = normalize_name(item.get("name"))
+            if name:
+                cur.execute("INSERT OR IGNORE INTO options_machines (name) VALUES (?)", (name,))
+
+        for item in data.get("materials", []):
+            name = normalize_name(item.get("name"))
+            if not name:
+                continue
+            cur.execute("""
+                INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                name,
+                normalize_name(item.get("unit")),
+                safe_float(item.get("stock_qty"), 0),
+                safe_float(item.get("unit_price"), 0),
+                safe_float(item.get("price_last_year"), 0),
+                safe_float(item.get("price_this_year"), 0),
+                normalize_name(item.get("memo"))
+            ))
+            sync_material_option(cur, name)
+
+        for item in data.get("works", []):
+            cur.execute("""
+                INSERT INTO works (start_date, end_date, weather, task_name, crops, pests, machines, work_hours, memo, task_category)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                item.get("start_date", ""),
+                item.get("end_date", ""),
+                item.get("weather", ""),
+                item.get("task_name", ""),
+                item.get("crops", ""),
+                item.get("pests", ""),
+                item.get("machines", ""),
+                safe_float(item.get("work_hours"), 0),
+                item.get("memo", ""),
+                item.get("task_category", "")
+            ))
+
+        for item in data.get("plans", []):
+            cur.execute("""
+                INSERT INTO plans (plan_date, title, details, status)
+                VALUES (?, ?, ?, ?)
+            """, (
+                item.get("plan_date", ""),
+                item.get("title", ""),
+                item.get("details", ""),
+                item.get("status", "planned")
+            ))
+
+        for item in data.get("seasons", []):
+            season_name = normalize_name(item.get("season_name") or item.get("name"))
+            if not season_name:
+                continue
+            cur.execute("""
+                INSERT INTO seasons (season_name, start_date, end_date, is_current, note, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                season_name,
+                item.get("start_date", ""),
+                item.get("end_date", ""),
+                1 if str(item.get("is_current")).lower() in ["1", "true", "yes", "y", "on"] else 0,
+                item.get("note", ""),
+                item.get("created_at", "") or current_timestamp()
+            ))
+
+        for item in data.get("incomes", []):
+            cur.execute("""
+                INSERT INTO incomes (income_date, income_type, amount, method, note, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                item.get("income_date", ""),
+                item.get("income_type", ""),
+                safe_float(item.get("amount"), 0),
+                item.get("method", ""),
+                item.get("note", ""),
+                item.get("created_at", "") or current_timestamp()
+            ))
+
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 400
+    finally:
+        conn.close()
+
+
+
 # =========================
 # IMPORT OLD DB
 # =========================

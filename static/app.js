@@ -1161,29 +1161,22 @@
 
     if (el.weather) el.weather.value = template.weather || '';
     if (el.task_category) el.task_category.value = template.task_category || '';
-    renderTaskOptionsByCategory(template.task_category || '', false);
-    selectTaskNameValue(template.task_name || '', true);
-
-    if (el.work_hours) el.work_hours.value = Number(template.work_hours || 0);
+    renderTaskOptionsByCategory(template.task_category || '');
+    if (el.task_name) el.task_name.value = template.task_name || '';
+    if (el['task-name-search']) el['task-name-search'].value = template.task_name || '';
+    renderTaskQuickOptions(template.task_category || '', template.task_name || '');
+    if (el.work_hours) el.work_hours.value = template.work_hours || 0;
     if (el.memo) el.memo.value = template.memo_text || '';
     if (el.start_time) el.start_time.value = template.start_time || '';
     if (el.end_time) el.end_time.value = template.end_time || '';
 
-    setChipSelections('crops', Array.isArray(template.crops) ? template.crops : []);
-    setChipSelections('pests', Array.isArray(template.pests) ? template.pests : []);
-    setChipSelections('machines', Array.isArray(template.machines) ? template.machines : []);
+    setChipSelections('crops', template.crops || []);
+    setChipSelections('pests', template.pests || []);
+    setChipSelections('machines', template.machines || []);
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
-      ? template.materials.map(item => ({
-          id: item?.id || '',
-          name: item?.name || '',
-          unit: item?.unit || '',
-          price: Number(item?.price || item?.unit_price || 0),
-          qty: Number(item?.qty || 0),
-          method: item?.method || '',
-          installment_months: Number(item?.installment_months || item?.installment || 0)
-        }))
+      ? JSON.parse(JSON.stringify(template.materials))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1192,23 +1185,17 @@
       template.labor_rows.forEach(row => addLaborRow(row));
     }
 
-    const money = template.money || {};
-    if (el.has_money) el.has_money.checked = !!money.enabled;
-    toggleMoneyBox(!!money.enabled);
-    if (el.money_note) el.money_note.value = money.note || '';
-    if (el.other_cost) el.other_cost.value = Number(money.other_total || 0);
-    if (el.money_method) el.money_method.value = money.method || '';
-    if (el.money_installment_months) {
-      el.money_installment_months.value = Number(money.installment_months || 0);
-    }
-    toggleInstallmentField();
+    if (el.has_money) el.has_money.checked = !!template.money?.enabled;
+    toggleMoneyBox(!!template.money?.enabled);
+    if (el.money_note) el.money_note.value = template.money?.note || '';
+    if (el.other_cost) el.other_cost.value = template.money?.other_total || 0;
+    if (el.money_method) el.money_method.value = template.money?.method || '';
+    if (el.money_installment_months) el.money_installment_months.value = template.money?.installment_months || 0;
 
     if (el.start_date) el.start_date.value = currentStartDate;
     if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
     updateEndDateFromRepeatDays();
     syncWorkTimeFields('time');
-    renderTaskCategoryRecommendations(template.task_category || '');
-    renderTaskMaterialRecommendations(template.task_name || '');
     updateMoneySummary();
   }
 
@@ -1360,9 +1347,6 @@
       toggleMoneyBox(true);
       if (el.money_note) el.money_note.value = meta.money.note || '';
       if (el.other_cost) el.other_cost.value = meta.money.other_total || 0;
-      if (el.money_method) el.money_method.value = meta.money.method || '';
-      if (el.money_installment_months) el.money_installment_months.value = Number(meta.money.installment_months || 0);
-      toggleInstallmentField();
     } else {
       resetMoneyFields();
     }
@@ -2334,10 +2318,6 @@ function filterChipOptions(type, keyword) {
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
   }
 
-  function getSelectedChips(type) {
-    return getSelectedChipValues(type);
-  }
-
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);
@@ -3258,7 +3238,109 @@ function filterChipOptions(type, keyword) {
     return value || '';
   }
 
-  function renderMoney() {
+  
+  function getWorkMoneyInfo(work) {
+    const meta = parseMemo(work?.memo);
+    const money = meta.money || null;
+    if (!money) return null;
+    return {
+      work_id: String(work.id || ''),
+      date: String(work.start_date || ''),
+      task_name: String(work.task_name || ''),
+      task_category: String(work.task_category || ''),
+      type: String(money.type || ''),
+      total_amount: Number(money.total_amount || 0),
+      labor_total: Number(money.labor_total || 0),
+      material_total: Number(money.material_total || 0),
+      other_total: Number(money.other_total || 0),
+      note: String(money.note || ''),
+      work_memo: String(meta.memo_text || ''),
+      raw_money: money
+    };
+  }
+
+  function findLinkedWorkByExpenseRow(row) {
+    const candidates = (state.works || []).filter(work => {
+      const info = getWorkMoneyInfo(work);
+      if (!info) return false;
+      return info.date === String(row.date || '')
+        && info.task_name === String(row.task_name || '')
+        && info.type === String(row.type || '')
+        && Number(info.total_amount || 0) === Number(row.total_amount || 0)
+        && Number(info.labor_total || 0) === Number(row.labor_total || 0)
+        && Number(info.material_total || 0) === Number(row.material_total || 0)
+        && Number(info.other_total || 0) === Number(row.other_total || 0)
+        && info.note === String(row.note || '');
+    });
+
+    if (candidates.length === 1) return candidates[0];
+
+    if (candidates.length > 1) {
+      const exactMemo = candidates.find(work => {
+        const info = getWorkMoneyInfo(work);
+        return String(info.work_memo || '') === String(row.work_memo || '');
+      });
+      if (exactMemo) return exactMemo;
+      return candidates[0];
+    }
+    return null;
+  }
+
+  function formatMoneyTypeDisplay(money) {
+    return String(money?.type || '').trim() || '-';
+  }
+
+  function openWorkMoneyDetail(workId) {
+    const work = (state.works || []).find(item => String(item.id) === String(workId));
+    if (!work) {
+      alert('연결된 작업을 찾지 못했습니다.');
+      return;
+    }
+    const info = getWorkMoneyInfo(work);
+    if (!info) {
+      alert('이 작업에는 연결된 금전정보가 없습니다.');
+      return;
+    }
+    const lines = [
+      `[${info.task_name || '작업'} 금전정보]`,
+      `날짜: ${info.date || '-'}`,
+      `작업분류: ${info.task_category || '-'}`,
+      `비용구분: ${formatMoneyTypeDisplay(info.raw_money)}`,
+      `총금액: ${formatNumber(info.total_amount || 0)}원`,
+      `인건비: ${formatNumber(info.labor_total || 0)}원`,
+      `자재비: ${formatNumber(info.material_total || 0)}원`,
+      `기타비: ${formatNumber(info.other_total || 0)}원`,
+      `비고: ${info.note || '-'}`,
+      `작업메모: ${info.work_memo || '-'}`
+    ];
+    alert(lines.join('\n'));
+  }
+
+  function openLinkedWorkFromMoneyRow(rowIndex) {
+    const row = (window.__moneyRowLinks__ || [])[Number(rowIndex)];
+    if (!row) {
+      alert('연결할 금전내역을 찾지 못했습니다.');
+      return;
+    }
+    const linked = findLinkedWorkByExpenseRow(row);
+    if (!linked) {
+      alert('연결된 작업을 찾지 못했습니다.');
+      return;
+    }
+    switchPage('works');
+    openWorkModalById(linked.id);
+  }
+
+  function bindMoneyLinkActions() {
+    document.querySelectorAll('[data-work-money-view]').forEach(btn => {
+      btn.addEventListener('click', () => openWorkMoneyDetail(btn.dataset.workMoneyView));
+    });
+    document.querySelectorAll('[data-money-work-open]').forEach(btn => {
+      btn.addEventListener('click', () => openLinkedWorkFromMoneyRow(btn.dataset.moneyWorkOpen));
+    });
+  }
+
+function renderMoney() {
     const wrap = el['money-list'];
     if (!wrap) return;
 
@@ -3272,25 +3354,30 @@ function filterChipOptions(type, keyword) {
     const thead = table?.querySelector('thead');
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
-    const expenseRows = (state.moneyRows || []).map(row => ({
-      row_kind: 'expense',
-      date: row.date || '',
-      task_name: row.task_name || '',
-      type: row.type || '',
-      total_amount: Number(row.total_amount || row.total || 0),
-      labor_total: Number(row.labor_total || 0),
-      material_total: Number(row.material_total || 0),
-      other_total: Number(row.other_total || 0),
-      method: row.method || '',
-      method_display: row.method_display || row.method || '',
-      note: row.note || '',
-      cash_amount: Number(row.cash_amount || 0),
-      transfer_amount: Number(row.transfer_amount || 0),
-      card_lump_amount: Number(row.card_lump_amount || 0),
-      card_install_amount: Number(row.card_install_amount || 0),
-      credit_amount: Number(row.credit_amount || 0),
-      work_memo: row.work_memo || ''
-    }));
+    const expenseRows = (state.moneyRows || []).map(row => {
+      const mapped = {
+        row_kind: 'expense',
+        date: row.date || '',
+        task_name: row.task_name || '',
+        type: row.type || '',
+        total_amount: Number(row.total_amount || row.total || 0),
+        labor_total: Number(row.labor_total || 0),
+        material_total: Number(row.material_total || 0),
+        other_total: Number(row.other_total || 0),
+        method: row.method || '',
+        method_display: row.method_display || row.method || '',
+        note: row.note || '',
+        cash_amount: Number(row.cash_amount || 0),
+        transfer_amount: Number(row.transfer_amount || 0),
+        card_lump_amount: Number(row.card_lump_amount || 0),
+        card_install_amount: Number(row.card_install_amount || 0),
+        credit_amount: Number(row.credit_amount || 0),
+        work_memo: row.work_memo || ''
+      };
+      const linked = findLinkedWorkByExpenseRow(mapped);
+      mapped.linked_work_id = linked ? String(linked.id || '') : '';
+      return mapped;
+    });
 
     const incomeRows = (state.incomeRows || []).map(row => {
       const amount = Number(row.amount || 0);
@@ -3410,12 +3497,13 @@ function filterChipOptions(type, keyword) {
         return acc;
       }, {});
 
+      window.__moneyRowLinks__ = [];
       wrap.innerHTML = Object.entries(grouped).map(([date, rows]) => `
         <tr class="money-mobile-group-row">
           <td colspan="7">
             <div class="money-mobile-date">${escapeHtml(date)}</div>
             <div class="money-mobile-cards">
-              ${rows.map(row => `
+              ${rows.map((row, rowIdx) => `
                 <div class="money-mobile-card">
                   <div class="money-mobile-card-head">
                     <strong>${escapeHtml(row.task_name || '작업명 없음')}</strong>
@@ -3429,7 +3517,9 @@ function filterChipOptions(type, keyword) {
                     <div><b>기타</b><span>${formatNumber(row.other_total || 0)}원</span></div>
                   </div>
                   ${row.note ? `<div class="money-mobile-card-note"><b>비고</b><span>${escapeHtml(row.note || '')}</span></div>` : ''}
-                  ${row.row_kind === 'income' ? `<div class="money-mobile-card-actions"><button class="btn" data-income-edit="${escapeHtml(String(row.id || ''))}">수정</button><button class="btn" data-income-delete="${escapeHtml(String(row.id || ''))}">삭제</button></div>` : ''}
+                  ${row.row_kind === 'income'
+                    ? `<div class="money-mobile-card-actions"><button class="btn" data-income-edit="${escapeHtml(String(row.id || ''))}">수정</button><button class="btn" data-income-delete="${escapeHtml(String(row.id || ''))}">삭제</button></div>`
+                    : row.linked_work_id ? `<div class="money-mobile-card-actions"><button class="btn" data-money-work-open="${escapeHtml(String(window.__moneyRowLinks__.push(row) - 1))}">연결작업</button></div>` : ''}
                 </div>
               `).join('')}
             </div>
@@ -3437,9 +3527,11 @@ function filterChipOptions(type, keyword) {
         </tr>
       `).join('');
       bindIncomeRowActions();
+      bindMoneyLinkActions();
       return;
     }
 
+    window.__moneyRowLinks__ = [];
     wrap.innerHTML = filtered.map(row => `
       <tr>
         <td>${escapeHtml(row.date || '')}</td>
@@ -3451,12 +3543,13 @@ function filterChipOptions(type, keyword) {
         <td>
           ${row.row_kind === 'income'
             ? `<div class="money-row-actions"><button class="btn" data-income-edit="${escapeHtml(String(row.id || ''))}">수정</button><button class="btn" data-income-delete="${escapeHtml(String(row.id || ''))}">삭제</button></div>`
-            : ''}
+            : row.linked_work_id ? `<div class="money-row-actions"><button class="btn" data-money-work-open="${escapeHtml(String(window.__moneyRowLinks__.push(row) - 1))}">연결작업</button></div>` : ''}
         </td>
       </tr>
     `).join('');
 
     bindIncomeRowActions();
+    bindMoneyLinkActions();
   }
 
 
@@ -3827,6 +3920,7 @@ function filterChipOptions(type, keyword) {
     wrap.querySelectorAll('[data-work-delete]').forEach(btn => {
       btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
     });
+    bindMoneyLinkActions();
   }
 
   function renderWorkCard(work) {
@@ -3847,7 +3941,9 @@ function filterChipOptions(type, keyword) {
         <div>자재: ${escapeHtml(materialsText || '')}</div>
         <div>인력: ${escapeHtml(laborText || '')}</div>
         <div>메모: ${escapeHtml(meta.memo_text || '')}</div>
+        ${meta.money ? `<div>금전: ${escapeHtml(meta.money.type || '-')} / ${formatNumber(meta.money.total_amount || 0)}원</div>` : ''}
         <div class="item-actions">
+          ${meta.money ? `<button type="button" class="btn" data-work-money-view="${escapeHtml(String(work.id))}">금전보기</button>` : ''}
           <button type="button" class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
           <button type="button" class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
         </div>

@@ -222,42 +222,10 @@
     @media (max-width: 1200px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:1fr;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
-    #page-works .page-header{
-      position:sticky;
-      top:0;
-      z-index:35;
-      background:#f8fafc;
-      padding:8px 0 10px;
-      margin-bottom:12px;
-    }
-    #page-works .page-header-actions{display:flex; gap:8px;}
-    #page-works .page-header-actions .btn{justify-content:center;}
-    .floating-new-work-btn{display:none;}
-    body.works-page-active .floating-new-work-btn{
-      display:flex;
-      position:fixed;
-      right:18px;
-      bottom:18px;
-      z-index:255;
-      align-items:center;
-      justify-content:center;
-      min-width:132px;
-      height:52px;
-      padding:0 18px;
-      border:none;
-      border-radius:999px;
-      background:#2563eb;
-      color:#fff;
-      font-size:15px;
-      font-weight:800;
-      box-shadow:0 12px 28px rgba(37,99,235,.28);
-    }
-    body.works-page-active .floating-new-work-btn:active{transform:translateY(1px);}
     @media (max-width: 900px){
-      #page-works .page-header-actions{position:sticky; top:0; z-index:36; background:#f8fafc; padding:0;}
+      #page-works .page-header-actions{position:sticky; top:0; z-index:30; background:#f8fafc; padding:8px 0 10px;}
       #page-works .page-header-actions .btn{width:100%; justify-content:center;}
       .grid.two.task-grid{grid-template-columns:1fr;}
-      body.works-page-active .floating-new-work-btn{right:14px; bottom:70px; min-width:120px; height:48px; padding:0 16px;}
     }
 
     .money-toggle label{display:flex; align-items:center; gap:10px; font-size:18px; font-weight:700; cursor:pointer;}
@@ -453,6 +421,14 @@
       .mobile-quick-exit:active{transform:translateY(1px);}
     }
 
+  
+    .works-floating-action{position:fixed; right:18px; bottom:18px; z-index:950; display:flex; justify-content:flex-end;}
+    .works-floating-action .btn{border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
+    @media (max-width: 768px){
+      .works-floating-action{right:14px; bottom:14px;}
+      .works-floating-action .btn{padding:13px 16px;}
+    }
+
   </style>
 </head>
 <body>
@@ -521,11 +497,11 @@
       <section id="page-works" class="page">
         <div class="page-header">
           <h2>작업일지</h2>
-          <div class="page-header-actions">
-            <button id="btn-new-work" class="btn primary" type="button">새 작업 입력</button>
-          </div>
         </div>
         <div id="works-list" class="cards"></div>
+        <div class="works-floating-action">
+          <button id="btn-new-work" class="btn primary">+ 새 작업 입력</button>
+        </div>
       </section>
 
       <section id="page-materials" class="page">
@@ -1210,6 +1186,5 @@
 
 
   <button id="btn-mobile-quick-exit" class="mobile-quick-exit" type="button">종료</button>
-  <button id="btn-floating-new-work" class="floating-new-work-btn" type="button">+ 새 작업 입력</button>
 </body>
 </html>

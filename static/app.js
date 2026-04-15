@@ -87,7 +87,7 @@
       'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
 
       'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work','favorite-work-status',
-      'btn-new-work',
+      'btn-new-work','btn-floating-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
       'weather','task_category','task_name','crops-box','pests-box','machines-box',
@@ -200,7 +200,27 @@
   }
 
   function bindWorkButtons() {
-    on(el['btn-new-work'], 'click', () => openWorkModal());
+    on(el['btn-new-work'], 'click', (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      openWorkModal();
+    });
+    on(el['btn-floating-new-work'], 'click', (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      openWorkModal();
+    });
+    document.addEventListener('click', (e) => {
+      const trigger = e.target && e.target.closest && e.target.closest('#btn-new-work, #btn-floating-new-work');
+      if (!trigger) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openWorkModal();
+    });
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
     on(el['btn-load-recent-work'], 'click', loadRecentWorkIntoForm);
     on(el['btn-save-favorite-work'], 'click', saveCurrentWorkAsFavorite);
@@ -561,6 +581,7 @@
   }
 
   function renderAll() {
+    document.body.classList.toggle('works-page-active', state.currentPage === 'works');
     renderMenuState();
     renderCalendar();
     renderWorkFormOptions();
@@ -573,6 +594,7 @@
 
   function switchPage(page, options = {}) {
     state.currentPage = page;
+    document.body.classList.toggle('works-page-active', page === 'works');
     if (!options.skipHistory) {
       pushHistoryState(page, '');
     }

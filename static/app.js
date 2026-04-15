@@ -1125,17 +1125,16 @@
   }
 
   function buildWorkTemplateFromForm() {
-    const rawStartTime = (el.start_time?.value || '').trim();
-    const rawEndTime = (el.end_time?.value || '').trim();
+    const startTime = (el.start_time?.value || '').trim();
+    const endTime = (el.end_time?.value || '').trim();
     let normalizedWorkHours = Number(el.work_hours?.value || 0);
 
-    if (rawStartTime !== '' && rawEndTime !== '') {
-      const computed = calcHoursFromTime(rawStartTime, rawEndTime);
-      if (computed > 0) normalizedWorkHours = computed;
-    }
-
-    if (!Number.isFinite(normalizedWorkHours) || normalizedWorkHours < 0) {
-      normalizedWorkHours = 0;
+    if (startTime && endTime) {
+      const startMinutes = parseTimeToMinutes(startTime);
+      const endMinutes = parseTimeToMinutes(endTime);
+      if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes) {
+        normalizedWorkHours = Number(((endMinutes - startMinutes) / 60).toFixed(2));
+      }
     }
 
     return {
@@ -1147,16 +1146,16 @@
       machines: getSelectedChips('machines'),
       work_hours: normalizedWorkHours,
       memo_text: el.memo?.value || '',
-      start_time: rawStartTime,
-      end_time: rawEndTime,
+      start_time: startTime,
+      end_time: endTime,
       materials: JSON.parse(JSON.stringify(state.selectedMaterialsDetailed || [])),
       labor_rows: JSON.parse(JSON.stringify(getLaborRows() || [])),
       money: {
         enabled: !!el.has_money?.checked,
-        note: el.money_note?.value || '',
-        other_total: Number(el.other_cost?.value || 0),
         method: el.money_method?.value || '',
-        installment_months: Number(el.money_installment_months?.value || 0)
+        installment_months: Number(el.money_installment_months?.value || 0),
+        note: el.money_note?.value || '',
+        other_total: Number(el.other_cost?.value || 0)
       }
     };
   }
@@ -1196,9 +1195,10 @@
     if (el.has_money) el.has_money.checked = !!template.money?.enabled;
     toggleMoneyBox(!!template.money?.enabled);
     if (el.money_method) el.money_method.value = template.money?.method || '';
-    if (el.money_installment_months) el.money_installment_months.value = template.money?.installment_months || 0;
+    if (el.money_installment_months) el.money_installment_months.value = template.money?.installment_months || '';
     if (el.money_note) el.money_note.value = template.money?.note || '';
     if (el.other_cost) el.other_cost.value = template.money?.other_total || 0;
+    if (typeof toggleInstallmentWrap === 'function') toggleInstallmentWrap();
 
     if (el.start_date) el.start_date.value = currentStartDate;
     if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;

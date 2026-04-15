@@ -1125,17 +1125,10 @@
   }
 
   function buildWorkTemplateFromForm() {
-    const startTime = (el.start_time?.value || '').trim();
-    const endTime = (el.end_time?.value || '').trim();
-    let normalizedWorkHours = Number(el.work_hours?.value || 0);
-
-    if (startTime && endTime) {
-      const startMinutes = parseTimeToMinutes(startTime);
-      const endMinutes = parseTimeToMinutes(endTime);
-      if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes) {
-        normalizedWorkHours = Number(((endMinutes - startMinutes) / 60).toFixed(2));
-      }
-    }
+    const startTime = String(el.start_time?.value || '').trim();
+    const endTime = String(el.end_time?.value || '').trim();
+    const workHoursInput = Number(el.work_hours?.value || 0);
+    const normalizedWorkHours = Number.isFinite(workHoursInput) ? workHoursInput : 0;
 
     return {
       weather: el.weather?.value || '',
@@ -1152,10 +1145,10 @@
       labor_rows: JSON.parse(JSON.stringify(getLaborRows() || [])),
       money: {
         enabled: !!el.has_money?.checked,
-        method: el.money_method?.value || '',
-        installment_months: Number(el.money_installment_months?.value || 0),
         note: el.money_note?.value || '',
-        other_total: Number(el.other_cost?.value || 0)
+        other_total: Number(el.other_cost?.value || 0),
+        method: String(el.money_method?.value || '').trim(),
+        installment_months: Number(el.money_installment_months?.value || 0)
       }
     };
   }
@@ -1194,11 +1187,10 @@
 
     if (el.has_money) el.has_money.checked = !!template.money?.enabled;
     toggleMoneyBox(!!template.money?.enabled);
-    if (el.money_method) el.money_method.value = template.money?.method || '';
-    if (el.money_installment_months) el.money_installment_months.value = template.money?.installment_months || '';
     if (el.money_note) el.money_note.value = template.money?.note || '';
     if (el.other_cost) el.other_cost.value = template.money?.other_total || 0;
-    if (typeof toggleInstallmentWrap === 'function') toggleInstallmentWrap();
+    if (el.money_method) el.money_method.value = template.money?.method || '';
+    if (el.money_installment_months) el.money_installment_months.value = template.money?.installment_months || 0;
 
     if (el.start_date) el.start_date.value = currentStartDate;
     if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;

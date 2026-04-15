@@ -591,7 +591,7 @@
     const isMobile = window.innerWidth <= 900;
     wrap.style.position = 'fixed';
     wrap.style.zIndex = '9999';
-    wrap.style.bottom = isMobile ? '14px' : '18px';
+    wrap.style.bottom = isMobile ? '74px' : '18px';
     wrap.style.right = isMobile ? '14px' : '20px';
     wrap.style.left = isMobile ? 'auto' : '278px';
     wrap.style.display = state.currentPage === 'works' && !isBlockingModalOpen() ? 'flex' : 'none';

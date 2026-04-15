@@ -3187,6 +3187,31 @@ function filterChipOptions(type, keyword) {
     return '전체';
   }
 
+  function applyMoneyMonthFilter(monthKey) {
+    const value = String(monthKey || '').trim();
+    if (!value || value.length !== 7) return;
+
+    const [yearText, monthText] = value.split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+    if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+
+    const start = `${yearText}-${monthText}-01`;
+    const endDay = String(new Date(year, month, 0).getDate()).padStart(2, '0');
+    const end = `${yearText}-${monthText}-${endDay}`;
+
+    if (el['money-start']) el['money-start'].value = start;
+    if (el['money-end']) el['money-end'].value = end;
+    if (el['money-period-filter']) el['money-period-filter'].value = 'custom';
+
+    renderMoney();
+    switchPage('money');
+    const moneyPage = el['page-money'];
+    if (moneyPage && moneyPage.scrollIntoView) {
+      moneyPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   function renderMonthlySettlement(rows) {
     const body = el['money-monthly-list'];
     const empty = el['money-monthly-empty'];
@@ -3224,14 +3249,28 @@ function filterChipOptions(type, keyword) {
       const expenseAmount = Number(item.expense || 0);
       const net = incomeAmount - expenseAmount;
       return `
-        <tr>
-          <td>${escapeHtml(monthKey)}</td>
+        <tr class="money-month-row" data-money-month="${escapeHtml(monthKey)}" style="cursor:pointer;">
+          <td><button type="button" class="btn" data-money-month-btn="${escapeHtml(monthKey)}">${escapeHtml(monthKey)}</button></td>
           <td>${formatNumber(incomeAmount)}</td>
           <td>${formatNumber(expenseAmount)}</td>
           <td>${net > 0 ? '+' : ''}${formatNumber(net)}</td>
         </tr>
       `;
     }).join('');
+
+    body.querySelectorAll('[data-money-month-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        applyMoneyMonthFilter(btn.dataset.moneyMonthBtn || '');
+      });
+    });
+
+    body.querySelectorAll('[data-money-month]').forEach(row => {
+      row.addEventListener('click', () => {
+        applyMoneyMonthFilter(row.dataset.moneyMonth || '');
+      });
+    });
   }
 
   function normalizeMoneyMethodFilterValue(value) {
@@ -3807,36 +3846,6 @@ function filterChipOptions(type, keyword) {
     wrap.querySelectorAll('[data-work-delete]').forEach(btn => {
       btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
     });
-
-    wrap.querySelectorAll('[data-work-money]').forEach(btn => {
-      btn.addEventListener('click', () => showWorkMoneyInfo(btn.dataset.workMoney));
-    });
-  }
-
-  function showWorkMoneyInfo(workId) {
-    const work = (state.works || []).find(item => String(item.id) === String(workId));
-    if (!work) {
-      alert('작업을 찾지 못했습니다.');
-      return;
-    }
-    const meta = parseMemo(work.memo);
-    const money = meta && meta.money ? meta.money : null;
-    if (!money || !Number(money.total_amount || 0)) {
-      alert('연결된 금전내역이 없습니다.');
-      return;
-    }
-
-    const lines = [
-      `작업: ${work.task_name || ''}`,
-      `구분: ${money.type || '-'}`,
-      `총금액: ${formatNumber(money.total_amount || 0)}원`,
-      `인건비: ${formatNumber(money.labor_total || 0)}원`,
-      `자재비: ${formatNumber(money.material_total || 0)}원`,
-      `기타비: ${formatNumber(money.other_total || 0)}원`,
-      `결제방식: ${money.method || '-'}`,
-      `비고: ${money.note || ''}`
-    ];
-    alert(lines.join('\n'));
   }
 
   function renderWorkCard(work) {
@@ -3860,7 +3869,6 @@ function filterChipOptions(type, keyword) {
         <div class="item-actions">
           <button type="button" class="btn" data-work-edit="${escapeHtml(String(work.id))}">수정</button>
           <button type="button" class="btn" data-work-delete="${escapeHtml(String(work.id))}">삭제</button>
-          <button type="button" class="btn" data-work-money="${escapeHtml(String(work.id))}">금전보기</button>
         </div>
       </div>
     `;

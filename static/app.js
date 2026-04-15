@@ -258,6 +258,7 @@
     });
 
     on(el['money_method'], 'change', () => {
+        toggleInstallmentField();
         updateMoneySummary();
     });
     on(el['money_installment_months'], 'input', updateMoneySummary);
@@ -1125,6 +1126,21 @@
   }
 
   function buildWorkTemplateFromForm() {
+    const rawStartTime = (el.start_time?.value || '').trim();
+    const rawEndTime = (el.end_time?.value || '').trim();
+    let normalizedWorkHours = Number(el.work_hours?.value || 0);
+
+    if (rawStartTime !== '' && rawEndTime !== '') {
+      const diff = calculateWorkedHours(rawStartTime, rawEndTime);
+      if (Number.isFinite(diff) && diff >= 0) {
+        normalizedWorkHours = diff;
+      }
+    }
+
+    if (!Number.isFinite(normalizedWorkHours) || normalizedWorkHours < 0) {
+      normalizedWorkHours = 0;
+    }
+
     return {
       weather: el.weather?.value || '',
       task_category: el.task_category?.value || '',
@@ -1134,12 +1150,14 @@
       machines: getSelectedChips('machines'),
       work_hours: normalizedWorkHours,
       memo_text: el.memo?.value || '',
-      start_time: startTime,
-      end_time: endTime,
+      start_time: rawStartTime,
+      end_time: rawEndTime,
       materials: JSON.parse(JSON.stringify(state.selectedMaterialsDetailed || [])),
       labor_rows: JSON.parse(JSON.stringify(getLaborRows() || [])),
       money: {
         enabled: !!el.has_money?.checked,
+        method: el.money_method?.value || '',
+        installment_months: Number(el.money_installment_months?.value || 0),
         note: el.money_note?.value || '',
         other_total: Number(el.other_cost?.value || 0)
       }
@@ -1151,13 +1169,19 @@
 
     const currentStartDate = el.start_date?.value || fmtDate(new Date());
     const currentRepeatDays = Number(el.repeat_days?.value || 1);
+    const taskCategory = template.task_category || '';
+    const taskName = template.task_name || '';
+    const moneyEnabled = !!template.money?.enabled;
 
     if (el.weather) el.weather.value = template.weather || '';
-    if (el.task_category) el.task_category.value = template.task_category || '';
-    renderTaskOptionsByCategory(template.task_category || '');
-    if (el.task_name) el.task_name.value = template.task_name || '';
-    if (el['task-name-search']) el['task-name-search'].value = template.task_name || '';
-    renderTaskQuickOptions(template.task_category || '', template.task_name || '');
+    if (el.task_category) el.task_category.value = taskCategory;
+    renderTaskOptionsByCategory(taskCategory);
+    renderTaskCategoryRecommendations(taskCategory);
+    if (el.task_name) el.task_name.value = taskName;
+    if (el['task-name-search']) el['task-name-search'].value = taskName;
+    syncTaskNameDatalist(taskCategory);
+    renderTaskQuickOptions(taskCategory, taskName);
+    renderTaskMaterialRecommendations(taskName);
     if (el.work_hours) el.work_hours.value = template.work_hours || 0;
     if (el.memo) el.memo.value = template.memo_text || '';
     if (el.start_time) el.start_time.value = template.start_time || '';
@@ -1178,8 +1202,11 @@
       template.labor_rows.forEach(row => addLaborRow(row));
     }
 
-    if (el.has_money) el.has_money.checked = !!template.money?.enabled;
-    toggleMoneyBox(!!template.money?.enabled);
+    if (el.has_money) el.has_money.checked = moneyEnabled;
+    toggleMoneyBox(moneyEnabled);
+    if (el.money_method) el.money_method.value = template.money?.method || '현금';
+    toggleInstallmentField();
+    if (el.money_installment_months) el.money_installment_months.value = Number(template.money?.installment_months || 0);
     if (el.money_note) el.money_note.value = template.money?.note || '';
     if (el.other_cost) el.other_cost.value = template.money?.other_total || 0;
 
@@ -2854,10 +2881,11 @@ function filterChipOptions(type, keyword) {
 
   function resetMoneyFields() {
     if (el.has_money) el.has_money.checked = false;
-
+    if (el.money_method) el.money_method.value = '현금';
     if (el.money_note) el.money_note.value = '';
     if (el.other_cost) el.other_cost.value = 0;
     toggleMoneyBox(false);
+    toggleInstallmentField();
     updateMoneySummary();
   }
 

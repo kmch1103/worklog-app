@@ -1556,9 +1556,9 @@ def build_excel_export_data(conn, season_id=''):
     }
 
 
-def style_header_row(ws, row_idx=1, fill_color="1F4E78", font_color="FFFFFF"):
-    fill = PatternFill(fill_type="solid", fgColor=fill_color)
-    font = Font(bold=True, color=font_color)
+def style_header_row(ws, row_idx=1):
+    fill = PatternFill(fill_type="solid", fgColor="1F4E78")
+    font = Font(bold=True, color="FFFFFF")
     thin = Side(border_style="thin", color="D9E2F2")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -1571,8 +1571,11 @@ def style_header_row(ws, row_idx=1, fill_color="1F4E78", font_color="FFFFFF"):
 
 def auto_fit_columns(ws, min_width=10, max_width=42):
     for col_cells in ws.columns:
+        first = col_cells[0]
+        if getattr(first, 'column_letter', None) is None:
+            continue
         max_length = 0
-        col_letter = col_cells[0].column_letter
+        col_letter = first.column_letter
         for cell in col_cells:
             value = "" if cell.value is None else str(cell.value)
             if len(value) > max_length:
@@ -1580,56 +1583,13 @@ def auto_fit_columns(ws, min_width=10, max_width=42):
         ws.column_dimensions[col_letter].width = min(max(max_length + 2, min_width), max_width)
 
 
-def style_data_range(ws, start_row=2, amount_cols=None, net_cols=None, income_cols=None, expense_cols=None):
-    amount_cols = amount_cols or []
-    net_cols = net_cols or []
-    income_cols = income_cols or []
-    expense_cols = expense_cols or []
-    thin = Side(border_style="thin", color="E5E7EB")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row):
-        for cell in row:
-            cell.border = border
-            if cell.column in amount_cols:
-                cell.alignment = Alignment(horizontal="right", vertical="center")
-            else:
-                cell.alignment = Alignment(vertical="top")
-
-            if cell.column in income_cols and isinstance(cell.value, (int, float)):
-                cell.font = Font(color="166534", bold=True)
-            elif cell.column in expense_cols and isinstance(cell.value, (int, float)):
-                cell.font = Font(color="B91C1C", bold=True)
-            elif cell.column in net_cols and isinstance(cell.value, (int, float)):
-                if cell.value < 0:
-                    cell.font = Font(color="B91C1C", bold=True)
-                elif cell.value > 0:
-                    cell.font = Font(color="166534", bold=True)
-                else:
-                    cell.font = Font(color="334155", bold=True)
-
-
 def apply_currency_format(ws, col_indexes, start_row=2):
     for col_idx in col_indexes:
-        for row in ws.iter_rows(min_row=start_row, min_col=col_idx, max_col=col_idx, max_row=ws.max_row):
+        for row in ws.iter_rows(min_row=start_row, min_col=col_idx, max_col=col_idx):
             for cell in row:
-                if isinstance(cell.value, (int, float)) or (isinstance(cell.value, str) and str(cell.value).startswith('=')):
-                    cell.number_format = '₩ #,##0;[Red]-₩ #,##0'
-
-
-def apply_integer_format(ws, col_indexes, start_row=2):
-    for col_idx in col_indexes:
-        for row in ws.iter_rows(min_row=start_row, min_col=col_idx, max_col=col_idx, max_row=ws.max_row):
-            for cell in row:
-                if isinstance(cell.value, (int, float)) or (isinstance(cell.value, str) and str(cell.value).startswith('=')):
-                    cell.number_format = '#,##0'
-
-
-def enable_sheet_features(ws):
-    ws.freeze_panes = 'A2'
-    if ws.max_row >= 1 and ws.max_column >= 1:
-        ws.auto_filter.ref = ws.dimensions
-    ws.sheet_view.showGridLines = True
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = '₩#,##0;[Red]-₩#,##0'
+                    cell.alignment = Alignment(horizontal='right', vertical='center')
 
 
 def write_sheet_rows(ws, title, headers, rows):
@@ -1640,7 +1600,8 @@ def write_sheet_rows(ws, title, headers, rows):
     for row in rows:
         ws.append([row.get(h, "") for h in headers])
 
-    enable_sheet_features(ws)
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = f"A1:{ws.cell(1, ws.max_column).column_letter}{ws.max_row}"
     auto_fit_columns(ws)
 
 
@@ -1650,7 +1611,7 @@ def append_total_row(ws, label_col=1, amount_cols=None):
     last_data_row = ws.max_row
     total_row = last_data_row + 1
     ws.cell(total_row, label_col).value = "합계"
-    ws.cell(total_row, label_col).font = Font(bold=True, color="111827")
+    ws.cell(total_row, label_col).font = Font(bold=True)
 
     fill = PatternFill(fill_type="solid", fgColor="FFF2CC")
     thin = Side(border_style="thin", color="D9D9D9")
@@ -1660,230 +1621,222 @@ def append_total_row(ws, label_col=1, amount_cols=None):
         cell = ws.cell(total_row, col_idx)
         cell.fill = fill
         cell.border = border
-        cell.alignment = Alignment(horizontal="right" if col_idx in amount_cols else "left", vertical="center")
         if col_idx in amount_cols:
             col_letter = ws.cell(1, col_idx).column_letter
             cell.value = f"=SUM({col_letter}2:{col_letter}{last_data_row})"
-            cell.number_format = '₩ #,##0;[Red]-₩ #,##0'
-            cell.font = Font(bold=True, color="111827")
+            cell.number_format = '₩#,##0;[Red]-₩#,##0'
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.font = Font(bold=True)
         elif col_idx != label_col:
             cell.value = ""
 
-    return total_row
+
+def style_money_rows(ws):
+    income_fill = PatternFill(fill_type='solid', fgColor='EAF7EA')
+    expense_fill = PatternFill(fill_type='solid', fgColor='FDECEC')
+    for row_idx in range(2, ws.max_row + 1):
+        row_type = ws.cell(row_idx, 7).value
+        fill = income_fill if row_type == '수익' else expense_fill
+        for col_idx in range(1, ws.max_column + 1):
+            ws.cell(row_idx, col_idx).fill = fill
+        amount_cell = ws.cell(row_idx, 4)
+        amount_cell.font = Font(bold=True, color='008000' if row_type == '수익' else 'C00000')
 
 
-def add_financial_trend_charts(summary_ws, monthly_ws, season_ws, monthly_count, season_count):
-    if monthly_count > 0:
-        month_categories = Reference(monthly_ws, min_col=1, min_row=2, max_row=monthly_count + 1)
-
-        monthly_bar = BarChart()
-        monthly_bar.type = 'col'
-        monthly_bar.style = 10
-        monthly_bar.title = '월별 수익 / 지출'
-        monthly_bar.y_axis.title = '금액(원)'
-        monthly_bar.x_axis.title = '월'
-        monthly_bar.height = 8.5
-        monthly_bar.width = 15
-        monthly_bar.gapWidth = 55
-        monthly_bar.add_data(Reference(monthly_ws, min_col=2, min_row=1, max_col=3, max_row=monthly_count + 1), titles_from_data=True)
-        monthly_bar.set_categories(month_categories)
-        monthly_bar.legend.position = 'r'
-        summary_ws.add_chart(monthly_bar, 'A18')
-
-        monthly_line = LineChart()
-        monthly_line.style = 13
-        monthly_line.title = '월별 순이익 흐름'
-        monthly_line.y_axis.title = '순이익(원)'
-        monthly_line.x_axis.title = '월'
-        monthly_line.height = 8.5
-        monthly_line.width = 15
-        monthly_line.add_data(Reference(monthly_ws, min_col=4, min_row=1, max_row=monthly_count + 1), titles_from_data=True)
-        monthly_line.set_categories(month_categories)
-        monthly_line.legend.position = 'r'
-        summary_ws.add_chart(monthly_line, 'I18')
-
-    if season_count > 0:
-        season_categories = Reference(season_ws, min_col=1, min_row=2, max_row=season_count + 1)
-        season_bar = BarChart()
-        season_bar.type = 'bar'
-        season_bar.style = 11
-        season_bar.title = '시즌별 순이익'
-        season_bar.x_axis.title = '금액(원)'
-        season_bar.y_axis.title = '시즌'
-        season_bar.height = 7.5
-        season_bar.width = 15
-        season_bar.add_data(Reference(season_ws, min_col=6, min_row=1, max_row=season_count + 1), titles_from_data=True)
-        season_bar.set_categories(season_categories)
-        season_bar.legend = None
-        summary_ws.add_chart(season_bar, 'A35')
-
-
-def build_summary_dashboard(ws, export_data):
-    ws.title = "요약"
+def set_summary_dashboard(ws, export_data):
+    ws.title = '요약'
     ws.sheet_view.showGridLines = False
-    ws.freeze_panes = 'A12'
+    for col, width in {'A':16,'B':16,'C':16,'D':16,'E':16,'F':16,'G':16,'H':16,'I':16,'J':16,'K':16,'L':16}.items():
+        ws.column_dimensions[col].width = width
 
-    ws.merge_cells('A1:L1')
-    title_cell = ws['A1']
-    title_cell.value = '작업일지 운영 보고서'
-    title_cell.font = Font(size=20, bold=True, color='FFFFFF')
-    title_cell.fill = PatternFill(fill_type='solid', fgColor='1F4E78')
-    title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[1].height = 30
+    ws.merge_cells('A1:L2')
+    title = ws['A1']
+    title.value = '작업일지 운영 보고서'
+    title.fill = PatternFill(fill_type='solid', fgColor='1F4E78')
+    title.font = Font(bold=True, color='FFFFFF', size=20)
+    title.alignment = Alignment(horizontal='center', vertical='center')
 
-    summary_map = {str(row.get('항목', '')): row.get('값', '') for row in export_data.get('summary', [])}
-    scope_text = summary_map.get('정산범위', '전체')
+    scope_name = '전체'
+    for row in export_data['summary']:
+        if row.get('항목') == '정산범위':
+            scope_name = row.get('값') or '전체'
+            break
+
+    ws.merge_cells('A3:L3')
+    meta = ws['A3']
+    meta.value = f"정산범위: {scope_name}   |   생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    meta.font = Font(bold=True, color='1F1F1F', size=11)
+    meta.alignment = Alignment(horizontal='center', vertical='center')
+
+    summary_map = {row.get('항목'): row.get('값') for row in export_data['summary']}
     total_income = safe_float(summary_map.get('총 수익'), 0)
     total_expense = safe_float(summary_map.get('총 지출'), 0)
     net_profit = safe_float(summary_map.get('순이익'), 0)
     work_count = int(safe_float(summary_map.get('작업 건수'), 0))
     money_count = int(safe_float(summary_map.get('금전 건수'), 0))
-    monthly_count = len(export_data.get('monthly', []))
-    season_count = len(export_data.get('season_summary', []))
-
-    ws.merge_cells('A2:L2')
-    scope_cell = ws['A2']
-    scope_cell.value = f'정산범위: {scope_text}    |    생성일시: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
-    scope_cell.font = Font(size=11, color='334155', bold=True)
-    scope_cell.alignment = Alignment(horizontal='center', vertical='center')
-    scope_cell.fill = PatternFill(fill_type='solid', fgColor='EAF2FF')
+    month_count = len(export_data.get('monthly') or [])
+    season_count = len(export_data.get('season_summary') or [])
+    status_text = '흑자' if net_profit > 0 else ('적자' if net_profit < 0 else '균형')
 
     cards = [
-        ('총 수익', total_income, 'A4:C8', 'ECFDF3', '166534', True),
-        ('총 지출', total_expense, 'D4:F8', 'FEF2F2', 'B91C1C', True),
-        ('순이익', net_profit, 'G4:I8', 'EFF6FF' if net_profit >= 0 else 'FEF2F2', '166534' if net_profit >= 0 else 'B91C1C', True),
-        ('작업 건수', work_count, 'J4:L5', 'F8FAFC', '334155', False),
-        ('금전 건수', money_count, 'J6:L8', 'F8FAFC', '334155', False),
-        ('월 수', monthly_count, 'A9:D10', 'FFF7ED', '9A3412', False),
-        ('시즌 수', season_count, 'E9:H10', 'EEF2FF', '3730A3', False),
-        ('현재 상태', '흑자' if net_profit > 0 else ('적자' if net_profit < 0 else '균형'), 'I9:L10', 'ECFDF3' if net_profit > 0 else ('FEF2F2' if net_profit < 0 else 'F8FAFC'), '166534' if net_profit > 0 else ('B91C1C' if net_profit < 0 else '334155'), False),
+        ('A5:C8', '총 수익', total_income, 'income'),
+        ('D5:F8', '총 지출', total_expense, 'expense'),
+        ('G5:I8', '순이익', net_profit, 'net'),
+        ('J5:L6', '작업 건수', work_count, 'count'),
+        ('J7:L8', '금전 건수', money_count, 'count'),
+        ('A9:D10', '월 수', month_count, 'sub'),
+        ('E9:H10', '시즌 수', season_count, 'sub'),
+        ('I9:L10', '현재 상태', status_text, 'status')
     ]
-
-    thin = Side(border_style='thin', color='D9E2F2')
+    fills = {
+        'income': 'E2F0D9',
+        'expense': 'FCE4D6',
+        'net': 'FFF2CC',
+        'count': 'D9E2F3',
+        'sub': 'F3F3F3',
+        'status': 'EAD1DC' if net_profit < 0 else 'D9EAD3'
+    }
+    font_colors = {
+        'income': '006100',
+        'expense': 'C00000',
+        'net': 'C00000' if net_profit < 0 else '1F4E78',
+        'count': '1F1F1F',
+        'sub': '7F6000',
+        'status': 'C00000' if net_profit < 0 else '006100'
+    }
+    thin = Side(border_style='thin', color='D9D9D9')
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    def apply_card(label, value, merged_range, fill_color, font_color, is_money=False):
-        ws.merge_cells(merged_range)
-        start = merged_range.split(':')[0]
-        end = merged_range.split(':')[1]
-        cell = ws[start]
-        if is_money:
-            value_text = f"₩ {int(round(safe_float(value, 0))):,}"
-        elif isinstance(value, (int, float)):
-            value_text = f"{int(round(value)):,}"
-        else:
-            value_text = str(value)
-        cell.value = f"{label}\n{value_text}"
-        cell.fill = PatternFill(fill_type='solid', fgColor=fill_color)
-        cell.font = Font(size=16, bold=True, color=font_color)
+    for rng, label, value, kind in cards:
+        ws.merge_cells(rng)
+        cell = ws[rng.split(':')[0]]
+        cell.value = f"{label}\n{value if isinstance(value, str) else ""}"
+        if not isinstance(value, str):
+            if kind in ('income', 'expense', 'net'):
+                cell.value = f"{label}\n₩ {value:,.0f}"
+            else:
+                cell.value = f"{label}\n{int(value):,}"
+        cell.fill = PatternFill(fill_type='solid', fgColor=fills[kind])
+        cell.font = Font(bold=True, color=font_colors[kind], size=16)
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        for r in range(ws[start].row, ws[end].row + 1):
-            for c in range(ws[start].column, ws[end].column + 1):
-                ws.cell(r, c).border = border
+        cell.border = border
 
-    for card in cards:
-        apply_card(*card)
+    ws['A12'] = '월 수'
+    ws['B12'] = month_count
+    ws['C12'] = '월별정산 시트 참조'
+    ws['A13'] = '시즌 수'
+    ws['B13'] = season_count
+    ws['C13'] = '시즌정산 시트 참조'
+    ws['A14'] = '작업 건수'
+    ws['B14'] = work_count
+    ws['C14'] = '작업일지 시트 참조'
+    for row in ws.iter_rows(min_row=12, max_row=14, min_col=1, max_col=3):
+        for cell in row:
+            cell.border = border
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            if cell.column == 1:
+                cell.fill = PatternFill(fill_type='solid', fgColor='EAF2FF')
+                cell.font = Font(bold=True)
 
-    ws['A12'] = '기준'
-    ws['B12'] = '값'
-    ws['C12'] = '비고'
-    style_header_row(ws, 12, fill_color='DCE6F1', font_color='1F2937')
 
-    detail_rows = [
-        ('정산범위', scope_text, ''),
-        ('생성일시', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ''),
-        ('월 수', monthly_count, '월별정산 시트 참조'),
-        ('시즌 수', season_count, '시즌정산 시트 참조'),
-        ('작업 건수', work_count, '작업일지 시트 참조'),
-        ('금전 건수', money_count, '금전내역 시트 참조'),
-    ]
-    for row_idx, (label, value, note) in enumerate(detail_rows, start=13):
-        ws.cell(row_idx, 1).value = label
-        ws.cell(row_idx, 2).value = value
-        ws.cell(row_idx, 3).value = note
-        for col in range(1, 4):
-            ws.cell(row_idx, col).border = border
-            ws.cell(row_idx, col).alignment = Alignment(horizontal='center' if col == 2 else 'left', vertical='center')
+def add_summary_charts(ws_summary, ws_monthly, ws_season):
+    monthly_data_end = ws_monthly.max_row - 1 if ws_monthly.max_row >= 3 else ws_monthly.max_row
+    if monthly_data_end >= 2:
+        bar = BarChart()
+        bar.type = 'col'
+        bar.style = 10
+        bar.title = '월별 수익 / 지출'
+        bar.y_axis.title = '금액'
+        bar.x_axis.title = '월'
+        data = Reference(ws_monthly, min_col=2, max_col=3, min_row=1, max_row=monthly_data_end)
+        cats = Reference(ws_monthly, min_col=1, min_row=2, max_row=monthly_data_end)
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(cats)
+        bar.height = 10
+        bar.width = 16
+        ws_summary.add_chart(bar, 'A18')
 
-    ws.column_dimensions['A'].width = 16
-    ws.column_dimensions['B'].width = 18
-    ws.column_dimensions['C'].width = 20
-    ws.column_dimensions['D'].width = 16
-    ws.column_dimensions['E'].width = 18
-    ws.column_dimensions['F'].width = 18
-    ws.column_dimensions['G'].width = 16
-    ws.column_dimensions['H'].width = 18
-    ws.column_dimensions['I'].width = 18
-    ws.column_dimensions['J'].width = 14
-    ws.column_dimensions['K'].width = 14
-    ws.column_dimensions['L'].width = 14
+        line = LineChart()
+        line.style = 2
+        line.title = '월별 순이익'
+        line.y_axis.title = '순이익'
+        line.x_axis.title = '월'
+        data2 = Reference(ws_monthly, min_col=4, max_col=4, min_row=1, max_row=monthly_data_end)
+        cats2 = Reference(ws_monthly, min_col=1, min_row=2, max_row=monthly_data_end)
+        line.add_data(data2, titles_from_data=True)
+        line.set_categories(cats2)
+        line.height = 10
+        line.width = 16
+        ws_summary.add_chart(line, 'G18')
+
+    season_data_end = ws_season.max_row - 1 if ws_season.max_row >= 3 else ws_season.max_row
+    if season_data_end >= 2:
+        season_chart = BarChart()
+        season_chart.type = 'col'
+        season_chart.style = 12
+        season_chart.title = '시즌별 순이익'
+        season_chart.y_axis.title = '순이익'
+        season_chart.x_axis.title = '시즌'
+        data3 = Reference(ws_season, min_col=6, max_col=6, min_row=1, max_row=season_data_end)
+        cats3 = Reference(ws_season, min_col=1, min_row=2, max_row=season_data_end)
+        season_chart.add_data(data3, titles_from_data=True)
+        season_chart.set_categories(cats3)
+        season_chart.height = 10
+        season_chart.width = 16
+        ws_summary.add_chart(season_chart, 'A36')
+
 
 def build_excel_file(export_data):
     wb = Workbook()
 
     ws0 = wb.active
-    build_summary_dashboard(ws0, export_data)
+    set_summary_dashboard(ws0, export_data)
 
-    ws1 = wb.create_sheet("작업일지")
+    ws1 = wb.create_sheet('작업일지')
     write_sheet_rows(
         ws1,
-        "작업일지",
-        ["날짜", "종료일", "작업분류", "세부작업", "작물", "병충해", "사용기계", "작업시간", "날씨", "사용자재", "인건비내역", "자재비", "인건비", "기타비", "비용구분", "비용합계", "결제방식", "비용비고", "작업메모"],
-        export_data["works"]
+        '작업일지',
+        ['날짜', '종료일', '작업분류', '세부작업', '작물', '병충해', '사용기계', '작업시간', '날씨', '사용자재', '인건비내역', '자재비', '인건비', '기타비', '비용구분', '비용합계', '결제방식', '비용비고', '작업메모'],
+        export_data['works']
     )
-    apply_integer_format(ws1, [8], start_row=2)
     apply_currency_format(ws1, [12, 13, 14, 16], start_row=2)
-    style_data_range(ws1, start_row=2, amount_cols=[8, 12, 13, 14, 16], expense_cols=[12, 13, 14, 16])
     append_total_row(ws1, label_col=1, amount_cols=[12, 13, 14, 16])
-    auto_fit_columns(ws1, min_width=10, max_width=36)
 
-    ws2 = wb.create_sheet("금전내역")
+    ws2 = wb.create_sheet('금전내역')
     write_sheet_rows(
         ws2,
-        "금전내역",
-        ["날짜", "이름", "구분", "금액", "방식", "비고", "행종류"],
-        export_data["money"]
+        '금전내역',
+        ['날짜', '이름', '구분', '금액', '방식', '비고', '행종류'],
+        export_data['money']
     )
     apply_currency_format(ws2, [4], start_row=2)
-    style_data_range(ws2, start_row=2, amount_cols=[4])
-    for row_idx in range(2, ws2.max_row + 1):
-        kind_value = ws2.cell(row_idx, 7).value
-        amount_cell = ws2.cell(row_idx, 4)
-        row_fill = 'F0FDF4' if kind_value == '수익' else 'FEF2F2'
-        for col_idx in range(1, ws2.max_column + 1):
-            ws2.cell(row_idx, col_idx).fill = PatternFill(fill_type='solid', fgColor=row_fill)
-        if kind_value == '수익':
-            amount_cell.font = Font(color='166534', bold=True)
-        else:
-            amount_cell.font = Font(color='B91C1C', bold=True)
+    style_money_rows(ws2)
     append_total_row(ws2, label_col=1, amount_cols=[4])
-    auto_fit_columns(ws2, min_width=10, max_width=32)
 
-    ws3 = wb.create_sheet("월별정산")
+    ws3 = wb.create_sheet('월별정산')
     write_sheet_rows(
         ws3,
-        "월별정산",
-        ["월", "수익", "지출", "순이익"],
-        export_data["monthly"]
+        '월별정산',
+        ['월', '수익', '지출', '순이익'],
+        export_data['monthly']
     )
     apply_currency_format(ws3, [2, 3, 4], start_row=2)
-    style_data_range(ws3, start_row=2, amount_cols=[2, 3, 4], income_cols=[2], expense_cols=[3], net_cols=[4])
     append_total_row(ws3, label_col=1, amount_cols=[2, 3, 4])
-    auto_fit_columns(ws3, min_width=12, max_width=20)
 
-    ws4 = wb.create_sheet("시즌정산")
+    ws4 = wb.create_sheet('시즌정산')
     write_sheet_rows(
         ws4,
-        "시즌정산",
-        ["시즌명", "시작일", "종료일", "수익", "지출", "순이익", "비고"],
-        export_data["season_summary"]
+        '시즌정산',
+        ['시즌명', '시작일', '종료일', '수익', '지출', '순이익', '비고'],
+        export_data['season_summary']
     )
     apply_currency_format(ws4, [4, 5, 6], start_row=2)
-    style_data_range(ws4, start_row=2, amount_cols=[4, 5, 6], income_cols=[4], expense_cols=[5], net_cols=[6])
     append_total_row(ws4, label_col=1, amount_cols=[4, 5, 6])
-    auto_fit_columns(ws4, min_width=12, max_width=28)
 
-    add_financial_trend_charts(ws0, ws3, ws4, len(export_data.get("monthly", [])), len(export_data.get("season_summary", [])))
+    ws3.column_dimensions['D'].width = 16
+    ws4.column_dimensions['F'].width = 16
+    ws4.column_dimensions['G'].width = 20
+
+    add_summary_charts(ws0, ws3, ws4)
 
     return wb
 

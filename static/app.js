@@ -1161,22 +1161,29 @@
 
     if (el.weather) el.weather.value = template.weather || '';
     if (el.task_category) el.task_category.value = template.task_category || '';
-    renderTaskOptionsByCategory(template.task_category || '');
-    if (el.task_name) el.task_name.value = template.task_name || '';
-    if (el['task-name-search']) el['task-name-search'].value = template.task_name || '';
-    renderTaskQuickOptions(template.task_category || '', template.task_name || '');
-    if (el.work_hours) el.work_hours.value = template.work_hours || 0;
+    renderTaskOptionsByCategory(template.task_category || '', false);
+    selectTaskNameValue(template.task_name || '', true);
+
+    if (el.work_hours) el.work_hours.value = Number(template.work_hours || 0);
     if (el.memo) el.memo.value = template.memo_text || '';
     if (el.start_time) el.start_time.value = template.start_time || '';
     if (el.end_time) el.end_time.value = template.end_time || '';
 
-    setChipSelections('crops', template.crops || []);
-    setChipSelections('pests', template.pests || []);
-    setChipSelections('machines', template.machines || []);
+    setChipSelections('crops', Array.isArray(template.crops) ? template.crops : []);
+    setChipSelections('pests', Array.isArray(template.pests) ? template.pests : []);
+    setChipSelections('machines', Array.isArray(template.machines) ? template.machines : []);
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
-      ? JSON.parse(JSON.stringify(template.materials))
+      ? template.materials.map(item => ({
+          id: item?.id || '',
+          name: item?.name || '',
+          unit: item?.unit || '',
+          price: Number(item?.price || item?.unit_price || 0),
+          qty: Number(item?.qty || 0),
+          method: item?.method || '',
+          installment_months: Number(item?.installment_months || item?.installment || 0)
+        }))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1185,17 +1192,23 @@
       template.labor_rows.forEach(row => addLaborRow(row));
     }
 
-    if (el.has_money) el.has_money.checked = !!template.money?.enabled;
-    toggleMoneyBox(!!template.money?.enabled);
-    if (el.money_note) el.money_note.value = template.money?.note || '';
-    if (el.other_cost) el.other_cost.value = template.money?.other_total || 0;
-    if (el.money_method) el.money_method.value = template.money?.method || '';
-    if (el.money_installment_months) el.money_installment_months.value = template.money?.installment_months || 0;
+    const money = template.money || {};
+    if (el.has_money) el.has_money.checked = !!money.enabled;
+    toggleMoneyBox(!!money.enabled);
+    if (el.money_note) el.money_note.value = money.note || '';
+    if (el.other_cost) el.other_cost.value = Number(money.other_total || 0);
+    if (el.money_method) el.money_method.value = money.method || '';
+    if (el.money_installment_months) {
+      el.money_installment_months.value = Number(money.installment_months || 0);
+    }
+    toggleInstallmentField();
 
     if (el.start_date) el.start_date.value = currentStartDate;
     if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
     updateEndDateFromRepeatDays();
     syncWorkTimeFields('time');
+    renderTaskCategoryRecommendations(template.task_category || '');
+    renderTaskMaterialRecommendations(template.task_name || '');
     updateMoneySummary();
   }
 
@@ -1347,6 +1360,9 @@
       toggleMoneyBox(true);
       if (el.money_note) el.money_note.value = meta.money.note || '';
       if (el.other_cost) el.other_cost.value = meta.money.other_total || 0;
+      if (el.money_method) el.money_method.value = meta.money.method || '';
+      if (el.money_installment_months) el.money_installment_months.value = Number(meta.money.installment_months || 0);
+      toggleInstallmentField();
     } else {
       resetMoneyFields();
     }

@@ -1200,71 +1200,31 @@
   }
 
   function saveCurrentWorkAsFavorite() {
-    try {
-      console.log('🔥 즐겨찾기 저장 시작');
-      showFavoriteWorkStatus('저장 시작...');
+    const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
+    const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
+    if (name == null) return;
 
-      const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
-      const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
-      if (name == null) {
-        console.log('❌ 취소 눌림');
-        showFavoriteWorkStatus('저장 취소');
-        return;
-      }
-
-      const trimmed = name.trim();
-      if (!trimmed) {
-        alert('즐겨찾기 이름을 입력하세요.');
-        showFavoriteWorkStatus('이름 없음');
-        return;
-      }
-
-      console.log('✅ 이름:', trimmed);
-      showFavoriteWorkStatus('템플릿 생성 중...');
-
-      const template = buildWorkTemplateFromForm();
-      console.log('✅ 템플릿 생성:', template);
-
-      showFavoriteWorkStatus('기존 목록 읽는 중...');
-      const rows = getFavoriteWorks();
-      console.log('📦 기존 저장 목록:', rows);
-
-      const newItem = {
-        id: `${Date.now()}`,
-        name: trimmed,
-        template: template
-      };
-      rows.push(newItem);
-
-      console.log('💾 저장 시도:', rows);
-      showFavoriteWorkStatus('localStorage 저장 중...');
-
-      const ok = setFavoriteWorks(rows);
-      if (!ok) {
-        alert('❌ localStorage 저장 실패');
-        showFavoriteWorkStatus('localStorage 저장 실패');
-        return;
-      }
-
-      console.log('✅ 저장 완료');
-      showFavoriteWorkStatus('저장 후 검증 중...');
-
-      const check = getFavoriteWorks();
-      console.log('🔍 저장 후 확인:', check);
-      if (!Array.isArray(check) || !check.some(item => String(item.id) === String(newItem.id))) {
-        alert('❌ 저장됐는데 다시 읽기 실패');
-        showFavoriteWorkStatus('저장 후 다시 읽기 실패');
-        return;
-      }
-
-      renderFavoriteWorkSelect(newItem.id);
-      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-      alert('✅ 즐겨찾기 저장 성공');
-    } catch (e) {
-      console.error('🔥 저장 중 에러:', e);
-      showFavoriteWorkStatus(`오류: ${e.message || e}`);
-      alert('❌ 저장 중 오류 발생: ' + (e.message || e));
+    const trimmed = name.trim();
+    if (!trimmed) {
+      alert('즐겨찾기 이름을 입력하세요.');
+      return;
     }
+
+    const rows = getFavoriteWorks();
+    const newItem = {
+      id: `${Date.now()}`,
+      name: trimmed,
+      template: buildWorkTemplateFromForm()
+    };
+    rows.push(newItem);
+    const ok = setFavoriteWorks(rows);
+    if (!ok) {
+      alert('즐겨찾기 저장 실패');
+      return;
+    }
+    renderFavoriteWorkSelect(newItem.id);
+    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+    alert('즐겨찾기로 저장했습니다.');
   }
 
   function loadFavoriteWorkIntoForm() {
@@ -2356,6 +2316,10 @@ function filterChipOptions(type, keyword) {
     const box = el[`${type}-box`];
     if (!box) return [];
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+  }
+
+  function getSelectedChips(type) {
+    return getSelectedChipValues(type);
   }
 
   function renderOptions() {

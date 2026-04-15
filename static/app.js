@@ -105,7 +105,7 @@
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
       'task-name-search','task-name-datalist','recent-task-picks','task-name-options','pest-search-input','recent-material-picks',
 
-      'recommended-materials-wrap','recommended-materials-box','material-list-search',
+      'recommended-materials-wrap','recommended-materials-box','task-material-recommend-wrap','task-material-recommend-box','material-list-search',
 
       'season-panel','season-panel-header','btn-toggle-season-panel','season-panel-toggle-text','season-panel-summary','season-panel-body',
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
@@ -221,9 +221,11 @@
     });
     on(el['task-name-search'], 'input', (e) => {
       syncTaskNameSearchToSelect(e.target.value || '');
+      renderTaskMaterialRecommendations(e.target.value || el.task_name?.value || '');
     });
     on(el['task-name-search'], 'change', (e) => {
       syncTaskNameSearchToSelect(e.target.value || '');
+      renderTaskMaterialRecommendations(e.target.value || el.task_name?.value || '');
     });
     on(el['pest-search-input'], 'input', (e) => {
       filterChipOptions('pests', e.target.value || '');
@@ -237,6 +239,7 @@
 
     on(el['task_category'], 'change', () => {
       renderTaskOptionsByCategory(el['task_category']?.value || '');
+      renderTaskMaterialRecommendations(el.task_name?.value || '');
     });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
@@ -1121,6 +1124,7 @@
     setChipSelections('pests', template.pests || []);
     setChipSelections('machines', template.machines || []);
     renderRecommendedMaterials();
+    renderTaskMaterialRecommendations(template.task_name || '');
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
       ? JSON.parse(JSON.stringify(template.materials))
@@ -1239,6 +1243,7 @@
     state.selectedMaterialsDetailed = [];
     renderSelectedMaterialsDetailed();
     renderRecommendedMaterials();
+    renderTaskMaterialRecommendations('');
     renderTaskOptionsByCategory('');
     syncFavoriteWorkButtons();
   }
@@ -1266,6 +1271,7 @@
     setChipSelections('pests', splitCsv(work.pests));
     setChipSelections('machines', splitCsv(work.machines));
     renderRecommendedMaterials();
+    renderTaskMaterialRecommendations(work.task_name || '');
 
     state.selectedMaterialsDetailed = Array.isArray(meta.materials)
       ? meta.materials.map(m => ({
@@ -1399,6 +1405,7 @@
     renderChipOptions('pests', state.options.pests);
     renderChipOptions('machines', state.options.machines);
     renderRecommendedMaterials();
+    renderTaskMaterialRecommendations(el.task_name?.value || el['task-name-search']?.value || '');
     renderRecentQuickPicks();
     syncTaskNameDatalist(el.task_category?.value || '');
     filterChipOptions('pests', el['pest-search-input']?.value || '');
@@ -1432,6 +1439,7 @@
       el['task-name-search'].value = selectEl.value;
     }
     renderTaskQuickOptions(categoryName || '', el['task-name-search']?.value || selectEl.value || '');
+    renderTaskMaterialRecommendations(selectEl.value || el['task-name-search']?.value || '');
   }
 
 
@@ -1573,6 +1581,7 @@ function selectTaskNameValue(value, syncSearch = false) {
     el['task-name-search'].value = target;
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
+  renderTaskMaterialRecommendations(target);
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -2060,6 +2069,93 @@ function filterChipOptions(type, keyword) {
     });
   }
 
+
+  function normalizeText(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function getTaskMaterialRecommendations(taskName) {
+    const target = normalizeText(taskName);
+    if (!target) return [];
+
+    const scoreMap = new Map();
+
+    (state.works || []).forEach(work => {
+      const workTask = normalizeText(work.task_name);
+      if (!workTask) return;
+
+      const isExact = workTask === target;
+      const isRelated = !isExact && (workTask.includes(target) || target.includes(workTask));
+      if (!isExact && !isRelated) return;
+
+      const memo = parseMemo(work.memo);
+      const materials = Array.isArray(memo.materials) ? memo.materials : [];
+      materials.forEach(material => {
+        const name = String(material.name || '').trim();
+        if (!name) return;
+        const weight = isExact ? 3 : 1;
+        scoreMap.set(name, (scoreMap.get(name) || 0) + weight);
+      });
+    });
+
+    return Array.from(scoreMap.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
+      .slice(0, 8)
+      .map(([name, score]) => ({ name, score }));
+  }
+
+  function addRecommendedMaterialByName(name) {
+    const item = findMaterialByRecommendedName(name);
+    if (item) {
+      addSelectedMaterial(item.id);
+      return;
+    }
+
+    const exists = state.selectedMaterialsDetailed.find(m => (m.name || '') === name);
+    if (exists) {
+      exists.qty = Number(exists.qty || 0) + 1;
+    } else {
+      state.selectedMaterialsDetailed.push({
+        id: '',
+        name,
+        unit: '',
+        price: 0,
+        qty: 1,
+        method: getDefaultMaterialMethod(),
+        installment_months: 0
+      });
+    }
+
+    renderSelectedMaterialsDetailed();
+    updateMoneySummary();
+  }
+
+  function renderTaskMaterialRecommendations(taskName = '') {
+    const wrap = el['task-material-recommend-wrap'];
+    const box = el['task-material-recommend-box'];
+    if (!wrap || !box) return;
+
+    const rows = getTaskMaterialRecommendations(taskName || el.task_name?.value || el['task-name-search']?.value || '');
+    if (!rows.length) {
+      wrap.classList.add('hidden');
+      box.innerHTML = `<div class="recommended-materials-empty">추천 자재 없음</div>`;
+      return;
+    }
+
+    wrap.classList.remove('hidden');
+    box.innerHTML = rows.map(item => `
+      <button type="button" class="search-result-item" data-task-recommend-material="${escapeHtml(item.name)}">
+        ${escapeHtml(item.name)} <span class="recommend-chip-note">(${item.score}회)</span>
+      </button>
+    `).join('');
+
+    box.querySelectorAll('[data-task-recommend-material]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        addRecommendedMaterialByName(btn.dataset.taskRecommendMaterial || '');
+      });
+    });
+  }
+
   function renderRecommendedMaterials() {
     const wrap = el['recommended-materials-wrap'];
     const box = el['recommended-materials-box'];
@@ -2090,30 +2186,7 @@ function filterChipOptions(type, keyword) {
     box.querySelectorAll('[data-recommend-material]').forEach(btn => {
       btn.addEventListener('click', () => {
         const name = btn.dataset.recommendMaterial || '';
-        const item = findMaterialByRecommendedName(name);
-
-        if (item) {
-          addSelectedMaterial(item.id);
-          return;
-        }
-
-        const exists = state.selectedMaterialsDetailed.find(m => (m.name || '') === name);
-        if (exists) {
-          exists.qty = Number(exists.qty || 0) + 1;
-        } else {
-          state.selectedMaterialsDetailed.push({
-            id: '',
-            name,
-            unit: '',
-            price: 0,
-            qty: 1,
-            method: getDefaultMaterialMethod(),
-            installment_months: 0
-          });
-        }
-
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
+        addRecommendedMaterialByName(name);
       });
     });
   }

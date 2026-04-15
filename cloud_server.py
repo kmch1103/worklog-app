@@ -8,6 +8,7 @@ from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.chart import BarChart, LineChart, Reference
 
 app = Flask(__name__)
 DB = "worklog.db"
@@ -1671,16 +1672,64 @@ def append_total_row(ws, label_col=1, amount_cols=None):
     return total_row
 
 
+def add_financial_trend_charts(summary_ws, monthly_ws, season_ws, monthly_count, season_count):
+    if monthly_count > 0:
+        month_categories = Reference(monthly_ws, min_col=1, min_row=2, max_row=monthly_count + 1)
+
+        monthly_bar = BarChart()
+        monthly_bar.type = 'col'
+        monthly_bar.style = 10
+        monthly_bar.title = '월별 수익 / 지출'
+        monthly_bar.y_axis.title = '금액(원)'
+        monthly_bar.x_axis.title = '월'
+        monthly_bar.height = 8.5
+        monthly_bar.width = 15
+        monthly_bar.gapWidth = 55
+        monthly_bar.add_data(Reference(monthly_ws, min_col=2, min_row=1, max_col=3, max_row=monthly_count + 1), titles_from_data=True)
+        monthly_bar.set_categories(month_categories)
+        monthly_bar.legend.position = 'r'
+        summary_ws.add_chart(monthly_bar, 'A18')
+
+        monthly_line = LineChart()
+        monthly_line.style = 13
+        monthly_line.title = '월별 순이익 흐름'
+        monthly_line.y_axis.title = '순이익(원)'
+        monthly_line.x_axis.title = '월'
+        monthly_line.height = 8.5
+        monthly_line.width = 15
+        monthly_line.add_data(Reference(monthly_ws, min_col=4, min_row=1, max_row=monthly_count + 1), titles_from_data=True)
+        monthly_line.set_categories(month_categories)
+        monthly_line.legend.position = 'r'
+        summary_ws.add_chart(monthly_line, 'I18')
+
+    if season_count > 0:
+        season_categories = Reference(season_ws, min_col=1, min_row=2, max_row=season_count + 1)
+        season_bar = BarChart()
+        season_bar.type = 'bar'
+        season_bar.style = 11
+        season_bar.title = '시즌별 순이익'
+        season_bar.x_axis.title = '금액(원)'
+        season_bar.y_axis.title = '시즌'
+        season_bar.height = 7.5
+        season_bar.width = 15
+        season_bar.add_data(Reference(season_ws, min_col=6, min_row=1, max_row=season_count + 1), titles_from_data=True)
+        season_bar.set_categories(season_categories)
+        season_bar.legend = None
+        summary_ws.add_chart(season_bar, 'A35')
+
+
 def build_summary_dashboard(ws, export_data):
     ws.title = "요약"
     ws.sheet_view.showGridLines = False
-    ws.merge_cells('A1:F1')
+    ws.freeze_panes = 'A12'
+
+    ws.merge_cells('A1:L1')
     title_cell = ws['A1']
-    title_cell.value = '작업일지 운영 요약'
-    title_cell.font = Font(size=18, bold=True, color='FFFFFF')
+    title_cell.value = '작업일지 운영 보고서'
+    title_cell.font = Font(size=20, bold=True, color='FFFFFF')
     title_cell.fill = PatternFill(fill_type='solid', fgColor='1F4E78')
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[1].height = 30
 
     summary_map = {str(row.get('항목', '')): row.get('값', '') for row in export_data.get('summary', [])}
     scope_text = summary_map.get('정산범위', '전체')
@@ -1689,66 +1738,85 @@ def build_summary_dashboard(ws, export_data):
     net_profit = safe_float(summary_map.get('순이익'), 0)
     work_count = int(safe_float(summary_map.get('작업 건수'), 0))
     money_count = int(safe_float(summary_map.get('금전 건수'), 0))
+    monthly_count = len(export_data.get('monthly', []))
+    season_count = len(export_data.get('season_summary', []))
+
+    ws.merge_cells('A2:L2')
+    scope_cell = ws['A2']
+    scope_cell.value = f'정산범위: {scope_text}    |    생성일시: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+    scope_cell.font = Font(size=11, color='334155', bold=True)
+    scope_cell.alignment = Alignment(horizontal='center', vertical='center')
+    scope_cell.fill = PatternFill(fill_type='solid', fgColor='EAF2FF')
 
     cards = [
-        ('정산범위', scope_text, 'A3:B5', 'EAF2FF', '1F4E78', False),
-        ('총 수익', total_income, 'C3:D5', 'ECFDF3', '166534', True),
-        ('총 지출', total_expense, 'E3:F5', 'FEF2F2', 'B91C1C', True),
-        ('순이익', net_profit, 'A7:B9', 'EFF6FF' if net_profit >= 0 else 'FEF2F2', '166534' if net_profit >= 0 else 'B91C1C', True),
-        ('작업 건수', work_count, 'C7:D9', 'F8FAFC', '334155', False),
-        ('금전 건수', money_count, 'E7:F9', 'F8FAFC', '334155', False),
+        ('총 수익', total_income, 'A4:C8', 'ECFDF3', '166534', True),
+        ('총 지출', total_expense, 'D4:F8', 'FEF2F2', 'B91C1C', True),
+        ('순이익', net_profit, 'G4:I8', 'EFF6FF' if net_profit >= 0 else 'FEF2F2', '166534' if net_profit >= 0 else 'B91C1C', True),
+        ('작업 건수', work_count, 'J4:L5', 'F8FAFC', '334155', False),
+        ('금전 건수', money_count, 'J6:L8', 'F8FAFC', '334155', False),
+        ('월 수', monthly_count, 'A9:D10', 'FFF7ED', '9A3412', False),
+        ('시즌 수', season_count, 'E9:H10', 'EEF2FF', '3730A3', False),
+        ('현재 상태', '흑자' if net_profit > 0 else ('적자' if net_profit < 0 else '균형'), 'I9:L10', 'ECFDF3' if net_profit > 0 else ('FEF2F2' if net_profit < 0 else 'F8FAFC'), '166534' if net_profit > 0 else ('B91C1C' if net_profit < 0 else '334155'), False),
     ]
 
     thin = Side(border_style='thin', color='D9E2F2')
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    for label, value, merged_range, fill_color, font_color, is_money in cards:
+    def apply_card(label, value, merged_range, fill_color, font_color, is_money=False):
         ws.merge_cells(merged_range)
-        cell = ws[merged_range.split(':')[0]]
-        display_value = value
+        start = merged_range.split(':')[0]
+        end = merged_range.split(':')[1]
+        cell = ws[start]
         if is_money:
-            display_value = f"₩ {int(round(safe_float(value, 0))):,}"
+            value_text = f"₩ {int(round(safe_float(value, 0))):,}"
         elif isinstance(value, (int, float)):
-            display_value = f"{int(round(value)):,}"
-        cell.value = f"{label}\n{display_value}"
+            value_text = f"{int(round(value)):,}"
+        else:
+            value_text = str(value)
+        cell.value = f"{label}\n{value_text}"
         cell.fill = PatternFill(fill_type='solid', fgColor=fill_color)
-        cell.font = Font(size=15, bold=True, color=font_color)
+        cell.font = Font(size=16, bold=True, color=font_color)
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        start_col = ws[merged_range.split(':')[0]].column
-        end_col = ws[merged_range.split(':')[1]].column
-        start_row = ws[merged_range.split(':')[0]].row
-        end_row = ws[merged_range.split(':')[1]].row
-        for r in range(start_row, end_row + 1):
-            for c in range(start_col, end_col + 1):
+        for r in range(ws[start].row, ws[end].row + 1):
+            for c in range(ws[start].column, ws[end].column + 1):
                 ws.cell(r, c).border = border
 
-    ws['A11'] = '기준'
-    ws['B11'] = '값'
-    style_header_row(ws, 11, fill_color='DCE6F1', font_color='1F2937')
+    for card in cards:
+        apply_card(*card)
 
-    details = [
-        ('정산범위', scope_text),
-        ('생성일시', datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
-        ('월 수', len(export_data.get('monthly', []))),
-        ('시즌 수', len(export_data.get('season_summary', []))),
+    ws['A12'] = '기준'
+    ws['B12'] = '값'
+    ws['C12'] = '비고'
+    style_header_row(ws, 12, fill_color='DCE6F1', font_color='1F2937')
+
+    detail_rows = [
+        ('정산범위', scope_text, ''),
+        ('생성일시', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ''),
+        ('월 수', monthly_count, '월별정산 시트 참조'),
+        ('시즌 수', season_count, '시즌정산 시트 참조'),
+        ('작업 건수', work_count, '작업일지 시트 참조'),
+        ('금전 건수', money_count, '금전내역 시트 참조'),
     ]
-    row_idx = 12
-    for label, value in details:
+    for row_idx, (label, value, note) in enumerate(detail_rows, start=13):
         ws.cell(row_idx, 1).value = label
         ws.cell(row_idx, 2).value = value
-        ws.cell(row_idx, 1).border = border
-        ws.cell(row_idx, 2).border = border
-        ws.cell(row_idx, 1).alignment = Alignment(vertical='center')
-        ws.cell(row_idx, 2).alignment = Alignment(vertical='center')
-        row_idx += 1
+        ws.cell(row_idx, 3).value = note
+        for col in range(1, 4):
+            ws.cell(row_idx, col).border = border
+            ws.cell(row_idx, col).alignment = Alignment(horizontal='center' if col == 2 else 'left', vertical='center')
 
     ws.column_dimensions['A'].width = 16
     ws.column_dimensions['B'].width = 18
-    ws.column_dimensions['C'].width = 16
-    ws.column_dimensions['D'].width = 18
-    ws.column_dimensions['E'].width = 16
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 16
+    ws.column_dimensions['E'].width = 18
     ws.column_dimensions['F'].width = 18
-
+    ws.column_dimensions['G'].width = 16
+    ws.column_dimensions['H'].width = 18
+    ws.column_dimensions['I'].width = 18
+    ws.column_dimensions['J'].width = 14
+    ws.column_dimensions['K'].width = 14
+    ws.column_dimensions['L'].width = 14
 
 def build_excel_file(export_data):
     wb = Workbook()
@@ -1781,6 +1849,9 @@ def build_excel_file(export_data):
     for row_idx in range(2, ws2.max_row + 1):
         kind_value = ws2.cell(row_idx, 7).value
         amount_cell = ws2.cell(row_idx, 4)
+        row_fill = 'F0FDF4' if kind_value == '수익' else 'FEF2F2'
+        for col_idx in range(1, ws2.max_column + 1):
+            ws2.cell(row_idx, col_idx).fill = PatternFill(fill_type='solid', fgColor=row_fill)
         if kind_value == '수익':
             amount_cell.font = Font(color='166534', bold=True)
         else:
@@ -1811,6 +1882,8 @@ def build_excel_file(export_data):
     style_data_range(ws4, start_row=2, amount_cols=[4, 5, 6], income_cols=[4], expense_cols=[5], net_cols=[6])
     append_total_row(ws4, label_col=1, amount_cols=[4, 5, 6])
     auto_fit_columns(ws4, min_width=12, max_width=28)
+
+    add_financial_trend_charts(ws0, ws3, ws4, len(export_data.get("monthly", [])), len(export_data.get("season_summary", [])))
 
     return wb
 

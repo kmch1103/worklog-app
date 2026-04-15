@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 app = Flask(__name__)
 DB = "worklog.db"
@@ -1534,7 +1534,20 @@ def build_excel_export_data(conn, season_id=''):
             "비고": s.get("note", "")
         })
 
+    total_income = sum(safe_float(row.get("금액"), 0) for row in money_rows if row.get("행종류") == "수익")
+    total_expense = sum(safe_float(row.get("금액"), 0) for row in money_rows if row.get("행종류") != "수익")
+
+    summary_rows = [
+        {"항목": "정산범위", "값": (season.get("season_name") if season else "전체"), "비고": ""},
+        {"항목": "총 수익", "값": total_income, "비고": ""},
+        {"항목": "총 지출", "값": total_expense, "비고": ""},
+        {"항목": "순이익", "값": total_income - total_expense, "비고": ""},
+        {"항목": "작업 건수", "값": len(work_rows), "비고": ""},
+        {"항목": "금전 건수", "값": len(money_rows), "비고": ""}
+    ]
+
     return {
+        "summary": summary_rows,
         "works": work_rows,
         "money": sorted(money_rows, key=lambda x: (x.get("날짜", ""), x.get("행종류", "")), reverse=True),
         "monthly": monthly_rows,
@@ -1542,19 +1555,20 @@ def build_excel_export_data(conn, season_id=''):
     }
 
 
-def write_sheet_rows(ws, title, headers, rows):
-    ws.title = title
-    ws.append(headers)
-    header_fill = PatternFill(fill_type="solid", fgColor="EAF2FF")
-    header_font = Font(bold=True)
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
+def style_header_row(ws, row_idx=1):
+    fill = PatternFill(fill_type="solid", fgColor="EAF2FF")
+    font = Font(bold=True)
+    thin = Side(border_style="thin", color="D9E2F2")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for cell in ws[row_idx]:
+        cell.fill = fill
+        cell.font = font
         cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
 
-    for row in rows:
-        ws.append([row.get(h, "") for h in headers])
 
+def auto_fit_columns(ws, min_width=10, max_width=42):
     for col_cells in ws.columns:
         max_length = 0
         col_letter = col_cells[0].column_letter
@@ -1562,18 +1576,69 @@ def write_sheet_rows(ws, title, headers, rows):
             value = "" if cell.value is None else str(cell.value)
             if len(value) > max_length:
                 max_length = len(value)
-        ws.column_dimensions[col_letter].width = min(max(max_length + 2, 10), 42)
+        ws.column_dimensions[col_letter].width = min(max(max_length + 2, min_width), max_width)
+
+
+def apply_currency_format(ws, col_indexes, start_row=2):
+    for col_idx in col_indexes:
+        for row in ws.iter_rows(min_row=start_row, min_col=col_idx, max_col=col_idx):
+            for cell in row:
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = '#,##0'
+
+
+def write_sheet_rows(ws, title, headers, rows):
+    ws.title = title
+    ws.append(headers)
+    style_header_row(ws, 1)
+
+    for row in rows:
+        ws.append([row.get(h, "") for h in headers])
+
+    auto_fit_columns(ws)
+
+
+def append_total_row(ws, label_col=1, amount_cols=None):
+    if amount_cols is None:
+        amount_cols = []
+    last_data_row = ws.max_row
+    total_row = last_data_row + 1
+    ws.cell(total_row, label_col).value = "합계"
+    ws.cell(total_row, label_col).font = Font(bold=True)
+
+    fill = PatternFill(fill_type="solid", fgColor="FFF2CC")
+    thin = Side(border_style="thin", color="D9D9D9")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for col_idx in range(1, ws.max_column + 1):
+        cell = ws.cell(total_row, col_idx)
+        cell.fill = fill
+        cell.border = border
+        if col_idx in amount_cols:
+            col_letter = ws.cell(1, col_idx).column_letter
+            cell.value = f"=SUM({col_letter}2:{col_letter}{last_data_row})"
+            cell.number_format = '#,##0'
+            cell.font = Font(bold=True)
+        elif col_idx != label_col:
+            cell.value = ""
 
 
 def build_excel_file(export_data):
     wb = Workbook()
-    ws1 = wb.active
+
+    ws0 = wb.active
+    write_sheet_rows(ws0, "요약", ["항목", "값", "비고"], export_data["summary"])
+    apply_currency_format(ws0, [2], start_row=2)
+
+    ws1 = wb.create_sheet("작업일지")
     write_sheet_rows(
         ws1,
         "작업일지",
         ["날짜", "종료일", "작업분류", "세부작업", "작물", "병충해", "사용기계", "작업시간", "날씨", "사용자재", "인건비내역", "자재비", "인건비", "기타비", "비용구분", "비용합계", "결제방식", "비용비고", "작업메모"],
         export_data["works"]
     )
+    apply_currency_format(ws1, [12, 13, 14, 16], start_row=2)
+    append_total_row(ws1, label_col=1, amount_cols=[12, 13, 14, 16])
 
     ws2 = wb.create_sheet("금전내역")
     write_sheet_rows(
@@ -1582,6 +1647,8 @@ def build_excel_file(export_data):
         ["날짜", "이름", "구분", "금액", "방식", "비고", "행종류"],
         export_data["money"]
     )
+    apply_currency_format(ws2, [4], start_row=2)
+    append_total_row(ws2, label_col=1, amount_cols=[4])
 
     ws3 = wb.create_sheet("월별정산")
     write_sheet_rows(
@@ -1590,6 +1657,8 @@ def build_excel_file(export_data):
         ["월", "수익", "지출", "순이익"],
         export_data["monthly"]
     )
+    apply_currency_format(ws3, [2, 3, 4], start_row=2)
+    append_total_row(ws3, label_col=1, amount_cols=[2, 3, 4])
 
     ws4 = wb.create_sheet("시즌정산")
     write_sheet_rows(
@@ -1598,6 +1667,9 @@ def build_excel_file(export_data):
         ["시즌명", "시작일", "종료일", "수익", "지출", "순이익", "비고"],
         export_data["season_summary"]
     )
+    apply_currency_format(ws4, [4, 5, 6], start_row=2)
+    append_total_row(ws4, label_col=1, amount_cols=[4, 5, 6])
+
     return wb
 
 
@@ -1617,7 +1689,7 @@ def export_excel():
     output.seek(0)
 
     scope_name = season_id or "all"
-    filename = f"worklog_export_{scope_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"worklog_report_{scope_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return send_file(
         output,
         as_attachment=True,

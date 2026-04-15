@@ -108,7 +108,7 @@
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
 
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
-      'task-name-search','btn-clear-task-name','task-name-datalist','recent-task-picks','task-name-options','pest-search-input','recent-material-picks',
+      'task-name-search','btn-clear-task-name','task-name-datalist','recent-task-picks','task-name-options','task-recommend-wrap','task-recommend-box','task-material-recommend-wrap','task-material-recommend-box','pest-search-input','recent-material-picks',
 
       'recommended-materials-wrap','recommended-materials-box','material-list-search',
 
@@ -1306,6 +1306,7 @@
     if (el.task_name) el.task_name.value = work.task_name || '';
     if (el['task-name-search']) el['task-name-search'].value = work.task_name || '';
     renderTaskQuickOptions(work.task_category || '', work.task_name || '');
+    renderTaskMaterialRecommendations(work.task_name || '');
     if (el.work_hours) el.work_hours.value = work.work_hours || meta.work_hours || 0;
     if (el.memo) el.memo.value = meta.memo_text || '';
 
@@ -1448,6 +1449,8 @@
     renderRecommendedMaterials();
     renderRecentQuickPicks();
     syncTaskNameDatalist(el.task_category?.value || '');
+    renderTaskCategoryRecommendations(el.task_category?.value || '');
+    renderTaskMaterialRecommendations(el.task_name?.value || '');
     filterChipOptions('pests', el['pest-search-input']?.value || '');
   }
 
@@ -1479,6 +1482,8 @@
       el['task-name-search'].value = selectEl.value;
     }
     renderTaskQuickOptions(categoryName || '', el['task-name-search']?.value || selectEl.value || '');
+    renderTaskCategoryRecommendations(categoryName || '');
+    renderTaskMaterialRecommendations(selectEl.value || '');
   }
 
 
@@ -1594,6 +1599,8 @@ function clearTaskSelection() {
 
   syncTaskNameDatalist(currentCategory);
   renderTaskQuickOptions(currentCategory, '');
+  renderTaskCategoryRecommendations(currentCategory);
+  renderTaskMaterialRecommendations('');
 }
 
 function syncTaskNameDatalist(categoryName = '') {
@@ -1617,6 +1624,7 @@ function selectTaskNameValue(value, syncSearch = false) {
     el.task_name.value = '';
     if (syncSearch && el['task-name-search']) el['task-name-search'].value = '';
     renderTaskQuickOptions(el.task_category?.value || '', '');
+    renderTaskMaterialRecommendations('');
     return;
   }
 
@@ -1633,6 +1641,7 @@ function selectTaskNameValue(value, syncSearch = false) {
     el['task-name-search'].value = target;
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
+  renderTaskMaterialRecommendations(target);
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -1708,10 +1717,149 @@ function syncTaskNameSearchToSelect(keyword) {
 
   if (option) {
     el.task_name.value = option.value;
+    renderTaskMaterialRecommendations(option.value);
   } else {
     selectTaskNameValue(q, false);
   }
   renderTaskQuickOptions(el.task_category?.value || '', q);
+}
+
+
+function getTaskHistoryRowsByCategory(categoryName = '') {
+  const category = String(categoryName || '').trim();
+  const works = Array.isArray(state.works) ? state.works : [];
+  if (!category) return [];
+  return works.filter(work => String(work.task_category || '').trim() === category);
+}
+
+function getTaskRecommendationNames(categoryName = '') {
+  const rows = getTaskHistoryRowsByCategory(categoryName);
+  const scoreMap = new Map();
+  rows.forEach(work => {
+    const name = String(work.task_name || '').trim();
+    if (!name) return;
+    scoreMap.set(name, (scoreMap.get(name) || 0) + 1);
+  });
+
+  const optionNames = (state.optionsRaw?.tasks || [])
+    .filter(item => !categoryName || getTaskCategoryName(item) === categoryName)
+    .map(item => optionName(item))
+    .filter(Boolean);
+
+  optionNames.forEach(name => {
+    if (!scoreMap.has(name)) scoreMap.set(name, 0);
+  });
+
+  return Array.from(scoreMap.entries())
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      return a[0].localeCompare(b[0], 'ko');
+    })
+    .map(([name]) => name)
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function renderTaskCategoryRecommendations(categoryName = '') {
+  const wrap = el['task-recommend-wrap'];
+  const box = el['task-recommend-box'];
+  if (!wrap || !box) return;
+
+  const names = getTaskRecommendationNames(categoryName).filter(name => name !== String(el.task_name?.value || '').trim());
+  if (!categoryName || !names.length) {
+    wrap.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+
+  wrap.classList.remove('hidden');
+  box.innerHTML = names.map(name => `
+    <button type="button" class="search-result-item" data-task-recommend="${escapeHtml(name)}">${escapeHtml(name)}</button>
+  `).join('');
+
+  box.querySelectorAll('[data-task-recommend]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const value = btn.dataset.taskRecommend || '';
+      selectTaskNameValue(value, true);
+    });
+  });
+}
+
+function getTaskMaterialRecommendationNames(taskName = '') {
+  const target = String(taskName || '').trim();
+  if (!target) return [];
+
+  const scoreMap = new Map();
+  (state.works || []).forEach(work => {
+    if (String(work.task_name || '').trim() !== target) return;
+    const meta = parseMemo(work.memo);
+    const materials = Array.isArray(meta.materials) ? meta.materials : [];
+    materials.forEach(item => {
+      const name = String(item.name || '').trim();
+      if (!name) return;
+      const qty = Number(item.qty || 0) || 1;
+      scoreMap.set(name, (scoreMap.get(name) || 0) + qty);
+    });
+  });
+
+  return Array.from(scoreMap.entries())
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      return a[0].localeCompare(b[0], 'ko');
+    })
+    .map(([name]) => name)
+    .slice(0, 8);
+}
+
+function addRecommendedMaterialName(name) {
+  const target = String(name || '').trim();
+  if (!target) return;
+
+  const item = findMaterialByRecommendedName(target);
+  if (item) {
+    addSelectedMaterial(item.id);
+    return;
+  }
+
+  const exists = state.selectedMaterialsDetailed.find(m => String(m.name || '').trim() === target);
+  if (exists) {
+    exists.qty = Number(exists.qty || 0) + 1;
+  } else {
+    state.selectedMaterialsDetailed.push({
+      id: '',
+      name: target,
+      unit: '',
+      price: 0,
+      qty: 1,
+      method: getDefaultMaterialMethod(),
+      installment_months: 0
+    });
+  }
+
+  renderSelectedMaterialsDetailed();
+  updateMoneySummary();
+}
+
+function renderTaskMaterialRecommendations(taskName = '') {
+  const wrap = el['task-material-recommend-wrap'];
+  const box = el['task-material-recommend-box'];
+  if (!wrap || !box) return;
+
+  const names = getTaskMaterialRecommendationNames(taskName);
+  if (!taskName || !names.length) {
+    wrap.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+
+  wrap.classList.remove('hidden');
+  box.innerHTML = names.map(name => `
+    <button type="button" class="search-result-item" data-task-material-recommend="${escapeHtml(name)}">${escapeHtml(name)}</button>
+  `).join('');
+
+  box.querySelectorAll('[data-task-material-recommend]').forEach(btn => {
+    btn.addEventListener('click', () => addRecommendedMaterialName(btn.dataset.taskMaterialRecommend || ''));
+  });
 }
 
 function filterChipOptions(type, keyword) {
@@ -2150,30 +2298,7 @@ function filterChipOptions(type, keyword) {
     box.querySelectorAll('[data-recommend-material]').forEach(btn => {
       btn.addEventListener('click', () => {
         const name = btn.dataset.recommendMaterial || '';
-        const item = findMaterialByRecommendedName(name);
-
-        if (item) {
-          addSelectedMaterial(item.id);
-          return;
-        }
-
-        const exists = state.selectedMaterialsDetailed.find(m => (m.name || '') === name);
-        if (exists) {
-          exists.qty = Number(exists.qty || 0) + 1;
-        } else {
-          state.selectedMaterialsDetailed.push({
-            id: '',
-            name,
-            unit: '',
-            price: 0,
-            qty: 1,
-            method: getDefaultMaterialMethod(),
-            installment_months: 0
-          });
-        }
-
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
+        addRecommendedMaterialName(name);
       });
     });
   }

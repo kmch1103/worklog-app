@@ -744,9 +744,31 @@
 
       <section id="page-backup" class="page">
         <div class="page-header"><h2>백업</h2></div>
+
         <div class="panel">
+          <h3 style="margin-top:0;">현재 데이터 백업 / 복구</h3>
           <div class="field">
-            <span>기존 worklog.db 가져오기</span>
+            <span>전체 백업 다운로드</span>
+            <div class="item-actions" style="margin-top:8px;">
+              <button id="btn-backup-download-json" class="btn primary">전체 백업 다운로드</button>
+            </div>
+            <div class="inline-help">작업일지 / 작업계획 / 자재 / 옵션 / 시즌 / 수익 데이터를 JSON 파일로 저장합니다. 즐겨찾기와 최소재고 설정도 함께 포함됩니다.</div>
+          </div>
+
+          <div class="field" style="margin-top:16px;">
+            <span>백업 JSON 복구</span>
+            <input type="file" id="backup-restore-file-input" accept=".json,application/json">
+            <div class="item-actions" style="margin-top:8px;">
+              <button id="btn-backup-restore-json" class="btn">백업 JSON 복구</button>
+            </div>
+            <div id="backup-restore-status" class="inline-help" style="margin-top:12px;"></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:16px;">
+          <h3 style="margin-top:0;">기존 worklog.db 가져오기</h3>
+          <div class="field">
+            <span>예전 worklog.db 파일 가져오기</span>
             <input type="file" id="backup-file-input" accept=".db,.sqlite,.sqlite3,application/octet-stream">
             <div class="inline-help">예전 PC에서 사용하던 worklog.db 파일을 선택하면 현재 작업일지 구조로 변환해서 가져옵니다.</div>
           </div>
@@ -759,7 +781,7 @@
 
           <div class="panel" style="margin-top:16px; background:#f8fafc;">
             <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
-            <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
+            <p class="placeholder-text" style="margin:0;">백업 JSON 복구나 기존 DB 가져오기를 실행하면 현재 작업일지 / 자재 / 옵션 / 시즌 / 수익 데이터가 복구 데이터로 교체됩니다. 복구 전에 백업 파일을 먼저 내려받는 것을 권장합니다.</p>
           </div>
         </div>
       </section>

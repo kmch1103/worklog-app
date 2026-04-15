@@ -99,7 +99,7 @@
       'btn-save-material','btn-open-material-modal','btn-close-material-modal','btn-cancel-material',
       'material-modal','material-modal-title','material-search-box','material-search-keyword','materials-list',
 
-      'new-weather','new-crops','new-task-categories','new-task-category','new-tasks','new-pests','new-pests-recommend','new-machines',
+      'new-weather','new-crops','new-task-categories','new-task-category','new-tasks','new-task-recommend','new-pests','new-pests-recommend','new-machines',
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
 
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
@@ -118,7 +118,7 @@
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','money-scope-label','money-scope-month-count','money-scope-row-count','money-monthly-list','money-monthly-empty','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
-      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season'
+      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','edit-task-recommend','btn-download-excel-all','btn-download-excel-current-season'
     ];
 
     ids.forEach(id => {
@@ -239,7 +239,7 @@
 
     on(el['task_category'], 'change', () => {
       renderTaskOptionsByCategory(el['task_category']?.value || '');
-      renderTaskMaterialRecommendations(el.task_name?.value || '');
+      renderTaskMaterialRecommendations(el.task_name?.value || el['task-name-search']?.value || '');
     });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
@@ -2070,6 +2070,11 @@ function filterChipOptions(type, keyword) {
   }
 
 
+  function getTaskRecommend(name) {
+    const item = (state.optionsRaw?.tasks || []).find(t => optionName(t) === name);
+    return item?.recommended_materials || '';
+  }
+
   function normalizeText(value) {
     return String(value || '').trim().toLowerCase();
   }
@@ -2079,6 +2084,11 @@ function filterChipOptions(type, keyword) {
     if (!target) return [];
 
     const scoreMap = new Map();
+
+    splitCsv(getTaskRecommend(taskName)).forEach(name => {
+      if (!name) return;
+      scoreMap.set(name, { name, score: 999, source: '설정' });
+    });
 
     (state.works || []).forEach(work => {
       const workTask = normalizeText(work.task_name);
@@ -2093,15 +2103,20 @@ function filterChipOptions(type, keyword) {
       materials.forEach(material => {
         const name = String(material.name || '').trim();
         if (!name) return;
-        const weight = isExact ? 3 : 1;
-        scoreMap.set(name, (scoreMap.get(name) || 0) + weight);
+        const prev = scoreMap.get(name);
+        const plus = isExact ? 3 : 1;
+        if (prev) {
+          prev.score += plus;
+          if (prev.source !== '설정') prev.source = '최근';
+        } else {
+          scoreMap.set(name, { name, score: plus, source: '최근' });
+        }
       });
     });
 
-    return Array.from(scoreMap.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
-      .slice(0, 8)
-      .map(([name, score]) => ({ name, score }));
+    return Array.from(scoreMap.values())
+      .sort((a, b) => (b.score - a.score) || a.name.localeCompare(b.name, 'ko'))
+      .slice(0, 8);
   }
 
   function addRecommendedMaterialByName(name) {
@@ -2145,7 +2160,7 @@ function filterChipOptions(type, keyword) {
     wrap.classList.remove('hidden');
     box.innerHTML = rows.map(item => `
       <button type="button" class="search-result-item" data-task-recommend-material="${escapeHtml(item.name)}">
-        ${escapeHtml(item.name)} <span class="recommend-chip-note">(${item.score}회)</span>
+        ${escapeHtml(item.name)} <span class="recommend-chip-note">(${item.source === '설정' ? '설정' : item.score + '회'})</span>
       </button>
     `).join('');
 
@@ -2304,12 +2319,13 @@ function filterChipOptions(type, keyword) {
     }
   }
 
-  function openTaskOptionModal(optionId, currentName, currentCategory) {
+  function openTaskOptionModal(optionId, currentName, currentCategory, currentRecommend = '') {
     state.editingTaskOptionId = optionId;
     if (el['task-option-modal-title']) el['task-option-modal-title'].textContent = '세부작업 수정';
     renderTaskCategorySelects();
     if (el['edit-task-name']) el['edit-task-name'].value = currentName || '';
     if (el['edit-task-category']) el['edit-task-category'].value = currentCategory || '';
+    if (el['edit-task-recommend']) el['edit-task-recommend'].value = currentRecommend || '';
     removeHidden(el['task-option-modal']);
   }
 
@@ -2318,6 +2334,7 @@ function filterChipOptions(type, keyword) {
     state.editingTaskOptionId = null;
     if (el['edit-task-name']) el['edit-task-name'].value = '';
     if (el['edit-task-category']) el['edit-task-category'].value = '';
+    if (el['edit-task-recommend']) el['edit-task-recommend'].value = '';
   }
 
   async function saveTaskOptionEdit() {
@@ -2326,6 +2343,7 @@ function filterChipOptions(type, keyword) {
 
     const name = (el['edit-task-name']?.value || '').trim();
     const category_name = (el['edit-task-category']?.value || '').trim();
+    const recommended_materials = (el['edit-task-recommend']?.value || '').trim();
 
     if (!name) {
       alert('세부작업을 입력하세요.');
@@ -2334,7 +2352,7 @@ function filterChipOptions(type, keyword) {
     }
 
     try {
-      await apiPut(`/api/options/tasks/${optionId}`, { name, category_name });
+      await apiPut(`/api/options/tasks/${optionId}`, { name, category_name, recommended_materials });
       closeTaskOptionModal();
       await loadOptions();
       renderOptions();
@@ -2416,14 +2434,17 @@ function filterChipOptions(type, keyword) {
       const name = optionName(item);
       const itemId = item?.id ?? name;
       const categoryName = getTaskCategoryName(item);
+      const recommend = item?.recommended_materials || '';
+      const recommendText = recommend ? `추천자재: ${recommend}` : '추천자재 없음';
       return `
         <div class="option-item">
           <div class="option-item-main">
             <span>${escapeHtml(name)}</span>
             <div class="option-subtext">${escapeHtml(categoryName || '분류 없음')}</div>
+            <div class="option-subtext">${escapeHtml(recommendText)}</div>
           </div>
           <div class="item-actions">
-            <button type="button" class="btn" data-task-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}|${escapeHtml(categoryName)}">수정</button>
+            <button type="button" class="btn" data-task-edit="${escapeHtml(String(itemId))}|${escapeHtml(name)}|${escapeHtml(categoryName)}|${escapeHtml(recommend)}">수정</button>
             <button type="button" class="btn" data-task-delete="${escapeHtml(String(itemId))}">삭제</button>
           </div>
         </div>
@@ -2432,8 +2453,8 @@ function filterChipOptions(type, keyword) {
 
     listEl.querySelectorAll('[data-task-edit]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const [optionId, currentName, currentCategory] = String(btn.dataset.taskEdit || '').split('|');
-        openTaskOptionModal(optionId, currentName, currentCategory);
+        const [optionId, currentName, currentCategory, currentRecommend] = String(btn.dataset.taskEdit || '').split('|');
+        openTaskOptionModal(optionId, currentName, currentCategory, currentRecommend);
       });
     });
 
@@ -2546,10 +2567,12 @@ function filterChipOptions(type, keyword) {
   async function saveTaskOption() {
     const nameNode = el['new-tasks'];
     const categoryNode = el['new-task-category'];
+    const recommendNode = el['new-task-recommend'];
     if (!nameNode || !categoryNode) return;
 
     const name = (nameNode.value || '').trim();
     const category_name = (categoryNode.value || '').trim();
+    const recommended_materials = (recommendNode?.value || '').trim();
 
     if (!name) {
       alert('세부작업을 입력하세요.');
@@ -2558,8 +2581,9 @@ function filterChipOptions(type, keyword) {
     }
 
     try {
-      await apiPost('/api/options/tasks', { name, category_name });
+      await apiPost('/api/options/tasks', { name, category_name, recommended_materials });
       nameNode.value = '';
+      if (recommendNode) recommendNode.value = '';
       await loadOptions();
       renderOptions();
       renderWorkFormOptions();

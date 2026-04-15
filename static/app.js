@@ -65,7 +65,12 @@
     updateMobileCalendarMode();
     initializeHistoryState();
 
-    window.addEventListener('resize', updateMobileCalendarMode);
+    window.addEventListener('resize', () => {
+      updateMobileCalendarMode();
+      stabilizeWorksFloatingButton();
+    });
+
+    stabilizeWorksFloatingButton();
   }
 
   function cacheElements() {
@@ -560,6 +565,29 @@
     }
   }
 
+
+
+  function stabilizeWorksFloatingButton() {
+    const wrap = document.querySelector('#page-works .works-floating-action');
+    const btn = el['btn-new-work'];
+    if (!wrap || !btn) return;
+
+    if (wrap.parentElement !== document.body) {
+      document.body.appendChild(wrap);
+    }
+
+    const isMobile = window.innerWidth <= 900;
+    wrap.style.position = 'fixed';
+    wrap.style.zIndex = '9999';
+    wrap.style.bottom = isMobile ? '14px' : '18px';
+    wrap.style.right = isMobile ? '14px' : '20px';
+    wrap.style.left = isMobile ? 'auto' : '278px';
+    wrap.style.display = state.currentPage === 'works' ? 'flex' : 'none';
+    wrap.style.justifyContent = 'flex-end';
+    wrap.style.pointerEvents = 'none';
+    btn.style.pointerEvents = 'auto';
+  }
+
   function renderAll() {
     renderMenuState();
     renderCalendar();
@@ -593,6 +621,8 @@
       node.classList.toggle('active', key === page);
       node.style.display = key === page ? '' : 'none';
     });
+
+    stabilizeWorksFloatingButton();
 
     if (page === 'calendar') {
       renderCalendar();

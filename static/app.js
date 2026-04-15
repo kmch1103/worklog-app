@@ -572,10 +572,6 @@
     const btn = el['btn-new-work'];
     if (!wrap || !btn) return;
 
-    if (wrap.parentElement !== document.body) {
-      document.body.appendChild(wrap);
-    }
-
     const isMobile = window.innerWidth <= 900;
     wrap.style.position = 'fixed';
     wrap.style.zIndex = '9999';

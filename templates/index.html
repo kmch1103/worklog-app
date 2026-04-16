@@ -10,6 +10,11 @@
     *, *::before, *::after{box-sizing:border-box;}
     html, body{max-width:100%; overflow-x:hidden;}
     body{margin:0;}
+    .top-alert-bar{position:sticky; top:0; z-index:950; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; margin:0 0 12px; border:1px solid #f59e0b; border-radius:14px; background:#fffbeb; color:#92400e; box-shadow:0 2px 10px rgba(0,0,0,.05);}
+    .top-alert-bar.hidden{display:none;}
+    .top-alert-bar-text{font-size:14px; font-weight:700; line-height:1.4; word-break:keep-all;}
+    .top-alert-bar-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .top-alert-bar .btn{padding:8px 12px;}
     .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
     input, select, textarea, button{max-width:100%;}
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
@@ -315,6 +320,9 @@
         width:100%;
         padding:12px 12px 24px;
       }
+      .top-alert-bar{flex-direction:column; align-items:flex-start; padding:10px 12px;}
+      .top-alert-bar-actions{width:100%;}
+      .top-alert-bar-actions .btn{flex:1 1 auto;}
       .page-header{
         flex-direction:column;
         align-items:stretch;
@@ -449,6 +457,13 @@
     </aside>
 
     <main class="content">
+      <div id="low-stock-banner" class="top-alert-bar hidden">
+        <div id="low-stock-banner-text" class="top-alert-bar-text">⚠️ 부족자재 0개 있습니다</div>
+        <div class="top-alert-bar-actions">
+          <button id="btn-open-low-stock" class="btn" type="button">자재관리에서 보기</button>
+          <button id="btn-hide-low-stock-today" class="btn" type="button">오늘 하루 숨기기</button>
+        </div>
+      </div>
       <section id="page-calendar" class="page active">
         <div class="page-header">
           <h2>작업달력</h2>
@@ -519,6 +534,7 @@
             <button type="button" class="btn material-tab-btn active" data-material-tab="all">전체</button>
             <button type="button" class="btn material-tab-btn" data-material-tab="in">재고있음</button>
             <button type="button" class="btn material-tab-btn" data-material-tab="out">재고없음</button>
+            <button type="button" class="btn material-tab-btn" data-material-tab="low">부족자재</button>
           </div>
         </div>
         <div id="materials-list"></div>
@@ -737,7 +753,7 @@
             <button id="btn-download-excel-current-season" class="btn">현재시즌 엑셀 다운로드</button>
           </div>
           <div class="inline-help" style="margin-top:12px;">
-            작업일지 / 금전내역 / 월별정산 / 시즌정산 / 작업통계 시트가 하나의 엑셀 파일로 내려받아집니다.
+            작업일지 / 금전내역 / 월별정산 / 시즌정산 시트가 하나의 엑셀 파일로 내려받아집니다.
           </div>
         </div>
       </section>
@@ -1077,10 +1093,15 @@
           </label>
         </div>
 
-        <div class="grid two">
+        <div class="grid three">
           <label class="field">
             <span>재고</span>
             <input type="number" id="material_stock" min="0" step="0.1">
+          </label>
+
+          <label class="field">
+            <span>최소재고</span>
+            <input type="number" id="material_minimum_stock" min="0" step="0.1" value="0">
           </label>
 
           <label class="field">

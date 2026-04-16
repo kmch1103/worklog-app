@@ -37,7 +37,8 @@
     editingSeasonId: null,
     editingTaskOptionId: null,
     editingIncomeId: null,
-    seasonPanelCollapsed: true
+    seasonPanelCollapsed: true,
+    lowStockItems: []
   };
 
   const el = {};
@@ -62,6 +63,7 @@
     await loadAll();
     await loadMoney();
     renderAll();
+    renderLowStockBanner();
     updateMobileCalendarMode();
     initializeHistoryState();
 
@@ -100,9 +102,10 @@
       'labor_cost','work_hours','memo',
       'btn-save-work','btn-cancel-work','works-list',
 
-      'material_name','material_unit','material_stock','material_price','material_price_last_year','material_price_this_year','material_memo',
+      'material_name','material_unit','material_stock','material_minimum_stock','material_price','material_price_last_year','material_price_this_year','material_memo',
       'btn-save-material','btn-open-material-modal','btn-close-material-modal','btn-cancel-material',
       'material-modal','material-modal-title','material-search-box','material-search-keyword','materials-list',
+      'low-stock-banner','low-stock-banner-text','btn-open-low-stock','btn-hide-low-stock-today',
 
       'new-weather','new-crops','new-task-categories','new-task-category','new-tasks','new-pests','new-pests-recommend','new-machines',
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
@@ -391,6 +394,8 @@
 
   function bindMaterialButtons() {
     on(el['btn-open-material-modal'], 'click', () => openMaterialModal());
+    on(el['btn-open-low-stock'], 'click', openLowStockMaterialsPage);
+    on(el['btn-hide-low-stock-today'], 'click', hideLowStockBannerForToday);
     on(el['btn-close-material-modal'], 'click', closeMaterialModal);
     on(el['btn-cancel-material'], 'click', closeMaterialModal);
     on(el['btn-save-material'], 'click', saveMaterial);
@@ -511,6 +516,7 @@
       console.error(e);
       state.materials = [];
     }
+    refreshLowStockState();
   }
 
   async function loadOptions() {
@@ -606,6 +612,7 @@
     renderWorkFormOptions();
     renderWorks();
     renderMaterials();
+    renderLowStockBanner();
     renderOptions();
     renderMoney();
     ensureWorksSearchBar();
@@ -2941,6 +2948,7 @@ function filterChipOptions(type, keyword) {
     if (el.material_name) el.material_name.value = item.name || '';
     if (el.material_unit) el.material_unit.value = item.unit || state.materialUnits[0] || '';
     if (el.material_stock) el.material_stock.value = item.stock_qty ?? item.stock ?? 0;
+    if (el.material_minimum_stock) el.material_minimum_stock.value = item.minimum_stock ?? 0;
     if (el.material_price) el.material_price.value = item.unit_price ?? item.price ?? 0;
     if (el.material_price_last_year) el.material_price_last_year.value = item.price_last_year ?? 0;
     if (el.material_price_this_year) el.material_price_this_year.value = (item.price_this_year ?? item.unit_price ?? item.price ?? 0);
@@ -2961,6 +2969,7 @@ function filterChipOptions(type, keyword) {
     if (el.material_name) el.material_name.value = '';
     if (el.material_unit) el.material_unit.value = state.materialUnits[0] || '';
     if (el.material_stock) el.material_stock.value = '0';
+    if (el.material_minimum_stock) el.material_minimum_stock.value = '0';
     if (el.material_price) el.material_price.value = '0';
     if (el.material_price_last_year) el.material_price_last_year.value = '0';
     if (el.material_price_this_year) el.material_price_this_year.value = '0';
@@ -2998,6 +3007,7 @@ function filterChipOptions(type, keyword) {
         el.material_name.value = item.name || '';
         el.material_unit.value = item.unit || '';
         el.material_price.value = item.unit_price || item.price || 0;
+        if (el.material_minimum_stock) el.material_minimum_stock.value = item.minimum_stock ?? 0;
         if (el.material_price_last_year) el.material_price_last_year.value = item.price_last_year ?? 0;
         if (el.material_price_this_year) el.material_price_this_year.value = (item.price_this_year ?? item.unit_price ?? item.price ?? 0);
       });
@@ -3009,6 +3019,7 @@ function filterChipOptions(type, keyword) {
       name: (el.material_name?.value || '').trim(),
       unit: el.material_unit?.value || '',
       stock_qty: Number(el.material_stock?.value || 0),
+      minimum_stock: Number(el.material_minimum_stock?.value || 0),
       unit_price: Number(el.material_price?.value || 0),
       price_last_year: Number(el.material_price_last_year?.value || 0),
       price_this_year: Number(el.material_price_this_year?.value || 0),
@@ -3075,12 +3086,13 @@ function filterChipOptions(type, keyword) {
     const q = (state.materialListSearchKeyword || '').trim().toLowerCase();
 
     const filtered = state.materials.filter(item => {
-      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''} ${item.price_last_year || ''} ${item.price_this_year || ''}`.toLowerCase();
+      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''} ${item.price_last_year || ''} ${item.price_this_year || ''} ${item.minimum_stock || ''}`.toLowerCase();
       return text.includes(q);
     });
 
     const inStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) > 0);
     const outStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) <= 0);
+    const lowStock = filtered.filter(isLowStockMaterial);
     const tab = state.materialFilterTab || 'all';
 
     if (tab === 'in') {
@@ -3098,6 +3110,15 @@ function filterChipOptions(type, keyword) {
           <div>
             <h3>재고 없음</h3>
             ${renderMaterialSection(outStock)}
+          </div>
+        </div>
+      `;
+    } else if (tab === 'low') {
+      wrap.innerHTML = `
+        <div class="materials-single-col">
+          <div>
+            <h3>부족자재</h3>
+            ${renderMaterialSection(lowStock)}
           </div>
         </div>
       `;
@@ -3138,6 +3159,7 @@ function filterChipOptions(type, keyword) {
       <div class="day-item">
         <div><strong>${escapeHtml(item.name || '')}</strong></div>
         <div>재고: ${formatNumber(item.stock_qty || item.stock || 0)} ${escapeHtml(item.unit || '')}</div>
+        <div>최소재고: ${formatNumber(item.minimum_stock || 0)} ${escapeHtml(item.unit || '')}</div>
         <div>현재단가: ${formatNumber(item.unit_price || item.price || 0)}</div>
         <div>작년단가: ${formatNumber(item.price_last_year || 0)}</div>
         <div>올해단가: ${formatNumber(item.price_this_year || item.unit_price || item.price || 0)}</div>
@@ -3152,6 +3174,67 @@ function filterChipOptions(type, keyword) {
     `).join('');
   }
 
+
+  function refreshLowStockState() {
+    state.lowStockItems = (state.materials || []).filter(isLowStockMaterial);
+  }
+
+  function isLowStockMaterial(item) {
+    const stockQty = Number(item?.stock_qty || item?.stock || 0);
+    const minimumStock = Number(item?.minimum_stock || 0);
+    return stockQty <= minimumStock;
+  }
+
+  function getLowStockBannerDismissKey() {
+    return `worklog_low_stock_hidden_${fmtDate(new Date())}`;
+  }
+
+  function isLowStockBannerHiddenToday() {
+    try {
+      return localStorage.getItem(getLowStockBannerDismissKey()) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function hideLowStockBannerForToday() {
+    try {
+      localStorage.setItem(getLowStockBannerDismissKey(), '1');
+    } catch (e) {
+      console.error(e);
+    }
+    renderLowStockBanner();
+  }
+
+  function openLowStockMaterialsPage() {
+    state.materialFilterTab = 'low';
+    if (el['material-list-search']) el['material-list-search'].value = '';
+    state.materialListSearchKeyword = '';
+    switchPage('materials');
+    renderMaterials();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function renderLowStockBanner() {
+    const banner = el['low-stock-banner'];
+    const textNode = el['low-stock-banner-text'];
+    if (!banner || !textNode) return;
+
+    refreshLowStockState();
+
+    if (!state.lowStockItems.length || isLowStockBannerHiddenToday()) {
+      banner.classList.add('hidden');
+      return;
+    }
+
+    const count = state.lowStockItems.length;
+    const preview = state.lowStockItems.slice(0, 3).map(item => String(item.name || '').trim()).filter(Boolean).join(', ');
+    textNode.textContent = preview
+      ? `⚠️ 부족자재 ${count}개 있습니다 · ${preview}`
+      : `⚠️ 부족자재 ${count}개 있습니다`;
+
+    banner.classList.remove('hidden');
+  }
 
   function applyMoneyQuickPeriod() {
     const period = el['money-period-filter']?.value || '';

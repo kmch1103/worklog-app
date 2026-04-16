@@ -227,8 +227,8 @@ def import_old_db_into_current(uploaded_db_path):
                 continue
 
             cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
-                VALUES (?, ?, ?, ?, 0, 0, '')
+                INSERT INTO materials (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo)
+                VALUES (?, ?, ?, 0, ?, 0, 0, '')
             """, (name, unit, stock_qty, unit_price))
             sync_material_option(cur, name)
 
@@ -431,7 +431,8 @@ def init_db():
         unit_price REAL DEFAULT 0,
         price_last_year REAL DEFAULT 0,
         price_this_year REAL DEFAULT 0,
-        memo TEXT DEFAULT ''
+        memo TEXT DEFAULT '',
+        minimum_stock REAL DEFAULT 0
     )
     """)
 
@@ -441,6 +442,7 @@ def init_db():
     ensure_column(cur, "materials", "price_last_year", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "price_this_year", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
+    ensure_column(cur, "materials", "minimum_stock", "REAL DEFAULT 0")
 
     # option tables
     for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
@@ -798,8 +800,8 @@ def create_option(option_type):
         ).fetchone()
         if not row:
             cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
-                VALUES (?, '', 0, 0, '')
+                INSERT INTO materials (name, unit, stock_qty, minimum_stock, unit_price, memo)
+                VALUES (?, '', 0, 0, 0, '')
             """, (name,))
 
     conn.commit()
@@ -907,7 +909,7 @@ def delete_option(option_type, option_id):
 def get_materials():
     conn = db()
     rows = conn.execute("""
-        SELECT id, name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo
+        SELECT id, name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo, minimum_stock
         FROM materials
         ORDER BY
           CASE WHEN COALESCE(stock_qty, 0) > 0 THEN 0 ELSE 1 END,
@@ -927,6 +929,7 @@ def create_material():
     unit_price = float(data.get("unit_price") or 0)
     price_last_year = float(data.get("price_last_year") or 0)
     price_this_year = float(data.get("price_this_year") or 0)
+    minimum_stock = float(data.get("minimum_stock") or 0)
     memo = normalize_name(data.get("memo"))
 
     if unit_price <= 0 and price_this_year > 0:
@@ -946,14 +949,14 @@ def create_material():
     if row:
         cur.execute("""
             UPDATE materials
-            SET unit = ?, stock_qty = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
+            SET unit = ?, stock_qty = ?, minimum_stock = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
             WHERE id = ?
-        """, (unit, stock_qty, unit_price, price_last_year, price_this_year, memo, row["id"]))
+        """, (unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo, row["id"]))
     else:
         cur.execute("""
-            INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo))
+            INSERT INTO materials (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo))
 
     sync_material_option(cur, name)
 
@@ -972,6 +975,7 @@ def update_material(material_id):
     unit_price = float(data.get("unit_price") or 0)
     price_last_year = float(data.get("price_last_year") or 0)
     price_this_year = float(data.get("price_this_year") or 0)
+    minimum_stock = float(data.get("minimum_stock") or 0)
     memo = normalize_name(data.get("memo"))
 
     if unit_price <= 0 and price_this_year > 0:
@@ -990,9 +994,9 @@ def update_material(material_id):
 
     cur.execute("""
         UPDATE materials
-        SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
+        SET name = ?, unit = ?, stock_qty = ?, minimum_stock = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
         WHERE id = ?
-    """, (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo, material_id))
+    """, (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo, material_id))
 
     if old_row:
         old_name = old_row["name"]
@@ -1538,43 +1542,6 @@ def build_excel_export_data(conn, season_id=''):
     total_income = sum(safe_float(row.get("금액"), 0) for row in money_rows if row.get("행종류") == "수익")
     total_expense = sum(safe_float(row.get("금액"), 0) for row in money_rows if row.get("행종류") != "수익")
 
-    task_counter = {}
-    task_category_counter = {}
-    work_month_counter = {}
-
-    for item in works:
-        task_name = (item.get("task_name") or "").strip() or "미분류"
-        task_category = (item.get("task_category") or "").strip() or "미분류"
-        start_date = (item.get("start_date") or "").strip()
-        month_key = start_date[:7] if len(start_date) >= 7 else "미지정"
-
-        task_counter[task_name] = task_counter.get(task_name, 0) + 1
-        task_category_counter[task_category] = task_category_counter.get(task_category, 0) + 1
-        work_month_counter[month_key] = work_month_counter.get(month_key, 0) + 1
-
-    task_top_rows = [
-        {"순위": idx, "세부작업": name, "횟수": count}
-        for idx, (name, count) in enumerate(
-            sorted(task_counter.items(), key=lambda x: (-x[1], x[0]))[:15],
-            start=1
-        )
-    ]
-
-    work_month_rows = [
-        {"월": month_key, "작업횟수": count}
-        for month_key, count in sorted(work_month_counter.items(), key=lambda x: x[0], reverse=True)
-    ]
-
-    total_work_count = sum(task_category_counter.values())
-    task_category_rows = []
-    for category, count in sorted(task_category_counter.items(), key=lambda x: (-x[1], x[0])):
-        ratio = round((count / total_work_count * 100), 1) if total_work_count else 0
-        task_category_rows.append({
-            "작업분류": category,
-            "횟수": count,
-            "비율(%)": ratio
-        })
-
     summary_rows = [
         {"항목": "정산범위", "값": (season.get("season_name") if season else "전체"), "비고": ""},
         {"항목": "총 수익", "값": total_income, "비고": ""},
@@ -1589,12 +1556,7 @@ def build_excel_export_data(conn, season_id=''):
         "works": work_rows,
         "money": sorted(money_rows, key=lambda x: (x.get("날짜", ""), x.get("행종류", "")), reverse=True),
         "monthly": monthly_rows,
-        "season_summary": season_rows,
-        "work_stats": {
-            "task_top": task_top_rows,
-            "work_monthly": work_month_rows,
-            "task_categories": task_category_rows
-        }
+        "season_summary": season_rows
     }
 
 
@@ -1780,150 +1742,6 @@ def set_summary_dashboard(ws, export_data):
                 cell.font = Font(bold=True)
 
 
-def write_work_stats_sheet(ws, export_data):
-    ws.title = '작업통계'
-    ws.sheet_view.showGridLines = False
-
-    for col, width in {
-        'A': 14, 'B': 28, 'C': 14, 'D': 14, 'E': 24, 'F': 14, 'G': 14
-    }.items():
-        ws.column_dimensions[col].width = width
-
-    ws.merge_cells('A1:G2')
-    title = ws['A1']
-    title.value = '작업 통계'
-    title.fill = PatternFill(fill_type='solid', fgColor='1F4E78')
-    title.font = Font(bold=True, color='FFFFFF', size=18)
-    title.alignment = Alignment(horizontal='center', vertical='center')
-
-    thin = Side(border_style='thin', color='D9D9D9')
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    summary_map = {row.get('항목'): row.get('값') for row in export_data.get('summary', [])}
-    total_work_count = int(safe_float(summary_map.get('작업 건수'), 0))
-    unique_task_count = len(export_data.get('work_stats', {}).get('task_top', []))
-    unique_category_count = len(export_data.get('work_stats', {}).get('task_categories', []))
-    month_count = len(export_data.get('work_stats', {}).get('work_monthly', []))
-
-    cards = [
-        ('A4:B6', '총 작업 건수', total_work_count),
-        ('C4:D6', 'TOP 작업 수', unique_task_count),
-        ('E4:F6', '작업분류 수', unique_category_count),
-        ('G4:G6', f'월 수\n{month_count}')
-    ]
-
-    for item in cards:
-        rng = item[0]
-        label = item[1]
-        value = item[2] if len(item) >= 3 else ''
-        ws.merge_cells(rng)
-        cell = ws[rng.split(':')[0]]
-        cell.value = f"{label}\n{value:,}" if isinstance(value, int) else label
-        cell.fill = PatternFill(fill_type='solid', fgColor='EAF2FF')
-        cell.font = Font(bold=True, color='1F1F1F', size=14)
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = border
-
-    ws['A8'] = '많이 한 작업 TOP'
-    ws['D8'] = '월별 작업 횟수'
-    ws['F8'] = '작업분류별 비율'
-    for cell_ref in ('A8', 'D8', 'F8'):
-        cell = ws[cell_ref]
-        cell.font = Font(bold=True, size=12, color='1F1F1F')
-
-    top_headers = ['순위', '세부작업', '횟수']
-    top_rows = export_data.get('work_stats', {}).get('task_top', [])
-    for col_idx, header in enumerate(top_headers, start=1):
-        ws.cell(9, col_idx).value = header
-    style_header_row(ws, 9)
-    row_idx = 10
-    for row in top_rows:
-        ws.cell(row_idx, 1).value = row.get('순위', '')
-        ws.cell(row_idx, 2).value = row.get('세부작업', '')
-        ws.cell(row_idx, 3).value = row.get('횟수', 0)
-        row_idx += 1
-
-    month_headers = ['월', '작업횟수']
-    month_rows = export_data.get('work_stats', {}).get('work_monthly', [])
-    for col_idx, header in enumerate(month_headers, start=4):
-        ws.cell(9, col_idx).value = header
-    style_header_row(ws, 9)
-    row_idx = 10
-    for row in month_rows:
-        ws.cell(row_idx, 4).value = row.get('월', '')
-        ws.cell(row_idx, 5).value = row.get('작업횟수', 0)
-        row_idx += 1
-
-    category_headers = ['작업분류', '횟수', '비율(%)']
-    category_rows = export_data.get('work_stats', {}).get('task_categories', [])
-    for col_idx, header in enumerate(category_headers, start=6):
-        ws.cell(9, col_idx).value = header
-    style_header_row(ws, 9)
-    row_idx = 10
-    for row in category_rows:
-        ws.cell(row_idx, 6).value = row.get('작업분류', '')
-        ws.cell(row_idx, 7).value = row.get('횟수', 0)
-        ws.cell(row_idx, 8).value = row.get('비율(%)', 0)
-        row_idx += 1
-
-    max_rows = max(len(top_rows), len(month_rows), len(category_rows), 1)
-    for r in range(9, 10 + max_rows - 1):
-        for c in range(1, 9):
-            ws.cell(r, c).border = border
-            if r >= 10:
-                ws.cell(r, c).alignment = Alignment(vertical='center')
-
-    for r in range(10, 10 + len(category_rows)):
-        ws.cell(r, 8).number_format = '0.0'
-        ws.cell(r, 8).alignment = Alignment(horizontal='right', vertical='center')
-
-
-def add_work_stats_charts(ws_stats, task_top_count, work_month_count, task_category_count):
-    if task_top_count >= 1:
-        chart = BarChart()
-        chart.type = 'bar'
-        chart.style = 10
-        chart.title = '많이 한 작업 TOP'
-        chart.y_axis.title = '세부작업'
-        chart.x_axis.title = '횟수'
-        data = Reference(ws_stats, min_col=3, max_col=3, min_row=9, max_row=9 + task_top_count)
-        cats = Reference(ws_stats, min_col=2, min_row=10, max_row=9 + task_top_count)
-        chart.add_data(data, titles_from_data=True)
-        chart.set_categories(cats)
-        chart.height = 9
-        chart.width = 16
-        ws_stats.add_chart(chart, 'A28')
-
-    if work_month_count >= 1:
-        chart = LineChart()
-        chart.style = 2
-        chart.title = '월별 작업 횟수'
-        chart.y_axis.title = '횟수'
-        chart.x_axis.title = '월'
-        data = Reference(ws_stats, min_col=5, max_col=5, min_row=9, max_row=9 + work_month_count)
-        cats = Reference(ws_stats, min_col=4, min_row=10, max_row=9 + work_month_count)
-        chart.add_data(data, titles_from_data=True)
-        chart.set_categories(cats)
-        chart.height = 9
-        chart.width = 16
-        ws_stats.add_chart(chart, 'H28')
-
-    if task_category_count >= 1:
-        chart = BarChart()
-        chart.type = 'col'
-        chart.style = 12
-        chart.title = '작업분류별 비율'
-        chart.y_axis.title = '횟수'
-        chart.x_axis.title = '작업분류'
-        data = Reference(ws_stats, min_col=7, max_col=7, min_row=9, max_row=9 + task_category_count)
-        cats = Reference(ws_stats, min_col=6, min_row=10, max_row=9 + task_category_count)
-        chart.add_data(data, titles_from_data=True)
-        chart.set_categories(cats)
-        chart.height = 9
-        chart.width = 16
-        ws_stats.add_chart(chart, 'O28')
-
-
 def add_summary_charts(ws_summary, ws_monthly, ws_season):
     monthly_data_end = ws_monthly.max_row - 1 if ws_monthly.max_row >= 3 else ws_monthly.max_row
     if monthly_data_end >= 2:
@@ -2018,20 +1836,11 @@ def build_excel_file(export_data):
     apply_currency_format(ws4, [4, 5, 6], start_row=2)
     append_total_row(ws4, label_col=1, amount_cols=[4, 5, 6])
 
-    ws5 = wb.create_sheet('작업통계')
-    write_work_stats_sheet(ws5, export_data)
-
     ws3.column_dimensions['D'].width = 16
     ws4.column_dimensions['F'].width = 16
     ws4.column_dimensions['G'].width = 20
 
     add_summary_charts(ws0, ws3, ws4)
-    add_work_stats_charts(
-        ws5,
-        len(export_data.get('work_stats', {}).get('task_top', [])),
-        len(export_data.get('work_stats', {}).get('work_monthly', [])),
-        len(export_data.get('work_stats', {}).get('task_categories', []))
-    )
 
     return wb
 

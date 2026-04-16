@@ -81,6 +81,9 @@
     });
 
     stabilizeWorksFloatingButton();
+    ensureScrollNavButtons();
+    updateScrollNavButtons();
+    window.addEventListener('scroll', updateScrollNavButtons, { passive: true });
   }
 
   function cacheElements() {
@@ -699,6 +702,63 @@
     btn.style.pointerEvents = 'auto';
   }
 
+
+  function ensureScrollNavButtons() {
+    let wrap = document.getElementById('scroll-nav-buttons');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'scroll-nav-buttons';
+      wrap.style.position = 'fixed';
+      wrap.style.right = '18px';
+      wrap.style.bottom = '86px';
+      wrap.style.zIndex = '9998';
+      wrap.style.display = 'flex';
+      wrap.style.flexDirection = 'column';
+      wrap.style.gap = '10px';
+
+      const topBtn = document.createElement('button');
+      topBtn.type = 'button';
+      topBtn.id = 'btn-scroll-top';
+      topBtn.className = 'btn';
+      topBtn.textContent = '↑ 맨위';
+      topBtn.style.minWidth = '88px';
+      topBtn.style.boxShadow = '0 6px 16px rgba(15,23,42,.18)';
+
+      const bottomBtn = document.createElement('button');
+      bottomBtn.type = 'button';
+      bottomBtn.id = 'btn-scroll-bottom';
+      bottomBtn.className = 'btn';
+      bottomBtn.textContent = '↓ 맨아래';
+      bottomBtn.style.minWidth = '88px';
+      bottomBtn.style.boxShadow = '0 6px 16px rgba(15,23,42,.18)';
+
+      topBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+      bottomBtn.addEventListener('click', () => {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+      });
+
+      wrap.appendChild(topBtn);
+      wrap.appendChild(bottomBtn);
+      document.body.appendChild(wrap);
+    }
+  }
+
+  function updateScrollNavButtons() {
+    const wrap = document.getElementById('scroll-nav-buttons');
+    if (!wrap) return;
+    const isMobile = window.innerWidth <= 900;
+    wrap.style.right = isMobile ? '14px' : '20px';
+    wrap.style.bottom = isMobile ? '136px' : '118px';
+    const y = window.scrollY || document.documentElement.scrollTop || 0;
+    const maxY = Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
+    const topBtn = document.getElementById('btn-scroll-top');
+    const bottomBtn = document.getElementById('btn-scroll-bottom');
+    if (topBtn) topBtn.style.display = y > 120 ? '' : 'none';
+    if (bottomBtn) bottomBtn.style.display = y < (maxY - 120) ? '' : 'none';
+  }
+
   function renderAll() {
     renderMenuState();
     renderCalendar();
@@ -737,6 +797,7 @@
     });
 
     stabilizeWorksFloatingButton();
+    updateScrollNavButtons();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -3736,12 +3797,18 @@ function filterChipOptions(type, keyword) {
     if (!node) return;
     node.classList.remove('hidden');
     stabilizeWorksFloatingButton();
+    ensureScrollNavButtons();
+    updateScrollNavButtons();
+    window.addEventListener('scroll', updateScrollNavButtons, { passive: true });
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
     stabilizeWorksFloatingButton();
+    ensureScrollNavButtons();
+    updateScrollNavButtons();
+    window.addEventListener('scroll', updateScrollNavButtons, { passive: true });
   }
 
   function fmtDate(date) {
@@ -3899,7 +3966,7 @@ function filterChipOptions(type, keyword) {
         renderWorks();
       });
       el['works-filter-season'].addEventListener('change', (e) => {
-        state.workSeasonFilter = e.target.value || 'current';
+        state.workSeasonFilter = e.target.value;
         renderWorksSearchFilterOptions();
         renderWorks();
       });
@@ -3927,14 +3994,14 @@ function filterChipOptions(type, keyword) {
       });
       resetBtn.addEventListener('click', () => {
         state.workSearchKeyword = '';
-        state.workSeasonFilter = 'current';
+        state.workSeasonFilter = '';
         state.workFilterStartDate = '';
         state.workFilterEndDate = '';
         state.workFilterTaskCategory = '';
         state.workFilterTaskName = '';
         state.workFilterCrop = '';
         renderWorksSearchFilterOptions();
-        if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter || 'current';
+        if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter ?? '';
         if (el['works-filter-start']) el['works-filter-start'].value = '';
         if (el['works-filter-end']) el['works-filter-end'].value = '';
         const searchInput = box.querySelector('#works-search-input');
@@ -3944,7 +4011,7 @@ function filterChipOptions(type, keyword) {
     }
 
     renderWorksSearchFilterOptions();
-    if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter || 'current';
+    if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter ?? '';
     if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
     if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
     const searchInput = box.querySelector('#works-search-input');
@@ -3968,7 +4035,7 @@ function filterChipOptions(type, keyword) {
         return `<option value="${escapeHtml(seasonId)}">${escapeHtml(seasonName)}</option>`;
       }));
       seasonEl.innerHTML = seasonOptions.join('');
-      seasonEl.value = state.workSeasonFilter || 'current';
+      seasonEl.value = (state.workSeasonFilter ?? 'current');
     }
 
     const categoryOptions = ['<option value="">전체 작업분류</option>']
@@ -4051,7 +4118,7 @@ function filterChipOptions(type, keyword) {
     }
 
     if (period === 'season') {
-      return getSeasonRangeByValue(state.workStatsSeasonFilter || 'current');
+      return getSeasonRangeByValue(state.workStatsSeasonFilter === undefined ? 'current' : state.workStatsSeasonFilter);
     }
 
     return { start: '', end: '' };
@@ -4077,7 +4144,7 @@ function filterChipOptions(type, keyword) {
       ].join(' ').toLowerCase();
 
       const inKeyword = text.includes(q);
-      const seasonRange = getSeasonRangeByValue(state.workSeasonFilter || 'current');
+      const seasonRange = getSeasonRangeByValue(state.workSeasonFilter === undefined ? 'current' : state.workSeasonFilter);
       const dateValue = String(work.start_date || '');
       const inSeason = !seasonRange.start || (dateValue >= seasonRange.start && dateValue <= seasonRange.end);
       const inStart = !state.workFilterStartDate || dateValue >= state.workFilterStartDate;
@@ -4167,7 +4234,7 @@ function filterChipOptions(type, keyword) {
       if (seasonEl) {
         el['works-stats-season'] = seasonEl;
         seasonEl.addEventListener('change', (e) => {
-          state.workStatsSeasonFilter = e.target.value || 'current';
+          state.workStatsSeasonFilter = e.target.value;
           renderWorks();
         });
       }
@@ -4178,11 +4245,12 @@ function filterChipOptions(type, keyword) {
     }
     if (el['works-stats-season']) {
       const node = el['works-stats-season'];
-      const current = state.workStatsSeasonFilter || 'current';
+      const current = (state.workStatsSeasonFilter === undefined ? 'current' : state.workStatsSeasonFilter);
       const options = ['<option value="current">현재시즌</option>', '<option value="">전체 시즌</option>']
         .concat((state.seasons || []).map(season => `<option value="${escapeHtml(String(season.id || ''))}">${escapeHtml(season.season_name || season.name || '')}</option>`));
       node.innerHTML = options.join('');
       if (Array.from(node.options).some(opt => opt.value === current)) node.value = current;
+      else node.value = 'current';
     }
   }
 

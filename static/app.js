@@ -1176,11 +1176,7 @@
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
-      ? JSON.parse(JSON.stringify(template.materials)).map(item => ({
-          ...item,
-          cost_included: item?.cost_included !== false,
-          auto_added: false
-        }))
+      ? JSON.parse(JSON.stringify(template.materials))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1336,9 +1332,7 @@
           price: Number(m.price || m.unit_price || 0),
           qty: Number(m.qty || 0),
           method: m.method || '',
-          installment_months: Number(m.installment_months || 0),
-          cost_included: m.cost_included !== false,
-          auto_added: false
+          installment_months: Number(m.installment_months || 0)
         }))
       : [];
     renderSelectedMaterialsDetailed();
@@ -1542,24 +1536,50 @@ function renderRecentQuickPicks() {
   renderRecentMaterialPicks();
 }
 
+function getRecentWorkQuickRows() {
+  const works = Array.isArray(state.works) ? [...state.works] : [];
+  return works
+    .sort((a, b) => {
+      const ad = String(a.start_date || '');
+      const bd = String(b.start_date || '');
+      if (bd !== ad) return bd.localeCompare(ad);
+      return Number(b.id || 0) - Number(a.id || 0);
+    })
+    .slice(0, 5);
+}
+
+function getRecentWorkQuickLabel(work) {
+  const category = String(work?.task_category || '').trim();
+  const task = String(work?.task_name || '').trim();
+  if (category && task) return `${category}-${task}`;
+  return task || category || '최근 작업';
+}
+
 function renderRecentTaskPicks() {
   const box = el['recent-task-picks'];
   if (!box) return;
-  const rows = getRecentItems('tasks');
+
+  const rows = getRecentWorkQuickRows();
   if (!rows.length) {
     box.innerHTML = '';
     box.classList.add('hidden');
     return;
   }
+
   box.classList.remove('hidden');
   box.innerHTML = `
-    <div class="task-quick-section-title">최근 사용 세부작업</div>
+    <div class="task-quick-section-title">최근 작업 빠른불러오기</div>
     <div class="task-chip-wrap">
-      ${rows.map(name => `<button type="button" class="quick-pick-chip" data-recent-task="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('')}
+      ${rows.map(work => `
+        <button type="button" class="quick-pick-chip" data-recent-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(String(work.start_date || ''))}">
+          ${escapeHtml(getRecentWorkQuickLabel(work))}
+        </button>
+      `).join('')}
     </div>
   `;
-  box.querySelectorAll('[data-recent-task]').forEach(btn => {
-    btn.addEventListener('click', () => applyRecentTask(btn.dataset.recentTask || ''));
+
+  box.querySelectorAll('[data-recent-work-id]').forEach(btn => {
+    btn.addEventListener('click', () => applyRecentWorkQuickPick(btn.dataset.recentWorkId || ''));
   });
 }
 
@@ -1579,17 +1599,25 @@ function renderRecentMaterialPicks() {
   });
 }
 
-function applyRecentTask(taskName) {
-  const target = String(taskName || '').trim();
-  if (!target) return;
-  const rawTasks = state.optionsRaw?.tasks || [];
-  const taskItem = rawTasks.find(item => optionName(item) === target);
-  const categoryName = taskItem ? getTaskCategoryName(taskItem) : '';
-  if (categoryName && el.task_category) {
-    el.task_category.value = categoryName;
+function applyRecentWorkQuickPick(workId) {
+  const work = (state.works || []).find(item => String(item.id) === String(workId));
+  if (!work) {
+    alert('불러올 최근 작업을 찾지 못했습니다.');
+    return;
   }
-  renderTaskOptionsByCategory(categoryName || el.task_category?.value || '', false);
-  selectTaskNameValue(target, true);
+
+  const currentStartDate = el.start_date?.value || fmtDate(new Date());
+  const currentRepeatDays = Number(el.repeat_days?.value || 1);
+
+  fillWorkForm(work);
+
+  if (el.start_date) el.start_date.value = currentStartDate;
+  if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
+  updateEndDateFromRepeatDays();
+
+  state.editingWorkId = null;
+  if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+  showFavoriteWorkStatus(`최근 작업 불러옴: ${getRecentWorkQuickLabel(work)}`);
 }
 
 function addRecentMaterialByName(name) {
@@ -1657,7 +1685,6 @@ function selectTaskNameValue(value, syncSearch = false) {
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
   renderTaskMaterialRecommendations(target);
-  maybeAutoAddRoutineMaterials(target);
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -1979,7 +2006,6 @@ function filterChipOptions(type, keyword) {
   function getMaterialTotal() {
     let total = 0;
     state.selectedMaterialsDetailed.forEach(m => {
-      if (m && m.cost_included === false) return;
       total += (m.price || 0) * (m.qty || 0);
     });
     return total;
@@ -2143,9 +2169,7 @@ function filterChipOptions(type, keyword) {
         price: Number(source.unit_price || source.price || 0),
         qty: 1,
         method: getDefaultMaterialMethod(),
-        installment_months: 0,
-        cost_included: true,
-        auto_added: false
+        installment_months: 0
       });
     }
 
@@ -2219,16 +2243,12 @@ function filterChipOptions(type, keyword) {
       const showInstallment = method === '카드할부';
       return `
       <div class="material-row material-row-inline">
-        <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong>${item.auto_added ? ' <small>(자동)</small>' : ''}</span>
+        <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong></span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
         <span class="material-unit">${escapeHtml(item.unit || '')}</span>
         <span class="material-price">단가 ${formatNumber(item.price || 0)}</span>
         <span class="material-total">합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
         <span class="material-method-wrap">
-          <label style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">
-            <input type="checkbox" data-material-cost-included="${idx}" ${(item.cost_included === false) ? '' : 'checked'}>
-            비용반영
-          </label>
           <select data-material-method="${idx}" class="material-method-select">${getMaterialMethodOptionsHtml(method)}</select>
           ${showInstallment ? `<input type="number" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" data-material-installment="${idx}" class="material-installment-input" placeholder="개월">` : ''}
         </span>
@@ -2277,16 +2297,6 @@ function filterChipOptions(type, keyword) {
         const idx = Number(input.dataset.materialInstallment);
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].installment_months = Number(input.value || 0);
-      });
-    });
-
-    box.querySelectorAll('[data-material-cost-included]').forEach(input => {
-      input.addEventListener('change', () => {
-        const idx = Number(input.dataset.materialCostIncluded);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].cost_included = !!input.checked;
-        updateMoneySummary();
-        renderSelectedMaterialsDetailed();
       });
     });
 
@@ -2340,127 +2350,6 @@ function filterChipOptions(type, keyword) {
     const box = el[`${type}-box`];
     if (!box) return [];
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
-  }
-
-  function getSelectedChips(type) {
-    return getSelectedChipValues(type);
-  }
-
-  function getAllPestRecommendedMaterialNames() {
-    const names = new Set();
-    (state.optionsRaw?.pests || []).forEach(item => {
-      const raw = typeof item === 'string' ? '' : (item.recommended_materials || '');
-      splitCsv(raw).forEach(name => {
-        const trimmed = String(name || '').trim();
-        if (trimmed) names.add(trimmed);
-      });
-    });
-    return names;
-  }
-
-  function isAutoExcludedChemicalMaterialName(name) {
-    const target = String(name || '').trim();
-    if (!target) return true;
-    return getAllPestRecommendedMaterialNames().has(target);
-  }
-
-  function getTaskRoutineMaterialNames(taskName = '') {
-    const target = String(taskName || '').trim();
-    if (!target) return [];
-
-    const scoreMap = new Map();
-    (state.works || []).forEach(work => {
-      if (String(work.task_name || '').trim() !== target) return;
-      const meta = parseMemo(work.memo);
-      const materials = Array.isArray(meta.materials) ? meta.materials : [];
-      materials.forEach(item => {
-        const name = String(item.name || '').trim();
-        if (!name || isAutoExcludedChemicalMaterialName(name)) return;
-        const qty = Number(item.qty || 0) || 1;
-        scoreMap.set(name, (scoreMap.get(name) || 0) + qty);
-      });
-    });
-
-    return Array.from(scoreMap.entries())
-      .sort((a, b) => {
-        if (b[1] != a[1]) return b[1] - a[1];
-        return a[0].localeCompare(b[0], 'ko');
-      })
-      .map(([name]) => name)
-      .slice(0, 5);
-  }
-
-  function clearAutoAddedRoutineMaterials() {
-    const rows = Array.isArray(state.selectedMaterialsDetailed) ? state.selectedMaterialsDetailed : [];
-    state.selectedMaterialsDetailed = rows.filter(item => !item.auto_added);
-  }
-
-  function addRoutineMaterialByName(name) {
-    const target = String(name || '').trim();
-    if (!target) return;
-
-    const source = findMaterialByRecommendedName(target);
-    if (source) {
-      const exists = state.selectedMaterialsDetailed.find(item => String(item.id) === String(source.id));
-      if (exists) {
-        exists.qty = Number(exists.qty || 0) + 1;
-        exists.auto_added = true;
-        return;
-      }
-      state.selectedMaterialsDetailed.push({
-        id: source.id,
-        name: source.name || '',
-        unit: source.unit || '',
-        price: Number(source.unit_price || source.price || 0),
-        qty: 1,
-        method: getDefaultMaterialMethod(),
-        installment_months: 0,
-        cost_included: true,
-        auto_added: true
-      });
-      return;
-    }
-
-    const existsByName = state.selectedMaterialsDetailed.find(item => String(item.name || '').trim() === target);
-    if (existsByName) {
-      existsByName.qty = Number(existsByName.qty || 0) + 1;
-      existsByName.auto_added = true;
-      return;
-    }
-
-    state.selectedMaterialsDetailed.push({
-      id: '',
-      name: target,
-      unit: '',
-      price: 0,
-      qty: 1,
-      method: getDefaultMaterialMethod(),
-      installment_months: 0,
-      cost_included: true,
-      auto_added: true
-    });
-  }
-
-  function maybeAutoAddRoutineMaterials(taskName = '') {
-    const target = String(taskName || '').trim();
-    clearAutoAddedRoutineMaterials();
-
-    if (!target) {
-      renderSelectedMaterialsDetailed();
-      updateMoneySummary();
-      return;
-    }
-
-    const names = getTaskRoutineMaterialNames(target);
-    if (!names.length) {
-      renderSelectedMaterialsDetailed();
-      updateMoneySummary();
-      return;
-    }
-
-    names.forEach(name => addRoutineMaterialByName(name));
-    renderSelectedMaterialsDetailed();
-    updateMoneySummary();
   }
 
   function renderOptions() {
@@ -4035,8 +3924,7 @@ function filterChipOptions(type, keyword) {
           price: Number(item.price || 0),
           qty: Number(item.qty || 0),
           method: item.method || '',
-          installment_months: Number(item.installment_months || 0),
-          cost_included: item.cost_included !== false
+          installment_months: Number(item.installment_months || 0)
         })),
         labor_rows: laborRows,
         work_hours: normalizedWorkHours,

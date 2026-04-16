@@ -107,11 +107,6 @@
     .money-table{width:100%;}
     .income-modal-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;}
     .income-note-field{grid-column:1 / -1;}
-    @media (max-width: 900px){
-      .works-stats-summary{grid-template-columns:1fr;}
-      .works-stats-grid{grid-template-columns:1fr;}
-      .works-stats-header{align-items:flex-start; flex-direction:column;}
-    }
     @media (max-width: 700px){
       .income-modal-grid{grid-template-columns:1fr;}
     }
@@ -211,26 +206,6 @@
     .page-header-actions{display:flex; gap:8px;}
 
     .works-search-box{padding:14px 16px;}
-    .works-stats-panel{padding:16px;}
-    .works-stats-header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;}
-    .works-stats-title{font-size:22px; font-weight:800; color:#0f172a;}
-    .works-stats-subtitle{font-size:13px; color:#64748b; margin-top:4px;}
-    .works-stats-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
-    .works-stat-card{border:1px solid #e2e8f0; border-radius:14px; background:#f8fafc; padding:14px 16px;}
-    .works-stat-card-label{font-size:13px; color:#64748b; margin-bottom:8px;}
-    .works-stat-card-value{font-size:28px; font-weight:800; color:#0f172a; line-height:1.1;}
-    .works-stats-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
-    .works-stats-block{border:1px solid #e2e8f0; border-radius:14px; background:#fff; padding:14px;}
-    .works-stats-block-title{font-size:16px; font-weight:800; color:#0f172a; margin-bottom:12px;}
-    .works-stat-row{margin-bottom:12px;}
-    .works-stat-row:last-child{margin-bottom:0;}
-    .works-stat-row-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; font-size:14px;}
-    .works-stat-row-head strong{font-size:14px; color:#0f172a; word-break:break-word;}
-    .works-stat-row-head span{font-size:13px; color:#475569; white-space:nowrap;}
-    .works-stat-bar{height:10px; border-radius:999px; background:#e5e7eb; overflow:hidden;}
-    .works-stat-bar-fill{height:100%; border-radius:999px; background:#2563eb;}
-    .works-stat-bar-fill.alt{background:#0f766e;}
-    .works-stat-bar-fill.soft{background:#7c3aed;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
     .task-search-input{width:100%; padding:12px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:16px;}
     .task-chip-wrap, .task-option-chip-wrap{display:flex; flex-wrap:wrap; gap:8px;}
@@ -762,7 +737,7 @@
             <button id="btn-download-excel-current-season" class="btn">현재시즌 엑셀 다운로드</button>
           </div>
           <div class="inline-help" style="margin-top:12px;">
-            작업일지 / 금전내역 / 월별정산 / 시즌정산 시트가 하나의 엑셀 파일로 내려받아집니다.
+            작업일지 / 금전내역 / 월별정산 / 시즌정산 / 작업통계 시트가 하나의 엑셀 파일로 내려받아집니다.
           </div>
         </div>
       </section>

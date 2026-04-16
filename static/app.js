@@ -96,7 +96,7 @@
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
-      'weather','task_category','task_name','crops-box','pests-box','machines-box',
+      'weather','task_category','task_name','crops-box','pests-box','pests-field','machines-box',
 
       'labor_cost','work_hours','memo',
       'btn-save-work','btn-cancel-work','works-list',

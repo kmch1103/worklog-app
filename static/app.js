@@ -4001,6 +4001,24 @@ function filterChipOptions(type, keyword) {
     cropEl.value = state.workFilterCrop || '';
   }
 
+  function getPreferredCurrentSeason() {
+    const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+    if (!seasons.length) return null;
+
+    const explicit = seasons.find(item => Number(item.is_current || 0) === 1);
+    if (explicit) return explicit;
+
+    const today = fmtDate(new Date());
+    const covering = seasons.find(item => {
+      const start = String(item.start_date || '');
+      const end = String(item.end_date || '');
+      return start && end && start <= today && today <= end;
+    });
+    if (covering) return covering;
+
+    return [...seasons].sort((a, b) => String(b.end_date || '').localeCompare(String(a.end_date || '')))[0] || null;
+  }
+
   function getSeasonRangeByValue(seasonValue) {
     const value = String(seasonValue || '').trim();
     if (!value) return { start: '', end: '', label: '전체' };

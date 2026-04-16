@@ -55,7 +55,6 @@
     bindIncomeButtons();
     bindOptionButtons();
     bindExcelButtons();
-    bindBackupButtons();
     bindCalendarDetailModal();
 
     bindHistoryNavigation();
@@ -124,7 +123,7 @@
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','money-scope-label','money-scope-month-count','money-scope-row-count','money-monthly-list','money-monthly-empty','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
-      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season','btn-backup-download-json','backup-restore-file-input','btn-backup-restore-json','backup-restore-status','btn-import-old-db','backup-file-input','backup-import-status'
+      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season'
     ];
 
     ids.forEach(id => {
@@ -436,139 +435,6 @@
       }
     });
   }
-
-
-  function bindBackupButtons() {
-    on(el['btn-backup-download-json'], 'click', downloadJsonBackup);
-    on(el['btn-backup-restore-json'], 'click', restoreJsonBackup);
-    on(el['btn-import-old-db'], 'click', importOldDbFile);
-  }
-
-  function getMinStockStorageKey() {
-    return 'worklog_material_min_stock_v1';
-  }
-
-  function getMinStockSettings() {
-    try {
-      const raw = localStorage.getItem(getMinStockStorageKey()) || '{}';
-      const data = JSON.parse(raw);
-      return data && typeof data === 'object' ? data : {};
-    } catch (e) {
-      console.error(e);
-      return {};
-    }
-  }
-
-  function setBackupStatus(id, message, isError = false) {
-    const node = el[id];
-    if (!node) return;
-    node.textContent = message || '';
-    node.style.color = isError ? '#b91c1c' : '#475569';
-  }
-
-  async function downloadJsonBackup() {
-    try {
-      const payload = await apiGet('/api/backup/export');
-      payload.client = {
-        favorites: getFavoriteWorks(),
-        min_stock: getMinStockSettings()
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-      a.href = url;
-      a.download = `worklog_backup_${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setBackupStatus('backup-restore-status', `백업 파일을 다운로드했습니다. (${stamp})`);
-    } catch (e) {
-      console.error(e);
-      alert(`백업 다운로드 실패: ${e.message || e}`);
-      setBackupStatus('backup-restore-status', `백업 다운로드 실패: ${e.message || e}`, true);
-    }
-  }
-
-  async function restoreJsonBackup() {
-    const file = el['backup-restore-file-input']?.files?.[0];
-    if (!file) {
-      alert('복구할 백업 JSON 파일을 선택하세요.');
-      return;
-    }
-
-    if (!confirm('현재 작업일지 / 자재 / 옵션 / 시즌 / 수익 데이터가 복구 파일 내용으로 교체됩니다. 계속할까요?')) {
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      const payload = JSON.parse(text || '{}');
-      const result = await apiPost('/api/backup/restore', {
-        works: payload.works || [],
-        plans: payload.plans || [],
-        materials: payload.materials || [],
-        options: payload.options || {},
-        seasons: payload.seasons || [],
-        incomes: payload.incomes || []
-      });
-
-      if (payload.client && Array.isArray(payload.client.favorites)) {
-        setFavoriteWorks(payload.client.favorites);
-      }
-      if (payload.client && payload.client.min_stock && typeof payload.client.min_stock === 'object') {
-        localStorage.setItem(getMinStockStorageKey(), JSON.stringify(payload.client.min_stock));
-      }
-
-      await loadAll();
-      await loadMoney();
-      renderAll();
-      renderFavoriteWorkSelect();
-      setBackupStatus('backup-restore-status', '백업 JSON 복구가 완료되었습니다.');
-      alert('백업 JSON 복구가 완료되었습니다.');
-    } catch (e) {
-      console.error(e);
-      alert(`백업 JSON 복구 실패: ${e.message || e}`);
-      setBackupStatus('backup-restore-status', `백업 JSON 복구 실패: ${e.message || e}`, true);
-    }
-  }
-
-  async function importOldDbFile() {
-    const file = el['backup-file-input']?.files?.[0];
-    if (!file) {
-      alert('가져올 기존 DB 파일을 선택하세요.');
-      return;
-    }
-    if (!confirm('현재 작업일지 / 자재 / 옵션 데이터가 기존 DB 내용으로 교체됩니다. 계속할까요?')) {
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch('/api/import_old_db', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error || '기존 DB 가져오기에 실패했습니다.');
-      }
-
-      await loadAll();
-      await loadMoney();
-      renderAll();
-      setBackupStatus('backup-import-status', '기존 DB 가져오기가 완료되었습니다.');
-      alert('기존 DB 가져오기가 완료되었습니다.');
-    } catch (e) {
-      console.error(e);
-      alert(`기존 DB 가져오기 실패: ${e.message || e}`);
-      setBackupStatus('backup-import-status', `기존 DB 가져오기 실패: ${e.message || e}`, true);
-    }
-  }
-
 
   function bindOptionButtons() {
     (el.optionTabButtons || []).forEach(btn => {
@@ -1310,7 +1176,11 @@
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
-      ? JSON.parse(JSON.stringify(template.materials))
+      ? JSON.parse(JSON.stringify(template.materials)).map(item => ({
+          ...item,
+          cost_included: item?.cost_included !== false,
+          auto_added: false
+        }))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1466,7 +1336,9 @@
           price: Number(m.price || m.unit_price || 0),
           qty: Number(m.qty || 0),
           method: m.method || '',
-          installment_months: Number(m.installment_months || 0)
+          installment_months: Number(m.installment_months || 0),
+          cost_included: m.cost_included !== false,
+          auto_added: false
         }))
       : [];
     renderSelectedMaterialsDetailed();
@@ -1785,6 +1657,7 @@ function selectTaskNameValue(value, syncSearch = false) {
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
   renderTaskMaterialRecommendations(target);
+  maybeAutoAddRoutineMaterials(target);
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -2106,6 +1979,7 @@ function filterChipOptions(type, keyword) {
   function getMaterialTotal() {
     let total = 0;
     state.selectedMaterialsDetailed.forEach(m => {
+      if (m && m.cost_included === false) return;
       total += (m.price || 0) * (m.qty || 0);
     });
     return total;
@@ -2269,7 +2143,9 @@ function filterChipOptions(type, keyword) {
         price: Number(source.unit_price || source.price || 0),
         qty: 1,
         method: getDefaultMaterialMethod(),
-        installment_months: 0
+        installment_months: 0,
+        cost_included: true,
+        auto_added: false
       });
     }
 
@@ -2343,12 +2219,16 @@ function filterChipOptions(type, keyword) {
       const showInstallment = method === '카드할부';
       return `
       <div class="material-row material-row-inline">
-        <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong></span>
+        <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong>${item.auto_added ? ' <small>(자동)</small>' : ''}</span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
         <span class="material-unit">${escapeHtml(item.unit || '')}</span>
         <span class="material-price">단가 ${formatNumber(item.price || 0)}</span>
         <span class="material-total">합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
         <span class="material-method-wrap">
+          <label style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;">
+            <input type="checkbox" data-material-cost-included="${idx}" ${(item.cost_included === false) ? '' : 'checked'}>
+            비용반영
+          </label>
           <select data-material-method="${idx}" class="material-method-select">${getMaterialMethodOptionsHtml(method)}</select>
           ${showInstallment ? `<input type="number" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" data-material-installment="${idx}" class="material-installment-input" placeholder="개월">` : ''}
         </span>
@@ -2397,6 +2277,16 @@ function filterChipOptions(type, keyword) {
         const idx = Number(input.dataset.materialInstallment);
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].installment_months = Number(input.value || 0);
+      });
+    });
+
+    box.querySelectorAll('[data-material-cost-included]').forEach(input => {
+      input.addEventListener('change', () => {
+        const idx = Number(input.dataset.materialCostIncluded);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].cost_included = !!input.checked;
+        updateMoneySummary();
+        renderSelectedMaterialsDetailed();
       });
     });
 
@@ -2450,6 +2340,127 @@ function filterChipOptions(type, keyword) {
     const box = el[`${type}-box`];
     if (!box) return [];
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+  }
+
+  function getSelectedChips(type) {
+    return getSelectedChipValues(type);
+  }
+
+  function getAllPestRecommendedMaterialNames() {
+    const names = new Set();
+    (state.optionsRaw?.pests || []).forEach(item => {
+      const raw = typeof item === 'string' ? '' : (item.recommended_materials || '');
+      splitCsv(raw).forEach(name => {
+        const trimmed = String(name || '').trim();
+        if (trimmed) names.add(trimmed);
+      });
+    });
+    return names;
+  }
+
+  function isAutoExcludedChemicalMaterialName(name) {
+    const target = String(name || '').trim();
+    if (!target) return true;
+    return getAllPestRecommendedMaterialNames().has(target);
+  }
+
+  function getTaskRoutineMaterialNames(taskName = '') {
+    const target = String(taskName || '').trim();
+    if (!target) return [];
+
+    const scoreMap = new Map();
+    (state.works || []).forEach(work => {
+      if (String(work.task_name || '').trim() !== target) return;
+      const meta = parseMemo(work.memo);
+      const materials = Array.isArray(meta.materials) ? meta.materials : [];
+      materials.forEach(item => {
+        const name = String(item.name || '').trim();
+        if (!name || isAutoExcludedChemicalMaterialName(name)) return;
+        const qty = Number(item.qty || 0) || 1;
+        scoreMap.set(name, (scoreMap.get(name) || 0) + qty);
+      });
+    });
+
+    return Array.from(scoreMap.entries())
+      .sort((a, b) => {
+        if (b[1] != a[1]) return b[1] - a[1];
+        return a[0].localeCompare(b[0], 'ko');
+      })
+      .map(([name]) => name)
+      .slice(0, 5);
+  }
+
+  function clearAutoAddedRoutineMaterials() {
+    const rows = Array.isArray(state.selectedMaterialsDetailed) ? state.selectedMaterialsDetailed : [];
+    state.selectedMaterialsDetailed = rows.filter(item => !item.auto_added);
+  }
+
+  function addRoutineMaterialByName(name) {
+    const target = String(name || '').trim();
+    if (!target) return;
+
+    const source = findMaterialByRecommendedName(target);
+    if (source) {
+      const exists = state.selectedMaterialsDetailed.find(item => String(item.id) === String(source.id));
+      if (exists) {
+        exists.qty = Number(exists.qty || 0) + 1;
+        exists.auto_added = true;
+        return;
+      }
+      state.selectedMaterialsDetailed.push({
+        id: source.id,
+        name: source.name || '',
+        unit: source.unit || '',
+        price: Number(source.unit_price || source.price || 0),
+        qty: 1,
+        method: getDefaultMaterialMethod(),
+        installment_months: 0,
+        cost_included: true,
+        auto_added: true
+      });
+      return;
+    }
+
+    const existsByName = state.selectedMaterialsDetailed.find(item => String(item.name || '').trim() === target);
+    if (existsByName) {
+      existsByName.qty = Number(existsByName.qty || 0) + 1;
+      existsByName.auto_added = true;
+      return;
+    }
+
+    state.selectedMaterialsDetailed.push({
+      id: '',
+      name: target,
+      unit: '',
+      price: 0,
+      qty: 1,
+      method: getDefaultMaterialMethod(),
+      installment_months: 0,
+      cost_included: true,
+      auto_added: true
+    });
+  }
+
+  function maybeAutoAddRoutineMaterials(taskName = '') {
+    const target = String(taskName || '').trim();
+    clearAutoAddedRoutineMaterials();
+
+    if (!target) {
+      renderSelectedMaterialsDetailed();
+      updateMoneySummary();
+      return;
+    }
+
+    const names = getTaskRoutineMaterialNames(target);
+    if (!names.length) {
+      renderSelectedMaterialsDetailed();
+      updateMoneySummary();
+      return;
+    }
+
+    names.forEach(name => addRoutineMaterialByName(name));
+    renderSelectedMaterialsDetailed();
+    updateMoneySummary();
   }
 
   function renderOptions() {
@@ -4024,7 +4035,8 @@ function filterChipOptions(type, keyword) {
           price: Number(item.price || 0),
           qty: Number(item.qty || 0),
           method: item.method || '',
-          installment_months: Number(item.installment_months || 0)
+          installment_months: Number(item.installment_months || 0),
+          cost_included: item.cost_included !== false
         })),
         labor_rows: laborRows,
         work_hours: normalizedWorkHours,

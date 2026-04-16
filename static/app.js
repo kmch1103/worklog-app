@@ -1340,7 +1340,7 @@
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
-      ? JSON.parse(JSON.stringify(template.materials))
+      ? template.materials.map(item => normalizeMaterialEntry(item))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1489,15 +1489,7 @@
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(meta.materials)
-      ? meta.materials.map(m => ({
-          id: m.id || '',
-          name: m.name || '',
-          unit: m.unit || '',
-          price: Number(m.price || m.unit_price || 0),
-          qty: Number(m.qty || 0),
-          method: m.method || '',
-          installment_months: Number(m.installment_months || 0)
-        }))
+      ? meta.materials.map(m => normalizeMaterialEntry(m))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1886,15 +1878,17 @@ ${nextMemo}` : nextMemo;
       if (!exists.method && item.method) exists.method = item.method;
       return;
     }
-    state.selectedMaterialsDetailed.push({
+    state.selectedMaterialsDetailed.push(normalizeMaterialEntry({
       id: item.id || '',
       name,
       unit: item.unit || '',
       price: Number(item.price || item.unit_price || 0),
       qty: Number(item.qty || 1) || 1,
       method: item.method || getDefaultMaterialMethod(),
-      installment_months: Number(item.installment_months || 0)
-    });
+      installment_months: Number(item.installment_months || 0),
+      action: item.action || item.behavior || item.type || '사용',
+      cost_included: item.cost_included !== false
+    }));
   });
 
   renderSelectedMaterialsDetailed();
@@ -2154,15 +2148,17 @@ function addRecommendedMaterialName(name) {
   if (exists) {
     exists.qty = Number(exists.qty || 0) + 1;
   } else {
-    state.selectedMaterialsDetailed.push({
+    state.selectedMaterialsDetailed.push(normalizeMaterialEntry({
       id: '',
       name: target,
       unit: '',
       price: 0,
       qty: 1,
       method: getDefaultMaterialMethod(),
-      installment_months: 0
-    });
+      installment_months: 0,
+      action: '사용',
+      cost_included: true
+    }));
   }
 
   renderSelectedMaterialsDetailed();
@@ -2296,7 +2292,7 @@ function filterChipOptions(type, keyword) {
   function getMaterialTotal() {
     let total = 0;
     state.selectedMaterialsDetailed.forEach(m => {
-      total += (m.price || 0) * (m.qty || 0);
+      total += getMaterialCostAmount(m);
     });
     return total;
   }
@@ -2452,15 +2448,17 @@ function filterChipOptions(type, keyword) {
     if (exists) {
       exists.qty = Number(exists.qty || 0) + 1;
     } else {
-      state.selectedMaterialsDetailed.push({
+      state.selectedMaterialsDetailed.push(normalizeMaterialEntry({
         id: source.id,
         name: source.name || '',
         unit: source.unit || '',
         price: Number(source.unit_price || source.price || 0),
         qty: 1,
         method: getDefaultMaterialMethod(),
-        installment_months: 0
-      });
+        installment_months: 0,
+        action: '사용',
+        cost_included: true
+      }));
     }
 
     renderSelectedMaterialsDetailed();
@@ -2505,6 +2503,53 @@ function filterChipOptions(type, keyword) {
     }).join('');
   }
 
+
+  function normalizeMaterialAction(value = '') {
+    const action = String(value || '').trim();
+    if (action === '구입' || action === '사용' || action === '반품') return action;
+    return '사용';
+  }
+
+  function isMaterialCostIncluded(item = {}) {
+    return item.cost_included !== false;
+  }
+
+  function getMaterialCostAmount(item = {}) {
+    if (!isMaterialCostIncluded(item)) return 0;
+    const qty = Number(item.qty || 0);
+    const price = Number(item.price || 0);
+    const amount = qty * price;
+    const action = normalizeMaterialAction(item.action || item.behavior || item.type || '사용');
+    return action === '반품' ? -amount : amount;
+  }
+
+  function getMaterialActionOptionsHtml(selectedValue = '') {
+    const action = normalizeMaterialAction(selectedValue);
+    const options = [
+      ['구입','구입'],
+      ['사용','사용'],
+      ['반품','반품']
+    ];
+    return options.map(([value,label]) => {
+      const selected = value === action ? ' selected' : '';
+      return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+    }).join('');
+  }
+
+  function normalizeMaterialEntry(item = {}) {
+    return {
+      id: item.id || '',
+      name: item.name || '',
+      unit: item.unit || '',
+      price: Number(item.price || item.unit_price || 0),
+      qty: Number(item.qty || 0),
+      method: item.method || '',
+      installment_months: Number(item.installment_months || 0),
+      action: normalizeMaterialAction(item.action || item.behavior || item.type || '사용'),
+      cost_included: item.cost_included !== false
+    };
+  }
+
   function applyDefaultMaterialMethodToAll() {
     const method = getDefaultMaterialMethod();
     if (!method) {
@@ -2531,13 +2576,17 @@ function filterChipOptions(type, keyword) {
     box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => {
       const method = item.method || '';
       const showInstallment = method === '카드할부';
+      const action = normalizeMaterialAction(item.action || item.behavior || item.type || '사용');
+      const costIncluded = isMaterialCostIncluded(item);
       return `
       <div class="material-row material-row-inline">
         <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong></span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
         <span class="material-unit">${escapeHtml(item.unit || '')}</span>
         <span class="material-price">단가 ${formatNumber(item.price || 0)}</span>
-        <span class="material-total">합계 ${formatNumber((item.price || 0) * (item.qty || 0))}</span>
+        <span class="material-total">합계 ${formatNumber(getMaterialCostAmount(item))}</span>
+        <label class="material-cost-wrap"><input type="checkbox" data-material-cost="${idx}" ${costIncluded ? 'checked' : ''}> 비용발생</label>
+        <span class="material-action-wrap"><select data-material-action="${idx}" class="material-action-select">${getMaterialActionOptionsHtml(action)}</select></span>
         <span class="material-method-wrap">
           <select data-material-method="${idx}" class="material-method-select">${getMaterialMethodOptionsHtml(method)}</select>
           ${showInstallment ? `<input type="number" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" data-material-installment="${idx}" class="material-installment-input" placeholder="개월">` : ''}
@@ -2556,7 +2605,7 @@ function filterChipOptions(type, keyword) {
         const row = input.closest('.material-row');
         const totalEl = row ? row.querySelector('.material-total') : null;
         if (totalEl) {
-          totalEl.textContent = `합계 ${formatNumber((state.selectedMaterialsDetailed[idx].price || 0) * nextQty)}`;
+          totalEl.textContent = `합계 ${formatNumber(getMaterialCostAmount(state.selectedMaterialsDetailed[idx]))}`;
         }
 
         updateMoneySummary();
@@ -2587,6 +2636,26 @@ function filterChipOptions(type, keyword) {
         const idx = Number(input.dataset.materialInstallment);
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].installment_months = Number(input.value || 0);
+      });
+    });
+
+    box.querySelectorAll('[data-material-cost]').forEach(input => {
+      input.addEventListener('change', () => {
+        const idx = Number(input.dataset.materialCost);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].cost_included = !!input.checked;
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
+      });
+    });
+
+    box.querySelectorAll('[data-material-action]').forEach(select => {
+      select.addEventListener('change', () => {
+        const idx = Number(select.dataset.materialAction);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].action = normalizeMaterialAction(select.value || '사용');
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
       });
     });
 
@@ -4682,7 +4751,9 @@ function filterChipOptions(type, keyword) {
           price: Number(item.price || 0),
           qty: Number(item.qty || 0),
           method: item.method || '',
-          installment_months: Number(item.installment_months || 0)
+          installment_months: Number(item.installment_months || 0),
+          action: normalizeMaterialAction(item.action || item.behavior || item.type || '사용'),
+          cost_included: item.cost_included !== false
         })),
         labor_rows: laborRows,
         work_hours: normalizedWorkHours,

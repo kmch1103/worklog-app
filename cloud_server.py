@@ -4,7 +4,6 @@ import json
 import os
 import tempfile
 import uuid
-import shutil
 from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
@@ -228,8 +227,8 @@ def import_old_db_into_current(uploaded_db_path):
                 continue
 
             cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo)
-                VALUES (?, ?, ?, 0, ?, 0, 0, '')
+                INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
+                VALUES (?, ?, ?, ?, 0, 0, '')
             """, (name, unit, stock_qty, unit_price))
             sync_material_option(cur, name)
 
@@ -318,7 +317,11 @@ def apply_material_stock_change(conn, materials, mode='apply'):
     for item in materials or []:
         name = normalize_name(item.get('name'))
         qty = safe_float(item.get('qty'), 0)
+        material_type = normalize_name(item.get('material_type') or item.get('kind') or '재고형')
         action = normalize_name(item.get('action') or item.get('behavior') or item.get('type') or '사용')
+
+        if material_type == '비용형':
+            continue
 
         if not name or qty == 0:
             continue
@@ -345,28 +348,12 @@ def current_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def get_preferred_current_season(conn):
-    row = conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY id DESC LIMIT 1").fetchone()
-    if row:
-        return row
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    row = conn.execute(
-        "SELECT * FROM seasons WHERE start_date <= ? AND end_date >= ? ORDER BY start_date DESC, id DESC LIMIT 1",
-        (today, today)
-    ).fetchone()
-    if row:
-        return row
-
-    return conn.execute("SELECT * FROM seasons ORDER BY end_date DESC, start_date DESC, id DESC LIMIT 1").fetchone()
-
-
 def get_season_row(conn, season_id):
     if season_id in (None, '', 'all'):
         return None
 
     if season_id == 'current':
-        return get_preferred_current_season(conn)
+        return conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY id DESC LIMIT 1").fetchone()
 
     try:
         sid = int(season_id)
@@ -448,8 +435,7 @@ def init_db():
         unit_price REAL DEFAULT 0,
         price_last_year REAL DEFAULT 0,
         price_this_year REAL DEFAULT 0,
-        memo TEXT DEFAULT '',
-        minimum_stock REAL DEFAULT 0
+        memo TEXT DEFAULT ''
     )
     """)
 
@@ -459,7 +445,6 @@ def init_db():
     ensure_column(cur, "materials", "price_last_year", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "price_this_year", "REAL DEFAULT 0")
     ensure_column(cur, "materials", "memo", "TEXT DEFAULT ''")
-    ensure_column(cur, "materials", "minimum_stock", "REAL DEFAULT 0")
 
     # option tables
     for t in ["weather", "crops", "tasks", "pests", "materials", "machines"]:
@@ -817,8 +802,8 @@ def create_option(option_type):
         ).fetchone()
         if not row:
             cur.execute("""
-                INSERT INTO materials (name, unit, stock_qty, minimum_stock, unit_price, memo)
-                VALUES (?, '', 0, 0, 0, '')
+                INSERT INTO materials (name, unit, stock_qty, unit_price, memo)
+                VALUES (?, '', 0, 0, '')
             """, (name,))
 
     conn.commit()
@@ -926,7 +911,7 @@ def delete_option(option_type, option_id):
 def get_materials():
     conn = db()
     rows = conn.execute("""
-        SELECT id, name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo, minimum_stock
+        SELECT id, name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo
         FROM materials
         ORDER BY
           CASE WHEN COALESCE(stock_qty, 0) > 0 THEN 0 ELSE 1 END,
@@ -946,7 +931,6 @@ def create_material():
     unit_price = float(data.get("unit_price") or 0)
     price_last_year = float(data.get("price_last_year") or 0)
     price_this_year = float(data.get("price_this_year") or 0)
-    minimum_stock = float(data.get("minimum_stock") or 0)
     memo = normalize_name(data.get("memo"))
 
     if unit_price <= 0 and price_this_year > 0:
@@ -966,14 +950,14 @@ def create_material():
     if row:
         cur.execute("""
             UPDATE materials
-            SET unit = ?, stock_qty = ?, minimum_stock = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
+            SET unit = ?, stock_qty = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
             WHERE id = ?
-        """, (unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo, row["id"]))
+        """, (unit, stock_qty, unit_price, price_last_year, price_this_year, memo, row["id"]))
     else:
         cur.execute("""
-            INSERT INTO materials (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo))
+            INSERT INTO materials (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo))
 
     sync_material_option(cur, name)
 
@@ -992,7 +976,6 @@ def update_material(material_id):
     unit_price = float(data.get("unit_price") or 0)
     price_last_year = float(data.get("price_last_year") or 0)
     price_this_year = float(data.get("price_this_year") or 0)
-    minimum_stock = float(data.get("minimum_stock") or 0)
     memo = normalize_name(data.get("memo"))
 
     if unit_price <= 0 and price_this_year > 0:
@@ -1011,9 +994,9 @@ def update_material(material_id):
 
     cur.execute("""
         UPDATE materials
-        SET name = ?, unit = ?, stock_qty = ?, minimum_stock = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
+        SET name = ?, unit = ?, stock_qty = ?, unit_price = ?, price_last_year = ?, price_this_year = ?, memo = ?
         WHERE id = ?
-    """, (name, unit, stock_qty, minimum_stock, unit_price, price_last_year, price_this_year, memo, material_id))
+    """, (name, unit, stock_qty, unit_price, price_last_year, price_this_year, memo, material_id))
 
     if old_row:
         old_name = old_row["name"]
@@ -1211,75 +1194,6 @@ def backup_season(season_id):
         }
     }
     return jsonify(payload)
-
-
-def ensure_backup_dir():
-    backup_dir = os.path.join(app.root_path, "backups")
-    os.makedirs(backup_dir, exist_ok=True)
-    return backup_dir
-
-
-def list_backup_files():
-    backup_dir = ensure_backup_dir()
-    rows = []
-    for name in sorted(os.listdir(backup_dir), reverse=True):
-        path = os.path.join(backup_dir, name)
-        if not os.path.isfile(path):
-            continue
-        size = os.path.getsize(path)
-        modified = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
-        rows.append({
-            "name": name,
-            "size": size,
-            "size_text": f"{round(size / 1024, 1)} KB" if size < 1024 * 1024 else f"{round(size / (1024 * 1024), 2)} MB",
-            "modified_at": modified
-        })
-    return rows
-
-
-@app.route("/api/backups", methods=["GET"])
-def get_backups():
-    return jsonify(list_backup_files())
-
-
-@app.route("/api/backups/<path:filename>", methods=["GET"])
-def download_backup_file(filename):
-    safe_name = os.path.basename(filename)
-    backup_dir = ensure_backup_dir()
-    backup_path = os.path.join(backup_dir, safe_name)
-    if not os.path.exists(backup_path) or not os.path.isfile(backup_path):
-        return jsonify({"ok": False, "error": "backup file not found"}), 404
-    return send_file(backup_path, as_attachment=True, download_name=safe_name)
-
-
-@app.route("/api/backup/manual", methods=["POST"])
-def manual_backup_db():
-    backup_dir = ensure_backup_dir()
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_name = f"worklog_manual_{stamp}.db"
-    backup_path = os.path.join(backup_dir, backup_name)
-
-    try:
-        shutil.copy2(DB, backup_path)
-        return jsonify({"ok": True, "backup_file": backup_name})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/backup/auto", methods=["POST"])
-def auto_backup_db():
-    backup_dir = ensure_backup_dir()
-
-    stamp = datetime.now().strftime("%Y%m%d")
-    backup_name = f"worklog_auto_{stamp}.db"
-    backup_path = os.path.join(backup_dir, backup_name)
-
-    try:
-        if not os.path.exists(backup_path):
-            shutil.copy2(DB, backup_path)
-        return jsonify({"ok": True, "backup_file": backup_name})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # =========================

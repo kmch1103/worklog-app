@@ -10,11 +10,6 @@
     *, *::before, *::after{box-sizing:border-box;}
     html, body{max-width:100%; overflow-x:hidden;}
     body{margin:0;}
-    .top-alert-bar{position:sticky; top:0; z-index:950; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; margin:0 0 12px; border:1px solid #f59e0b; border-radius:14px; background:#fffbeb; color:#92400e; box-shadow:0 2px 10px rgba(0,0,0,.05);}
-    .top-alert-bar.hidden{display:none;}
-    .top-alert-bar-text{font-size:14px; font-weight:700; line-height:1.4; word-break:keep-all;}
-    .top-alert-bar-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
-    .top-alert-bar .btn{padding:8px 12px;}
     .app, .content, .page, .panel, .sidebar{min-width:0; max-width:100%;}
     input, select, textarea, button{max-width:100%;}
     .readonly-money{min-height:42px; display:flex; align-items:center; padding:0 12px; border:1px solid #d7dbe3; border-radius:10px; background:#f7f8fb; font-weight:700;}
@@ -33,17 +28,20 @@
     .material-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
     .material-row input{width:90px;}
     .material-method-toolbar{display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin:6px 0 10px;}
-    .material-row-inline{display:grid; grid-template-columns:minmax(140px,1.15fr) 84px auto auto 110px 96px minmax(180px,240px) 70px; gap:8px; align-items:center;}
+    .material-row-inline{display:grid; grid-template-columns:minmax(150px,1.2fr) 90px auto auto auto minmax(180px,240px) 70px; gap:8px; align-items:center;}
     .material-row-inline input,.material-row-inline select{width:100%;}
     .material-row-inline .material-method-wrap{display:flex; gap:6px; align-items:center;}
     .material-row-inline .material-installment-input{width:72px;}
-    .material-row-inline .material-cost-wrap{display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px;}
-    .material-row-inline .material-cost-wrap input{width:auto;}
-    .material-row-inline .material-action-wrap{min-width:0;}
+    .material-row-compact{grid-template-columns:minmax(120px,1.1fr) 76px 44px 90px 100px 84px 90px 90px minmax(150px,220px) 64px; gap:6px;}
+    .material-cost-label{display:inline-flex; align-items:center; gap:4px; font-size:13px;}
+    .material-type-select,.material-action-select,.material-method-select{width:100%;}
+    .hidden{display:none !important;}
     @media (max-width: 900px){
       .material-row-inline{grid-template-columns:1fr 80px auto auto; align-items:center;}
-      .material-row-inline .material-unit,.material-row-inline .material-price,.material-row-inline .material-total,.material-row-inline .material-cost-wrap,.material-row-inline .material-action-wrap{grid-column:1 / -1;}
-      .material-row-inline .material-method-wrap{grid-column:1 / -1;}
+      .material-row-compact{grid-template-columns:1fr 72px 1fr 1fr;}
+      .material-row-inline .material-unit,.material-row-inline .material-price,.material-row-inline .material-total,
+      .material-row-inline .material-type-wrap,.material-row-inline .material-cost-wrap,
+      .material-row-inline .material-action-wrap,.material-row-inline .material-method-wrap{grid-column:1 / -1;}
     }
     .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
     .grid.six{display:grid; grid-template-columns:120px 90px 120px 130px 1fr 70px; gap:8px; align-items:center;}
@@ -214,34 +212,6 @@
     .page-header-actions{display:flex; gap:8px;}
 
     .works-search-box{padding:14px 16px;}
-    .works-stats-box{padding:16px;}
-    .works-stats-header{display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:14px; flex-wrap:wrap;}
-    .works-stats-title{font-size:20px; font-weight:800; color:#0f172a;}
-    .works-stats-subtitle{font-size:13px; color:#64748b; margin-top:4px; line-height:1.5;}
-    .works-stats-period-wrap{display:flex; flex-direction:column; gap:6px; min-width:180px;}
-    .works-stats-period-wrap select{width:100%;}
-    .works-stats-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
-    .works-stats-card{border:1px solid #dbe4f0; background:#f8fbff; border-radius:14px; padding:14px 16px;}
-    .works-stats-card span{display:block; font-size:12px; color:#64748b; margin-bottom:6px;}
-    .works-stats-card strong{font-size:22px; color:#0f172a;}
-    .works-stats-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
-    .works-stats-section{border:1px solid #e5e7eb; border-radius:14px; background:#fff; padding:14px;}
-    .works-stats-section-title{font-size:15px; font-weight:800; color:#0f172a; margin-bottom:10px;}
-    .works-stats-chip-list{display:flex; flex-wrap:wrap; gap:8px;}
-    .works-stats-chip{display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; border:1px solid #cbd5e1; background:#fff; border-radius:12px; padding:10px 12px; cursor:pointer; text-align:left;}
-    .works-stats-chip:hover{border-color:#2563eb; background:#eff6ff;}
-    .works-stats-chip span{font-size:14px; color:#0f172a;}
-    .works-stats-chip strong{font-size:13px; color:#2563eb; white-space:nowrap;}
-    .works-stats-month-list,.works-stats-category-list{display:grid; gap:10px;}
-    .works-stats-line{display:flex; justify-content:space-between; gap:10px; border-bottom:1px solid #eef2f7; padding-bottom:8px;}
-    .works-stats-line:last-child{border-bottom:0; padding-bottom:0;}
-    .works-stats-line span{color:#334155;}
-    .works-stats-line strong{color:#0f172a;}
-    .works-stats-category-item{display:grid; gap:6px;}
-    .works-stats-category-head{display:flex; justify-content:space-between; gap:10px; font-size:14px; color:#334155;}
-    .works-stats-category-head strong{white-space:nowrap; color:#0f172a;}
-    .works-stats-bar{height:10px; border-radius:999px; background:#e5e7eb; overflow:hidden;}
-    .works-stats-bar-fill{height:100%; border-radius:999px; background:#60a5fa;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
     .task-search-input{width:100%; padding:12px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:16px;}
     .task-chip-wrap, .task-option-chip-wrap{display:flex; flex-wrap:wrap; gap:8px;}
@@ -257,8 +227,6 @@
     .works-filter-grid input,.works-filter-grid select{width:100%;}
     @media (max-width: 1200px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:1fr;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
-    @media (max-width: 1200px){ .works-stats-grid{grid-template-columns:1fr;} }
-    @media (max-width: 700px){ .works-stats-summary{grid-template-columns:1fr;} .works-stats-header{flex-direction:column;} .works-stats-period-wrap{width:100%; min-width:0;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
       #page-works .page-header-actions{position:sticky; top:0; z-index:30; background:#f8fafc; padding:8px 0 10px;}
@@ -353,9 +321,6 @@
         width:100%;
         padding:12px 12px 24px;
       }
-      .top-alert-bar{flex-direction:column; align-items:flex-start; padding:10px 12px;}
-      .top-alert-bar-actions{width:100%;}
-      .top-alert-bar-actions .btn{flex:1 1 auto;}
       .page-header{
         flex-direction:column;
         align-items:stretch;
@@ -490,13 +455,6 @@
     </aside>
 
     <main class="content">
-      <div id="low-stock-banner" class="top-alert-bar hidden">
-        <div id="low-stock-banner-text" class="top-alert-bar-text">⚠️ 부족자재 0개 있습니다</div>
-        <div class="top-alert-bar-actions">
-          <button id="btn-open-low-stock" class="btn" type="button">자재관리에서 보기</button>
-          <button id="btn-hide-low-stock-today" class="btn" type="button">오늘 하루 숨기기</button>
-        </div>
-      </div>
       <section id="page-calendar" class="page active">
         <div class="page-header">
           <h2>작업달력</h2>
@@ -567,7 +525,6 @@
             <button type="button" class="btn material-tab-btn active" data-material-tab="all">전체</button>
             <button type="button" class="btn material-tab-btn" data-material-tab="in">재고있음</button>
             <button type="button" class="btn material-tab-btn" data-material-tab="out">재고없음</button>
-            <button type="button" class="btn material-tab-btn" data-material-tab="low">부족자재</button>
           </div>
         </div>
         <div id="materials-list"></div>
@@ -786,22 +743,13 @@
             <button id="btn-download-excel-current-season" class="btn">현재시즌 엑셀 다운로드</button>
           </div>
           <div class="inline-help" style="margin-top:12px;">
-            작업일지 / 금전내역 / 월별정산 / 시즌정산 / 작업통계 시트가 하나의 엑셀 파일로 내려받아집니다.
+            작업일지 / 금전내역 / 월별정산 / 시즌정산 시트가 하나의 엑셀 파일로 내려받아집니다.
           </div>
         </div>
       </section>
 
       <section id="page-backup" class="page">
         <div class="page-header"><h2>백업</h2></div>
-        <div class="inline-help" style="margin-bottom:12px;">앱 접속 시 하루 1회 자동백업이 실행됩니다. 아래 가져오기 기능은 그대로 사용할 수 있습니다.</div>
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="page-header-actions">
-            <button id="btn-create-backup-now" class="btn primary">지금 백업 만들기</button>
-          </div>
-          <div class="inline-help" style="margin-top:10px;">자동백업 파일은 서버의 worklog-app/backups 폴더에 저장되며, 아래 목록에서 바로 다운로드할 수 있습니다.</div>
-          <div id="backup-file-list" style="margin-top:12px;"></div>
-          <div id="backup-empty" class="empty-msg">아직 생성된 백업 파일이 없습니다.</div>
-        </div>
         <div class="panel">
           <div class="field">
             <span>기존 worklog.db 가져오기</span>
@@ -942,6 +890,11 @@
         </div>
         <div class="inline-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
 
+        <div class="field">
+          <span>작물</span>
+          <div id="crops-box" class="checks"></div>
+        </div>
+
         <div class="grid two task-grid">
           <label class="field">
             <span>날씨</span>
@@ -980,12 +933,7 @@
           </div>
         </div>
 
-        <div class="field">
-          <span>작물</span>
-          <div id="crops-box" class="checks"></div>
-        </div>
-
-        <div class="field">
+        <div class="field hidden" id="pests-field">
           <span>병충해</span>
           <input type="text" id="pest-search-input" placeholder="병충해 빠른 검색" style="padding:8px 10px; border:1px solid #ccc; border-radius:8px; margin:8px 0 10px; width:100%;">
           <div id="pests-box" class="checks"></div>
@@ -1135,15 +1083,10 @@
           </label>
         </div>
 
-        <div class="grid three">
+        <div class="grid two">
           <label class="field">
             <span>재고</span>
             <input type="number" id="material_stock" min="0" step="0.1">
-          </label>
-
-          <label class="field">
-            <span>최소재고</span>
-            <input type="number" id="material_minimum_stock" min="0" step="0.1" value="0">
           </label>
 
           <label class="field">

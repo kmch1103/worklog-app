@@ -27,10 +27,6 @@
     workFilterTaskCategory: '',
     workFilterTaskName: '',
     workFilterCrop: '',
-    workSeasonFilter: 'current',
-    workStatsPeriod: 'season',
-    workStatsSeasonFilter: 'current',
-    moneySeasonFilter: 'current',
     selectedMaterialsDetailed: [],
     materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
     mobileCalendarMode: 'current',
@@ -42,8 +38,7 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    lowStockItems: [],
-    backupFiles: []
+    recentQuickVisible: false
   };
 
   const el = {};
@@ -61,17 +56,13 @@
     bindIncomeButtons();
     bindOptionButtons();
     bindExcelButtons();
-    bindBackupButtons();
     bindCalendarDetailModal();
 
     bindHistoryNavigation();
 
     await loadAll();
     await loadMoney();
-    await loadBackupFiles();
     renderAll();
-    await runAutoBackupIfNeeded();
-    renderLowStockBanner();
     updateMobileCalendarMode();
     initializeHistoryState();
 
@@ -81,9 +72,6 @@
     });
 
     stabilizeWorksFloatingButton();
-    ensureScrollNavButtons();
-    updateScrollNavButtons();
-    window.addEventListener('scroll', updateScrollNavButtons, { passive: true });
   }
 
   function cacheElements() {
@@ -113,10 +101,9 @@
       'labor_cost','work_hours','memo',
       'btn-save-work','btn-cancel-work','works-list',
 
-      'material_name','material_unit','material_stock','material_minimum_stock','material_price','material_price_last_year','material_price_this_year','material_memo',
+      'material_name','material_unit','material_stock','material_price','material_price_last_year','material_price_this_year','material_memo',
       'btn-save-material','btn-open-material-modal','btn-close-material-modal','btn-cancel-material',
       'material-modal','material-modal-title','material-search-box','material-search-keyword','materials-list',
-      'low-stock-banner','low-stock-banner-text','btn-open-low-stock','btn-hide-low-stock-today',
 
       'new-weather','new-crops','new-task-categories','new-task-category','new-tasks','new-pests','new-pests-recommend','new-machines',
       'options-weather','options-crops','options-task-categories','options-tasks','options-pests','options-machines',
@@ -124,7 +111,7 @@
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
       'task-name-search','btn-clear-task-name','task-name-datalist','recent-task-picks','task-name-options','task-recommend-wrap','task-recommend-box','task-material-recommend-wrap','task-material-recommend-box','pest-search-input','recent-material-picks',
 
-      'recommended-materials-wrap','recommended-materials-box','pest-recent-material-wrap','pest-recent-material-box','material-list-search',
+      'recommended-materials-wrap','recommended-materials-box','material-list-search',
 
       'season-panel','season-panel-header','btn-toggle-season-panel','season-panel-toggle-text','season-panel-summary','season-panel-body',
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
@@ -137,8 +124,7 @@
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','money-scope-label','money-scope-month-count','money-scope-row-count','money-monthly-list','money-monthly-empty','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
-      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season',
-      'backup-file-input','btn-import-old-db','backup-import-status','btn-create-backup-now','backup-file-list','backup-empty'
+      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season'
     ];
 
     ids.forEach(id => {
@@ -261,6 +247,7 @@
     on(el['task_category'], 'change', () => {
       clearTaskSelection(false);
       renderTaskOptionsByCategory(el['task_category']?.value || '');
+      updatePestSectionVisibility(true);
     });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
@@ -406,8 +393,6 @@
 
   function bindMaterialButtons() {
     on(el['btn-open-material-modal'], 'click', () => openMaterialModal());
-    on(el['btn-open-low-stock'], 'click', openLowStockMaterialsPage);
-    on(el['btn-hide-low-stock-today'], 'click', hideLowStockBannerForToday);
     on(el['btn-close-material-modal'], 'click', closeMaterialModal);
     on(el['btn-cancel-material'], 'click', closeMaterialModal);
     on(el['btn-save-material'], 'click', saveMaterial);
@@ -431,90 +416,6 @@
     });
   }
 
-
-
-  function bindBackupButtons() {
-    on(el['btn-import-old-db'], 'click', importOldDbFile);
-    on(el['btn-create-backup-now'], 'click', createBackupNow);
-  }
-
-  async function importOldDbFile() {
-    const input = el['backup-file-input'];
-    const statusNode = el['backup-import-status'];
-    const file = input?.files?.[0];
-    if (!file) {
-      alert('가져올 DB 파일을 선택하세요.');
-      return;
-    }
-
-    const form = new FormData();
-    form.append('file', file);
-    if (statusNode) statusNode.textContent = '기존 DB 가져오는 중...';
-
-    try {
-      const res = await fetch('/api/import_old_db', { method: 'POST', body: form });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error || '기존 DB 가져오기에 실패했습니다.');
-      }
-      if (statusNode) statusNode.textContent = '기존 DB 가져오기가 완료되었습니다.';
-      await loadAll();
-      await loadMoney();
-      await loadBackupFiles();
-      renderAll();
-      alert('기존 DB를 가져왔습니다.');
-    } catch (e) {
-      console.error(e);
-      if (statusNode) statusNode.textContent = `가져오기 실패: ${e.message || e}`;
-      alert(`기존 DB 가져오기 실패: ${e.message || e}`);
-    }
-  }
-
-  async function createBackupNow() {
-    try {
-      const result = await apiPost('/api/backup/manual', {});
-      await loadBackupFiles();
-      renderBackupFiles();
-      alert(`백업을 만들었습니다. (${result.backup_file || ''})`);
-    } catch (e) {
-      console.error(e);
-      alert(`백업 생성 실패: ${e.message || e}`);
-    }
-  }
-
-  async function loadBackupFiles() {
-    try {
-      state.backupFiles = await apiGet('/api/backups');
-    } catch (e) {
-      console.error(e);
-      state.backupFiles = [];
-    }
-  }
-
-  function renderBackupFiles() {
-    const listNode = el['backup-file-list'];
-    const emptyNode = el['backup-empty'];
-    if (!listNode) return;
-
-    const files = Array.isArray(state.backupFiles) ? state.backupFiles : [];
-    if (!files.length) {
-      listNode.innerHTML = '';
-      if (emptyNode) emptyNode.classList.remove('hidden');
-      return;
-    }
-
-    if (emptyNode) emptyNode.classList.add('hidden');
-    listNode.innerHTML = files.map(file => `
-      <div class="day-item">
-        <div><strong>${escapeHtml(file.name || '')}</strong></div>
-        <div>생성시각: ${escapeHtml(file.modified_at || '')}</div>
-        <div>크기: ${escapeHtml(file.size_text || '')}</div>
-        <div class="item-actions">
-          <a class="btn" href="/api/backups/${encodeURIComponent(file.name || '')}" download>다운로드</a>
-        </div>
-      </div>
-    `).join('');
-  }
 
   function bindExcelButtons() {
     on(el['btn-download-excel-all'], 'click', () => {
@@ -567,7 +468,7 @@
     on(el['btn-cancel-task-option'], 'click', closeTaskOptionModal);
     on(el['btn-save-task-option'], 'click', saveTaskOptionEdit);
     on(el['new-task-category'], 'change', () => renderTaskOptionList());
-    on(el['money-season-filter'], 'change', async () => { state.moneySeasonFilter = el['money-season-filter']?.value || 'current'; await loadMoney(); renderMoney(); });
+    on(el['money-season-filter'], 'change', async () => { await loadMoney(); renderMoney(); });
   }
 
   function autoFillMaterialName(keyword) {
@@ -612,7 +513,6 @@
       console.error(e);
       state.materials = [];
     }
-    refreshLowStockState();
   }
 
   async function loadOptions() {
@@ -651,7 +551,7 @@
 
   async function loadMoney() {
     try {
-      const seasonId = el['money-season-filter']?.value || state.moneySeasonFilter || 'current';
+      const seasonId = el['money-season-filter']?.value || '';
       const url = seasonId ? `/api/money?season_id=${encodeURIComponent(seasonId)}` : '/api/money';
       const incomeUrl = seasonId ? `/api/incomes?season_id=${encodeURIComponent(seasonId)}` : '/api/incomes';
       const [moneyRows, incomeRows] = await Promise.all([
@@ -702,75 +602,15 @@
     btn.style.pointerEvents = 'auto';
   }
 
-
-  function ensureScrollNavButtons() {
-    let wrap = document.getElementById('scroll-nav-buttons');
-    if (!wrap) {
-      wrap = document.createElement('div');
-      wrap.id = 'scroll-nav-buttons';
-      wrap.style.position = 'fixed';
-      wrap.style.right = '18px';
-      wrap.style.bottom = '86px';
-      wrap.style.zIndex = '9998';
-      wrap.style.display = 'flex';
-      wrap.style.flexDirection = 'column';
-      wrap.style.gap = '10px';
-
-      const topBtn = document.createElement('button');
-      topBtn.type = 'button';
-      topBtn.id = 'btn-scroll-top';
-      topBtn.className = 'btn';
-      topBtn.textContent = '↑ 맨위';
-      topBtn.style.minWidth = '88px';
-      topBtn.style.boxShadow = '0 6px 16px rgba(15,23,42,.18)';
-
-      const bottomBtn = document.createElement('button');
-      bottomBtn.type = 'button';
-      bottomBtn.id = 'btn-scroll-bottom';
-      bottomBtn.className = 'btn';
-      bottomBtn.textContent = '↓ 맨아래';
-      bottomBtn.style.minWidth = '88px';
-      bottomBtn.style.boxShadow = '0 6px 16px rgba(15,23,42,.18)';
-
-      topBtn.addEventListener('click', () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      bottomBtn.addEventListener('click', () => {
-        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-      });
-
-      wrap.appendChild(topBtn);
-      wrap.appendChild(bottomBtn);
-      document.body.appendChild(wrap);
-    }
-  }
-
-  function updateScrollNavButtons() {
-    const wrap = document.getElementById('scroll-nav-buttons');
-    if (!wrap) return;
-    const isMobile = window.innerWidth <= 900;
-    wrap.style.right = isMobile ? '14px' : '20px';
-    wrap.style.bottom = isMobile ? '136px' : '118px';
-    const y = window.scrollY || document.documentElement.scrollTop || 0;
-    const maxY = Math.max(0, (document.documentElement.scrollHeight || 0) - window.innerHeight);
-    const topBtn = document.getElementById('btn-scroll-top');
-    const bottomBtn = document.getElementById('btn-scroll-bottom');
-    if (topBtn) topBtn.style.display = y > 120 ? '' : 'none';
-    if (bottomBtn) bottomBtn.style.display = y < (maxY - 120) ? '' : 'none';
-  }
-
   function renderAll() {
     renderMenuState();
     renderCalendar();
     renderWorkFormOptions();
     renderWorks();
     renderMaterials();
-    renderLowStockBanner();
     renderOptions();
     renderMoney();
-    renderBackupFiles();
     ensureWorksSearchBar();
-    ensureWorksStatsPanel();
   }
 
   function switchPage(page, options = {}) {
@@ -797,7 +637,6 @@
     });
 
     stabilizeWorksFloatingButton();
-    updateScrollNavButtons();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -805,7 +644,6 @@
     } else if (page === 'works') {
       renderWorks();
       ensureWorksSearchBar();
-      ensureWorksStatsPanel();
     } else if (page === 'materials') {
       renderMaterials();
     } else if (page === 'money') {
@@ -1181,6 +1019,7 @@
     renderFavoriteWorkSelect();
     syncFavoriteWorkButtons();
     renderRecentQuickPicks();
+    updatePestSectionVisibility(false);
     clearTaskSelection(false);
 
     removeHidden(el['work-modal']);
@@ -1199,6 +1038,7 @@
     renderFavoriteWorkSelect();
     syncFavoriteWorkButtons();
     renderRecentQuickPicks();
+    updatePestSectionVisibility(false);
     syncTaskNameDatalist(el.task_category?.value || '');
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
@@ -1227,6 +1067,8 @@
 
     state.editingWorkId = null;
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+    state.recentQuickVisible = true;
+    renderRecentQuickPicks();
   }
 
 
@@ -1337,10 +1179,12 @@
     setChipSelections('crops', template.crops || []);
     setChipSelections('pests', template.pests || []);
     setChipSelections('machines', template.machines || []);
+    updatePestSectionVisibility(false);
+    updatePestSectionVisibility(false);
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
-      ? template.materials.map(item => normalizeMaterialEntry(item))
+      ? JSON.parse(JSON.stringify(template.materials))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1456,10 +1300,12 @@
 
     resetMoneyFields();
     resetLaborRows();
+    state.recentQuickVisible = false;
     state.selectedMaterialsDetailed = [];
     renderSelectedMaterialsDetailed();
     renderRecommendedMaterials();
     renderTaskOptionsByCategory('');
+    updatePestSectionVisibility(false);
     syncFavoriteWorkButtons();
   }
 
@@ -1486,10 +1332,22 @@
     setChipSelections('crops', splitCsv(work.crops));
     setChipSelections('pests', splitCsv(work.pests));
     setChipSelections('machines', splitCsv(work.machines));
+    updatePestSectionVisibility(false);
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(meta.materials)
-      ? meta.materials.map(m => normalizeMaterialEntry(m))
+      ? meta.materials.map(m => ({
+          id: m.id || '',
+          name: m.name || '',
+          unit: m.unit || '',
+          price: Number(m.price || m.unit_price || 0),
+          qty: Number(m.qty || 0),
+          method: m.method || '',
+          installment_months: Number(m.installment_months || 0),
+          material_type: m.material_type || '재고형',
+          action: m.action || '사용',
+          cost_included: m.cost_included !== false
+        }))
       : [];
     renderSelectedMaterialsDetailed();
 
@@ -1613,6 +1471,7 @@
     renderChipOptions('machines', state.options.machines);
     renderRecommendedMaterials();
     renderRecentQuickPicks();
+    updatePestSectionVisibility(false);
     syncTaskNameDatalist(el.task_category?.value || '');
     renderTaskCategoryRecommendations(el.task_category?.value || '');
     renderTaskMaterialRecommendations(el.task_name?.value || '');
@@ -1688,6 +1547,17 @@ function rememberRecentWorkFormValues(payload) {
 }
 
 function renderRecentQuickPicks() {
+  if (!state.recentQuickVisible) {
+    if (el['recent-task-picks']) {
+      el['recent-task-picks'].innerHTML = '';
+      el['recent-task-picks'].classList.add('hidden');
+    }
+    if (el['recent-material-picks']) {
+      el['recent-material-picks'].innerHTML = '';
+      el['recent-material-picks'].classList.add('hidden');
+    }
+    return;
+  }
   renderRecentTaskPicks();
   renderRecentMaterialPicks();
 }
@@ -1711,103 +1581,31 @@ function getRecentWorkQuickLabel(work) {
   return task || category || '최근 작업';
 }
 
-function getCurrentAssistTaskContext() {
-  return {
-    category: String(el.task_category?.value || '').trim(),
-    task: String(el.task_name?.value || el['task-name-search']?.value || '').trim(),
-    pests: getSelectedChipValues('pests')
-  };
-}
-
-function getSimilarWorkAssistRows(categoryName = '', taskName = '') {
-  const category = String(categoryName || '').trim();
-  const task = String(taskName || '').trim();
-  let rows = Array.isArray(state.works) ? [...state.works] : [];
-  if (task) {
-    rows = rows.filter(work => String(work.task_name || '').trim() === task);
-  } else if (category) {
-    rows = rows.filter(work => String(work.task_category || '').trim() === category);
-  } else {
-    return [];
-  }
-  return rows
-    .filter(work => !state.editingWorkId || String(work.id) !== String(state.editingWorkId))
-    .sort((a, b) => {
-      const ad = String(a.start_date || '');
-      const bd = String(b.start_date || '');
-      if (bd !== ad) return bd.localeCompare(ad);
-      return Number(b.id || 0) - Number(a.id || 0);
-    })
-    .slice(0, 5);
-}
-
-function getAssistWorkButtonLabel(work) {
-  const date = String(work?.start_date || '').trim();
-  const meta = parseMemo(work?.memo);
-  const materials = Array.isArray(meta.materials) ? meta.materials : [];
-  const firstMaterial = materials.length ? String(materials[0].name || '').trim() : '';
-  if (firstMaterial) return `${date} · ${firstMaterial}`;
-  return date || getRecentWorkQuickLabel(work);
-}
-
 function renderRecentTaskPicks() {
   const box = el['recent-task-picks'];
   if (!box) return;
 
   const rows = getRecentWorkQuickRows();
-  const ctx = getCurrentAssistTaskContext();
-  const similarRows = getSimilarWorkAssistRows(ctx.category, ctx.task);
-
-  if (!rows.length && !similarRows.length) {
+  if (!rows.length) {
     box.innerHTML = '';
     box.classList.add('hidden');
     return;
   }
 
-  const sections = [];
-
-  if (rows.length) {
-    sections.push(`
-      <div class="task-quick-section">
-        <div class="task-quick-section-title">최근 작업 빠른불러오기</div>
-        <div class="task-chip-wrap">
-          ${rows.map(work => `
-            <button type="button" class="quick-pick-chip" data-recent-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(String(work.start_date || ''))}">
-              ${escapeHtml(getRecentWorkQuickLabel(work))}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-    `);
-  }
-
-  if (similarRows.length) {
-    const title = ctx.task
-      ? `같은 세부작업 최근기록 · ${escapeHtml(ctx.task)}`
-      : `같은 작업분류 최근기록 · ${escapeHtml(ctx.category)}`;
-    sections.push(`
-      <div class="task-quick-section">
-        <div class="task-quick-section-title">${title}</div>
-        <div class="task-chip-wrap">
-          ${similarRows.map(work => `
-            <button type="button" class="quick-pick-chip" data-assist-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(getRecentWorkQuickLabel(work))}">
-              ${escapeHtml(getAssistWorkButtonLabel(work))}
-            </button>
-          `).join('')}
-        </div>
-        <div class="inline-help">눌러서 시간, 메모, 자재를 빠르게 불러옵니다.</div>
-      </div>
-    `);
-  }
-
   box.classList.remove('hidden');
-  box.innerHTML = sections.join('');
+  box.innerHTML = `
+    <div class="task-quick-section-title">최근 작업 빠른불러오기</div>
+    <div class="task-chip-wrap">
+      ${rows.map(work => `
+        <button type="button" class="quick-pick-chip" data-recent-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(String(work.start_date || ''))}">
+          ${escapeHtml(getRecentWorkQuickLabel(work))}
+        </button>
+      `).join('')}
+    </div>
+  `;
 
   box.querySelectorAll('[data-recent-work-id]').forEach(btn => {
     btn.addEventListener('click', () => applyRecentWorkQuickPick(btn.dataset.recentWorkId || ''));
-  });
-  box.querySelectorAll('[data-assist-work-id]').forEach(btn => {
-    btn.addEventListener('click', () => applyAssistWorkQuickFill(btn.dataset.assistWorkId || ''));
   });
 }
 
@@ -1848,55 +1646,6 @@ function applyRecentWorkQuickPick(workId) {
   showFavoriteWorkStatus(`최근 작업 불러옴: ${getRecentWorkQuickLabel(work)}`);
 }
 
-function applyAssistWorkQuickFill(workId) {
-  const work = (state.works || []).find(item => String(item.id) === String(workId));
-  if (!work) {
-    alert('불러올 추천 작업을 찾지 못했습니다.');
-    return;
-  }
-
-  const meta = parseMemo(work.memo);
-  if (el.start_time) el.start_time.value = meta.start_time || '';
-  if (el.end_time) el.end_time.value = meta.end_time || '';
-  if (el.work_hours) el.work_hours.value = work.work_hours || meta.work_hours || 0;
-  if (el.memo) {
-    const nextMemo = String(meta.memo_text || '').trim();
-    if (nextMemo) {
-      const currentMemo = String(el.memo.value || '').trim();
-      el.memo.value = currentMemo ? `${currentMemo}
-${nextMemo}` : nextMemo;
-    }
-  }
-
-  const materials = Array.isArray(meta.materials) ? meta.materials : [];
-  materials.forEach(item => {
-    const name = String(item.name || '').trim();
-    if (!name) return;
-    const exists = state.selectedMaterialsDetailed.find(m => String(m.name || '').trim() === name);
-    if (exists) {
-      if (!(Number(exists.qty || 0) > 0) && Number(item.qty || 0) > 0) exists.qty = Number(item.qty || 0);
-      if (!exists.method && item.method) exists.method = item.method;
-      return;
-    }
-    state.selectedMaterialsDetailed.push(normalizeMaterialEntry({
-      id: item.id || '',
-      name,
-      unit: item.unit || '',
-      price: Number(item.price || item.unit_price || 0),
-      qty: Number(item.qty || 1) || 1,
-      method: item.method || getDefaultMaterialMethod(),
-      installment_months: Number(item.installment_months || 0),
-      action: item.action || item.behavior || item.type || '사용',
-      cost_included: item.cost_included !== false
-    }));
-  });
-
-  renderSelectedMaterialsDetailed();
-  syncWorkTimeFields('time');
-  updateMoneySummary();
-  showFavoriteWorkStatus(`추천 작업 적용: ${getRecentWorkQuickLabel(work)}`);
-}
-
 function addRecentMaterialByName(name) {
   const target = String(name || '').trim().toLowerCase();
   if (!target) return;
@@ -1921,7 +1670,6 @@ function clearTaskSelection() {
   renderTaskQuickOptions(currentCategory, '');
   renderTaskCategoryRecommendations(currentCategory);
   renderTaskMaterialRecommendations('');
-  renderRecentTaskPicks();
 }
 
 function syncTaskNameDatalist(categoryName = '') {
@@ -1963,7 +1711,6 @@ function selectTaskNameValue(value, syncSearch = false) {
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
   renderTaskMaterialRecommendations(target);
-  renderRecentTaskPicks();
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -2044,7 +1791,6 @@ function syncTaskNameSearchToSelect(keyword) {
     selectTaskNameValue(q, false);
   }
   renderTaskQuickOptions(el.task_category?.value || '', q);
-  renderRecentTaskPicks();
 }
 
 
@@ -2148,17 +1894,15 @@ function addRecommendedMaterialName(name) {
   if (exists) {
     exists.qty = Number(exists.qty || 0) + 1;
   } else {
-    state.selectedMaterialsDetailed.push(normalizeMaterialEntry({
+    state.selectedMaterialsDetailed.push({
       id: '',
       name: target,
       unit: '',
       price: 0,
       qty: 1,
       method: getDefaultMaterialMethod(),
-      installment_months: 0,
-      action: '사용',
-      cost_included: true
-    }));
+      installment_months: 0
+    });
   }
 
   renderSelectedMaterialsDetailed();
@@ -2244,7 +1988,6 @@ function filterChipOptions(type, keyword) {
 
         if (type === 'pests') {
           renderRecommendedMaterials();
-          renderRecentTaskPicks();
         }
       });
     });
@@ -2254,7 +1997,6 @@ function filterChipOptions(type, keyword) {
         input.closest('.chip')?.classList.toggle('active', input.checked);
         if (type === 'pests') {
           renderRecommendedMaterials();
-          renderRecentTaskPicks();
         }
       });
     });
@@ -2269,7 +2011,6 @@ function filterChipOptions(type, keyword) {
     box.querySelectorAll('.chip').forEach(chip => {
       chip.classList.remove('active');
     });
-    if (type === 'pests') renderPestRecentMaterialRecommendations();
   }
 
   function setChipSelections(type, values) {
@@ -2281,7 +2022,32 @@ function filterChipOptions(type, keyword) {
       input.checked = valueSet.has(input.value);
       input.closest('.chip')?.classList.toggle('active', input.checked);
     });
-    if (type === 'pests') renderPestRecentMaterialRecommendations();
+  }
+
+
+  function isSprayCategory(value) {
+    const text = String(value || '').trim();
+    return !!text && text.includes('방제');
+  }
+
+  function updatePestSectionVisibility(clearWhenHidden = false) {
+    const pestField = el['pests-field'];
+    const category = el['task_category']?.value || '';
+    const visible = isSprayCategory(category);
+
+    if (pestField) {
+      pestField.classList.toggle('hidden', !visible);
+    }
+    if (!visible) {
+      if (clearWhenHidden) {
+        if (el['pest-search-input']) el['pest-search-input'].value = '';
+        clearChipSelections('pests');
+      }
+      if (el['recommended-materials-wrap']) el['recommended-materials-wrap'].classList.add('hidden');
+      if (el['recommended-materials-box']) el['recommended-materials-box'].innerHTML = '';
+    } else {
+      renderRecommendedMaterials();
+    }
   }
 
   function getLaborTotal() {
@@ -2292,7 +2058,9 @@ function filterChipOptions(type, keyword) {
   function getMaterialTotal() {
     let total = 0;
     state.selectedMaterialsDetailed.forEach(m => {
-      total += getMaterialCostAmount(m);
+      if (m.cost_included === false) return;
+      const line = Number(m.price || 0) * Number(m.qty || 0);
+      total += (m.action || '') === '반품' ? -line : line;
     });
     return total;
   }
@@ -2448,7 +2216,7 @@ function filterChipOptions(type, keyword) {
     if (exists) {
       exists.qty = Number(exists.qty || 0) + 1;
     } else {
-      state.selectedMaterialsDetailed.push(normalizeMaterialEntry({
+      state.selectedMaterialsDetailed.push({
         id: source.id,
         name: source.name || '',
         unit: source.unit || '',
@@ -2456,9 +2224,10 @@ function filterChipOptions(type, keyword) {
         qty: 1,
         method: getDefaultMaterialMethod(),
         installment_months: 0,
+        material_type: '재고형',
         action: '사용',
         cost_included: true
-      }));
+      });
     }
 
     renderSelectedMaterialsDetailed();
@@ -2503,53 +2272,6 @@ function filterChipOptions(type, keyword) {
     }).join('');
   }
 
-
-  function normalizeMaterialAction(value = '') {
-    const action = String(value || '').trim();
-    if (action === '구입' || action === '사용' || action === '반품') return action;
-    return '사용';
-  }
-
-  function isMaterialCostIncluded(item = {}) {
-    return item.cost_included !== false;
-  }
-
-  function getMaterialCostAmount(item = {}) {
-    if (!isMaterialCostIncluded(item)) return 0;
-    const qty = Number(item.qty || 0);
-    const price = Number(item.price || 0);
-    const amount = qty * price;
-    const action = normalizeMaterialAction(item.action || item.behavior || item.type || '사용');
-    return action === '반품' ? -amount : amount;
-  }
-
-  function getMaterialActionOptionsHtml(selectedValue = '') {
-    const action = normalizeMaterialAction(selectedValue);
-    const options = [
-      ['구입','구입'],
-      ['사용','사용'],
-      ['반품','반품']
-    ];
-    return options.map(([value,label]) => {
-      const selected = value === action ? ' selected' : '';
-      return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
-    }).join('');
-  }
-
-  function normalizeMaterialEntry(item = {}) {
-    return {
-      id: item.id || '',
-      name: item.name || '',
-      unit: item.unit || '',
-      price: Number(item.price || item.unit_price || 0),
-      qty: Number(item.qty || 0),
-      method: item.method || '',
-      installment_months: Number(item.installment_months || 0),
-      action: normalizeMaterialAction(item.action || item.behavior || item.type || '사용'),
-      cost_included: item.cost_included !== false
-    };
-  }
-
   function applyDefaultMaterialMethodToAll() {
     const method = getDefaultMaterialMethod();
     if (!method) {
@@ -2576,17 +2298,35 @@ function filterChipOptions(type, keyword) {
     box.innerHTML = state.selectedMaterialsDetailed.map((item, idx) => {
       const method = item.method || '';
       const showInstallment = method === '카드할부';
-      const action = normalizeMaterialAction(item.action || item.behavior || item.type || '사용');
-      const costIncluded = isMaterialCostIncluded(item);
+      const materialType = item.material_type || '재고형';
+      const action = item.action || '사용';
+      const costIncluded = item.cost_included !== false;
+      const showAction = materialType === '재고형';
+      const lineAmount = Number(item.price || 0) * Number(item.qty || 0);
+      const signedAmount = action === '반품' ? -lineAmount : lineAmount;
       return `
-      <div class="material-row material-row-inline">
+      <div class="material-row material-row-inline material-row-compact">
         <span class="material-name"><strong>${escapeHtml(item.name || '')}</strong></span>
         <input type="number" min="0" step="0.1" value="${escapeHtml(String(item.qty || 0))}" data-material-qty="${idx}">
         <span class="material-unit">${escapeHtml(item.unit || '')}</span>
         <span class="material-price">단가 ${formatNumber(item.price || 0)}</span>
-        <span class="material-total">합계 ${formatNumber(getMaterialCostAmount(item))}</span>
-        <label class="material-cost-wrap"><input type="checkbox" data-material-cost="${idx}" ${costIncluded ? 'checked' : ''}> 비용발생</label>
-        <span class="material-action-wrap"><select data-material-action="${idx}" class="material-action-select">${getMaterialActionOptionsHtml(action)}</select></span>
+        <span class="material-total">합계 ${formatNumber(signedAmount)}</span>
+        <span class="material-type-wrap">
+          <select data-material-type="${idx}" class="material-type-select">
+            <option value="재고형" ${materialType === '재고형' ? 'selected' : ''}>재고형</option>
+            <option value="비용형" ${materialType === '비용형' ? 'selected' : ''}>비용형</option>
+          </select>
+        </span>
+        <span class="material-cost-wrap">
+          <label class="material-cost-label"><input type="checkbox" data-material-cost="${idx}" ${costIncluded ? 'checked' : ''}> 비용발생</label>
+        </span>
+        <span class="material-action-wrap ${showAction ? '' : 'hidden'}">
+          <select data-material-action="${idx}" class="material-action-select">
+            <option value="구입" ${action === '구입' ? 'selected' : ''}>구입</option>
+            <option value="사용" ${action === '사용' ? 'selected' : ''}>사용</option>
+            <option value="반품" ${action === '반품' ? 'selected' : ''}>반품</option>
+          </select>
+        </span>
         <span class="material-method-wrap">
           <select data-material-method="${idx}" class="material-method-select">${getMaterialMethodOptionsHtml(method)}</select>
           ${showInstallment ? `<input type="number" min="0" step="1" value="${escapeHtml(String(item.installment_months || 0))}" data-material-installment="${idx}" class="material-installment-input" placeholder="개월">` : ''}
@@ -2599,23 +2339,52 @@ function filterChipOptions(type, keyword) {
       input.addEventListener('input', () => {
         const idx = Number(input.dataset.materialQty);
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        const nextQty = Number(input.value || 0);
-        state.selectedMaterialsDetailed[idx].qty = nextQty;
-
-        const row = input.closest('.material-row');
-        const totalEl = row ? row.querySelector('.material-total') : null;
-        if (totalEl) {
-          totalEl.textContent = `합계 ${formatNumber(getMaterialCostAmount(state.selectedMaterialsDetailed[idx]))}`;
-        }
-
+        state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         updateMoneySummary();
       });
-
       input.addEventListener('change', () => {
         const idx = Number(input.dataset.materialQty);
         if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
         state.selectedMaterialsDetailed[idx].qty = Number(input.value || 0);
         renderSelectedMaterialsDetailed();
+      });
+    });
+
+    box.querySelectorAll('[data-material-type]').forEach(select => {
+      select.addEventListener('change', () => {
+        const idx = Number(select.dataset.materialType);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        const target = state.selectedMaterialsDetailed[idx];
+        target.material_type = select.value || '재고형';
+        if (target.material_type === '비용형') {
+          target.action = '사용';
+          target.cost_included = true;
+        } else {
+          target.action = target.action || '사용';
+          if (typeof target.cost_included !== 'boolean') target.cost_included = true;
+        }
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
+      });
+    });
+
+    box.querySelectorAll('[data-material-cost]').forEach(input => {
+      input.addEventListener('change', () => {
+        const idx = Number(input.dataset.materialCost);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].cost_included = !!input.checked;
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
+      });
+    });
+
+    box.querySelectorAll('[data-material-action]').forEach(select => {
+      select.addEventListener('change', () => {
+        const idx = Number(select.dataset.materialAction);
+        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
+        state.selectedMaterialsDetailed[idx].action = select.value || '사용';
+        renderSelectedMaterialsDetailed();
+        updateMoneySummary();
       });
     });
 
@@ -2639,26 +2408,6 @@ function filterChipOptions(type, keyword) {
       });
     });
 
-    box.querySelectorAll('[data-material-cost]').forEach(input => {
-      input.addEventListener('change', () => {
-        const idx = Number(input.dataset.materialCost);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].cost_included = !!input.checked;
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
-      });
-    });
-
-    box.querySelectorAll('[data-material-action]').forEach(select => {
-      select.addEventListener('change', () => {
-        const idx = Number(select.dataset.materialAction);
-        if (Number.isNaN(idx) || !state.selectedMaterialsDetailed[idx]) return;
-        state.selectedMaterialsDetailed[idx].action = normalizeMaterialAction(select.value || '사용');
-        renderSelectedMaterialsDetailed();
-        updateMoneySummary();
-      });
-    });
-
     box.querySelectorAll('[data-material-remove]').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = Number(btn.dataset.materialRemove);
@@ -2667,55 +2416,6 @@ function filterChipOptions(type, keyword) {
         renderSelectedMaterialsDetailed();
         updateMoneySummary();
       });
-    });
-  }
-
-  function getPestRecentMaterialRecommendationNames(selectedPests = []) {
-    const names = Array.isArray(selectedPests) ? selectedPests.map(v => String(v || '').trim()).filter(Boolean) : [];
-    if (!names.length) return [];
-
-    const scoreMap = new Map();
-    (state.works || []).forEach(work => {
-      const workPests = splitCsv(work.pests);
-      if (!workPests.some(name => names.includes(name))) return;
-      const meta = parseMemo(work.memo);
-      const materials = Array.isArray(meta.materials) ? meta.materials : [];
-      materials.forEach(item => {
-        const materialName = String(item.name || '').trim();
-        if (!materialName) return;
-        scoreMap.set(materialName, (scoreMap.get(materialName) || 0) + (Number(item.qty || 0) || 1));
-      });
-    });
-
-    return Array.from(scoreMap.entries())
-      .sort((a, b) => {
-        if (b[1] !== a[1]) return b[1] - a[1];
-        return a[0].localeCompare(b[0], 'ko');
-      })
-      .map(([name]) => name)
-      .slice(0, 8);
-  }
-
-  function renderPestRecentMaterialRecommendations() {
-    const wrap = el['pest-recent-material-wrap'];
-    const box = el['pest-recent-material-box'];
-    if (!wrap || !box) return;
-
-    const selectedPests = getSelectedChipValues('pests');
-    const names = getPestRecentMaterialRecommendationNames(selectedPests);
-    if (!selectedPests.length || !names.length) {
-      wrap.classList.add('hidden');
-      box.innerHTML = '';
-      return;
-    }
-
-    wrap.classList.remove('hidden');
-    box.innerHTML = names.map(name => `
-      <button type="button" class="search-result-item" data-pest-recent-material="${escapeHtml(name)}">${escapeHtml(name)}</button>
-    `).join('');
-
-    box.querySelectorAll('[data-pest-recent-material]').forEach(btn => {
-      btn.addEventListener('click', () => addRecommendedMaterialName(btn.dataset.pestRecentMaterial || ''));
     });
   }
 
@@ -2738,7 +2438,6 @@ function filterChipOptions(type, keyword) {
     if (!names.length) {
       wrap.classList.add('hidden');
       box.innerHTML = `<div class="recommended-materials-empty">추천 자재 없음</div>`;
-      renderPestRecentMaterialRecommendations();
       return;
     }
 
@@ -2753,7 +2452,6 @@ function filterChipOptions(type, keyword) {
         addRecommendedMaterialName(name);
       });
     });
-    renderPestRecentMaterialRecommendations();
   }
 
   function getSelectedChipValues(type) {
@@ -2811,7 +2509,7 @@ function filterChipOptions(type, keyword) {
       el['season-panel-toggle-text'].textContent = state.seasonPanelCollapsed ? '펼치기' : '접기';
     }
     if (el['season-panel-summary']) {
-      const currentSeason = getPreferredCurrentSeason();
+      const currentSeason = (state.seasons || []).find(season => Number(season.is_current || 0) === 1);
       const total = (state.seasons || []).length;
       if (currentSeason) {
         el['season-panel-summary'].textContent = `현재시즌: ${currentSeason.season_name || currentSeason.name || ''} · 등록 ${total}개`;
@@ -2853,7 +2551,7 @@ function filterChipOptions(type, keyword) {
     const node = el['money-season-filter'];
     if (!node) return;
 
-    const current = state.moneySeasonFilter || node.value || 'current';
+    const current = node.value || '';
     const options = [
       '<option value="">전체 시즌</option>',
       '<option value="current">현재 시즌</option>'
@@ -2864,12 +2562,8 @@ function filterChipOptions(type, keyword) {
     }));
 
     node.innerHTML = options.join('');
-    if (Array.from(node.options).some(opt => opt.value === current)) {
+    if (current && Array.from(node.options).some(opt => opt.value === current)) {
       node.value = current;
-      state.moneySeasonFilter = current;
-    } else {
-      node.value = 'current';
-      state.moneySeasonFilter = 'current';
     }
   }
 
@@ -3355,7 +3049,6 @@ function filterChipOptions(type, keyword) {
     if (el.material_name) el.material_name.value = item.name || '';
     if (el.material_unit) el.material_unit.value = item.unit || state.materialUnits[0] || '';
     if (el.material_stock) el.material_stock.value = item.stock_qty ?? item.stock ?? 0;
-    if (el.material_minimum_stock) el.material_minimum_stock.value = item.minimum_stock ?? 0;
     if (el.material_price) el.material_price.value = item.unit_price ?? item.price ?? 0;
     if (el.material_price_last_year) el.material_price_last_year.value = item.price_last_year ?? 0;
     if (el.material_price_this_year) el.material_price_this_year.value = (item.price_this_year ?? item.unit_price ?? item.price ?? 0);
@@ -3376,7 +3069,6 @@ function filterChipOptions(type, keyword) {
     if (el.material_name) el.material_name.value = '';
     if (el.material_unit) el.material_unit.value = state.materialUnits[0] || '';
     if (el.material_stock) el.material_stock.value = '0';
-    if (el.material_minimum_stock) el.material_minimum_stock.value = '0';
     if (el.material_price) el.material_price.value = '0';
     if (el.material_price_last_year) el.material_price_last_year.value = '0';
     if (el.material_price_this_year) el.material_price_this_year.value = '0';
@@ -3414,7 +3106,6 @@ function filterChipOptions(type, keyword) {
         el.material_name.value = item.name || '';
         el.material_unit.value = item.unit || '';
         el.material_price.value = item.unit_price || item.price || 0;
-        if (el.material_minimum_stock) el.material_minimum_stock.value = item.minimum_stock ?? 0;
         if (el.material_price_last_year) el.material_price_last_year.value = item.price_last_year ?? 0;
         if (el.material_price_this_year) el.material_price_this_year.value = (item.price_this_year ?? item.unit_price ?? item.price ?? 0);
       });
@@ -3426,7 +3117,6 @@ function filterChipOptions(type, keyword) {
       name: (el.material_name?.value || '').trim(),
       unit: el.material_unit?.value || '',
       stock_qty: Number(el.material_stock?.value || 0),
-      minimum_stock: Number(el.material_minimum_stock?.value || 0),
       unit_price: Number(el.material_price?.value || 0),
       price_last_year: Number(el.material_price_last_year?.value || 0),
       price_this_year: Number(el.material_price_this_year?.value || 0),
@@ -3493,13 +3183,12 @@ function filterChipOptions(type, keyword) {
     const q = (state.materialListSearchKeyword || '').trim().toLowerCase();
 
     const filtered = state.materials.filter(item => {
-      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''} ${item.price_last_year || ''} ${item.price_this_year || ''} ${item.minimum_stock || ''}`.toLowerCase();
+      const text = `${item.name || ''} ${item.unit || ''} ${item.memo || ''} ${item.price_last_year || ''} ${item.price_this_year || ''}`.toLowerCase();
       return text.includes(q);
     });
 
     const inStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) > 0);
     const outStock = filtered.filter(item => Number(item.stock_qty || item.stock || 0) <= 0);
-    const lowStock = filtered.filter(isLowStockMaterial);
     const tab = state.materialFilterTab || 'all';
 
     if (tab === 'in') {
@@ -3517,15 +3206,6 @@ function filterChipOptions(type, keyword) {
           <div>
             <h3>재고 없음</h3>
             ${renderMaterialSection(outStock)}
-          </div>
-        </div>
-      `;
-    } else if (tab === 'low') {
-      wrap.innerHTML = `
-        <div class="materials-single-col">
-          <div>
-            <h3>부족자재</h3>
-            ${renderMaterialSection(lowStock)}
           </div>
         </div>
       `;
@@ -3566,7 +3246,6 @@ function filterChipOptions(type, keyword) {
       <div class="day-item">
         <div><strong>${escapeHtml(item.name || '')}</strong></div>
         <div>재고: ${formatNumber(item.stock_qty || item.stock || 0)} ${escapeHtml(item.unit || '')}</div>
-        <div>최소재고: ${formatNumber(item.minimum_stock || 0)} ${escapeHtml(item.unit || '')}</div>
         <div>현재단가: ${formatNumber(item.unit_price || item.price || 0)}</div>
         <div>작년단가: ${formatNumber(item.price_last_year || 0)}</div>
         <div>올해단가: ${formatNumber(item.price_this_year || item.unit_price || item.price || 0)}</div>
@@ -3581,83 +3260,6 @@ function filterChipOptions(type, keyword) {
     `).join('');
   }
 
-
-  function refreshLowStockState() {
-    state.lowStockItems = (state.materials || []).filter(isLowStockMaterial);
-  }
-
-  function isLowStockMaterial(item) {
-    const stockQty = Number(item?.stock_qty || item?.stock || 0);
-    const minimumStock = Number(item?.minimum_stock || 0);
-    return stockQty <= minimumStock;
-  }
-
-  function getLowStockBannerDismissKey() {
-    return `worklog_low_stock_hidden_${fmtDate(new Date())}`;
-  }
-
-  function isLowStockBannerHiddenToday() {
-    try {
-      return localStorage.getItem(getLowStockBannerDismissKey()) === '1';
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function hideLowStockBannerForToday() {
-    try {
-      localStorage.setItem(getLowStockBannerDismissKey(), '1');
-    } catch (e) {
-      console.error(e);
-    }
-    renderLowStockBanner();
-  }
-
-  function openLowStockMaterialsPage() {
-    state.materialFilterTab = 'low';
-    if (el['material-list-search']) el['material-list-search'].value = '';
-    state.materialListSearchKeyword = '';
-    switchPage('materials');
-    renderMaterials();
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  }
-
-  function renderLowStockBanner() {
-    const banner = el['low-stock-banner'];
-    const textNode = el['low-stock-banner-text'];
-    if (!banner || !textNode) return;
-
-    refreshLowStockState();
-
-    if (!state.lowStockItems.length || isLowStockBannerHiddenToday()) {
-      banner.classList.add('hidden');
-      return;
-    }
-
-    const count = state.lowStockItems.length;
-    const preview = state.lowStockItems.slice(0, 3).map(item => String(item.name || '').trim()).filter(Boolean).join(', ');
-    textNode.textContent = preview
-      ? `⚠️ 부족자재 ${count}개 있습니다 · ${preview}`
-      : `⚠️ 부족자재 ${count}개 있습니다`;
-
-    banner.classList.remove('hidden');
-  }
-
-
-  function getAutoBackupKey() {
-    return `worklog_auto_backup_done_${fmtDate(new Date())}`;
-  }
-
-  async function runAutoBackupIfNeeded() {
-    try {
-      const key = getAutoBackupKey();
-      if (localStorage.getItem(key) === '1') return;
-      await apiPost('/api/backup/auto', {});
-      localStorage.setItem(key, '1');
-    } catch (e) {
-      console.error('auto backup failed', e);
-    }
-  }
 
   function applyMoneyQuickPeriod() {
     const period = el['money-period-filter']?.value || '';
@@ -4043,18 +3645,12 @@ function filterChipOptions(type, keyword) {
     if (!node) return;
     node.classList.remove('hidden');
     stabilizeWorksFloatingButton();
-    ensureScrollNavButtons();
-    updateScrollNavButtons();
-    window.addEventListener('scroll', updateScrollNavButtons, { passive: true });
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
     stabilizeWorksFloatingButton();
-    ensureScrollNavButtons();
-    updateScrollNavButtons();
-    window.addEventListener('scroll', updateScrollNavButtons, { passive: true });
   }
 
   function fmtDate(date) {
@@ -4159,10 +3755,6 @@ function filterChipOptions(type, keyword) {
       box.innerHTML = `
         <div class="works-filter-grid">
           <div>
-            <label class="inline-help">시즌</label>
-            <select id="works-filter-season"></select>
-          </div>
-          <div>
             <label class="inline-help">시작일</label>
             <input type="date" id="works-filter-start">
           </div>
@@ -4198,7 +3790,6 @@ function filterChipOptions(type, keyword) {
         page.insertBefore(box, page.firstChild);
       }
 
-      el['works-filter-season'] = box.querySelector('#works-filter-season');
       el['works-filter-start'] = box.querySelector('#works-filter-start');
       el['works-filter-end'] = box.querySelector('#works-filter-end');
       el['works-filter-task-category'] = box.querySelector('#works-filter-task-category');
@@ -4209,11 +3800,6 @@ function filterChipOptions(type, keyword) {
 
       input.addEventListener('input', (e) => {
         state.workSearchKeyword = (e.target.value || '').trim();
-        renderWorks();
-      });
-      el['works-filter-season'].addEventListener('change', (e) => {
-        state.workSeasonFilter = e.target.value;
-        renderWorksSearchFilterOptions();
         renderWorks();
       });
       el['works-filter-start'].addEventListener('change', (e) => {
@@ -4240,14 +3826,12 @@ function filterChipOptions(type, keyword) {
       });
       resetBtn.addEventListener('click', () => {
         state.workSearchKeyword = '';
-        state.workSeasonFilter = '';
         state.workFilterStartDate = '';
         state.workFilterEndDate = '';
         state.workFilterTaskCategory = '';
         state.workFilterTaskName = '';
         state.workFilterCrop = '';
         renderWorksSearchFilterOptions();
-        if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter ?? '';
         if (el['works-filter-start']) el['works-filter-start'].value = '';
         if (el['works-filter-end']) el['works-filter-end'].value = '';
         const searchInput = box.querySelector('#works-search-input');
@@ -4257,7 +3841,6 @@ function filterChipOptions(type, keyword) {
     }
 
     renderWorksSearchFilterOptions();
-    if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter ?? '';
     if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
     if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
     const searchInput = box.querySelector('#works-search-input');
@@ -4265,24 +3848,10 @@ function filterChipOptions(type, keyword) {
   }
 
   function renderWorksSearchFilterOptions() {
-    const seasonEl = el['works-filter-season'];
     const categoryEl = el['works-filter-task-category'];
     const taskEl = el['works-filter-task-name'];
     const cropEl = el['works-filter-crop'];
     if (!categoryEl || !taskEl || !cropEl) return;
-
-    if (seasonEl) {
-      const seasonOptions = [
-        '<option value="">전체 시즌</option>',
-        '<option value="current">현재시즌</option>'
-      ].concat((state.seasons || []).map(season => {
-        const seasonId = String(season.id || '');
-        const seasonName = season.season_name || season.name || '';
-        return `<option value="${escapeHtml(seasonId)}">${escapeHtml(seasonName)}</option>`;
-      }));
-      seasonEl.innerHTML = seasonOptions.join('');
-      seasonEl.value = (state.workSeasonFilter ?? 'current');
-    }
 
     const categoryOptions = ['<option value="">전체 작업분류</option>']
       .concat((state.options.task_categories || []).map(item => {
@@ -4314,67 +3883,14 @@ function filterChipOptions(type, keyword) {
     cropEl.value = state.workFilterCrop || '';
   }
 
-  function getPreferredCurrentSeason() {
-    const seasons = Array.isArray(state.seasons) ? state.seasons : [];
-    if (!seasons.length) return null;
+  function renderWorks() {
+    const wrap = el['works-list'];
+    if (!wrap) return;
 
-    const explicit = seasons.find(item => Number(item.is_current || 0) === 1);
-    if (explicit) return explicit;
-
-    const today = fmtDate(new Date());
-    const covering = seasons.find(item => {
-      const start = String(item.start_date || '');
-      const end = String(item.end_date || '');
-      return start && end && start <= today && today <= end;
-    });
-    if (covering) return covering;
-
-    return [...seasons].sort((a, b) => String(b.end_date || '').localeCompare(String(a.end_date || '')))[0] || null;
-  }
-
-  function getSeasonRangeByValue(seasonValue) {
-    const value = String(seasonValue || '').trim();
-    if (!value) return { start: '', end: '', label: '전체' };
-    let season = null;
-    if (value === 'current') {
-      season = getPreferredCurrentSeason();
-      return season ? { start: String(season.start_date || ''), end: String(season.end_date || ''), label: String(season.season_name || '현재시즌') } : { start: '', end: '', label: '현재시즌' };
-    }
-    season = (state.seasons || []).find(item => String(item.id) === value);
-    return season ? { start: String(season.start_date || ''), end: String(season.end_date || ''), label: String(season.season_name || '선택시즌') } : { start: '', end: '', label: '전체' };
-  }
-
-  function getWorkStatsRange(period) {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-
-    if (period === 'month') {
-      return {
-        start: fmtDate(new Date(year, month, 1)),
-        end: fmtDate(new Date(year, month + 1, 0))
-      };
-    }
-
-    if (period === 'year') {
-      return {
-        start: `${year}-01-01`,
-        end: `${year}-12-31`
-      };
-    }
-
-    if (period === 'season') {
-      return getSeasonRangeByValue(state.workStatsSeasonFilter === undefined ? 'current' : state.workStatsSeasonFilter);
-    }
-
-    return { start: '', end: '' };
-  }
-
-  function getFilteredWorks() {
     const q = (state.workSearchKeyword || '').trim().toLowerCase();
     const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
 
-    return works.filter(work => {
+    const filtered = works.filter(work => {
       const meta = parseMemo(work.memo);
       const text = [
         work.start_date,
@@ -4390,250 +3906,15 @@ function filterChipOptions(type, keyword) {
       ].join(' ').toLowerCase();
 
       const inKeyword = text.includes(q);
-      const seasonRange = getSeasonRangeByValue(state.workSeasonFilter === undefined ? 'current' : state.workSeasonFilter);
-      const dateValue = String(work.start_date || '');
-      const inSeason = !seasonRange.start || (dateValue >= seasonRange.start && dateValue <= seasonRange.end);
-      const inStart = !state.workFilterStartDate || dateValue >= state.workFilterStartDate;
-      const inEnd = !state.workFilterEndDate || dateValue <= state.workFilterEndDate;
+      const inStart = !state.workFilterStartDate || String(work.start_date || '') >= state.workFilterStartDate;
+      const inEnd = !state.workFilterEndDate || String(work.start_date || '') <= state.workFilterEndDate;
       const inCategory = !state.workFilterTaskCategory || String(work.task_category || '') === state.workFilterTaskCategory;
       const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
       const cropValues = splitCsv(work.crops);
       const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
 
-      return inKeyword && inSeason && inStart && inEnd && inCategory && inTask && inCrop;
+      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
     });
-  }
-
-  function getWorksForStats() {
-    const baseRows = getFilteredWorks();
-    const range = getWorkStatsRange(state.workStatsPeriod || 'all');
-    const start = String(range.start || '');
-    const end = String(range.end || '');
-
-    return baseRows.filter(work => {
-      const date = String(work.start_date || '');
-      if (start && date < start) return false;
-      if (end && date > end) return false;
-      return true;
-    });
-  }
-
-  function ensureWorksStatsPanel() {
-    const page = el['page-works'];
-    if (!page) return;
-
-    let box = page.querySelector('.works-stats-box');
-    if (!box) {
-      box = document.createElement('div');
-      box.className = 'works-stats-box panel';
-      box.style.marginBottom = '12px';
-      box.innerHTML = `
-        <div class="works-stats-header">
-          <div>
-            <div class="works-stats-title">작업 통계</div>
-            <div class="works-stats-subtitle">기간을 바꾸면 통계가 바로 갱신되고, TOP 작업을 누르면 해당 작업 목록으로 이동합니다.</div>
-          </div>
-          <div class="works-stats-period-wrap">
-            <label class="inline-help" for="works-stats-period">통계 기간</label>
-            <select id="works-stats-period">
-              <option value="season">시즌</option>
-              <option value="all">전체</option>
-              <option value="month">이번달</option>
-              <option value="year">올해</option>
-            </select>
-            <select id="works-stats-season"></select>
-          </div>
-        </div>
-        <div id="works-stats-summary" class="works-stats-summary"></div>
-        <div class="works-stats-grid">
-          <div class="works-stats-section">
-            <div class="works-stats-section-title">가장 많이 한 작업 TOP</div>
-            <div id="works-stats-top-tasks" class="works-stats-chip-list"></div>
-          </div>
-          <div class="works-stats-section">
-            <div class="works-stats-section-title">월별 작업 횟수</div>
-            <div id="works-stats-monthly" class="works-stats-month-list"></div>
-          </div>
-          <div class="works-stats-section">
-            <div class="works-stats-section-title">작업분류별 비율</div>
-            <div id="works-stats-categories" class="works-stats-category-list"></div>
-          </div>
-        </div>
-      `;
-
-      const worksList = el['works-list'];
-      if (worksList && worksList.parentNode === page) {
-        page.insertBefore(box, worksList);
-      } else {
-        page.appendChild(box);
-      }
-
-      const periodEl = box.querySelector('#works-stats-period');
-      const seasonEl = box.querySelector('#works-stats-season');
-      if (periodEl) {
-        el['works-stats-period'] = periodEl;
-        periodEl.addEventListener('change', (e) => {
-          state.workStatsPeriod = e.target.value || 'season';
-          renderWorks();
-        });
-      }
-      if (seasonEl) {
-        el['works-stats-season'] = seasonEl;
-        seasonEl.addEventListener('change', (e) => {
-          state.workStatsSeasonFilter = e.target.value;
-          renderWorks();
-        });
-      }
-    }
-
-    if (el['works-stats-period']) {
-      el['works-stats-period'].value = state.workStatsPeriod || 'season';
-    }
-    if (el['works-stats-season']) {
-      const node = el['works-stats-season'];
-      const current = (state.workStatsSeasonFilter === undefined ? 'current' : state.workStatsSeasonFilter);
-      const options = ['<option value="current">현재시즌</option>', '<option value="">전체 시즌</option>']
-        .concat((state.seasons || []).map(season => `<option value="${escapeHtml(String(season.id || ''))}">${escapeHtml(season.season_name || season.name || '')}</option>`));
-      node.innerHTML = options.join('');
-      if (Array.from(node.options).some(opt => opt.value === current)) node.value = current;
-      else node.value = 'current';
-    }
-  }
-
-  function openWorkListByTopTask(taskName) {
-    state.workFilterTaskName = String(taskName || '').trim();
-
-    const matchedWork = (state.works || []).find(item => String(item.task_name || '').trim() === state.workFilterTaskName);
-    state.workFilterTaskCategory = matchedWork ? String(matchedWork.task_category || '').trim() : '';
-
-    const range = getWorkStatsRange(state.workStatsPeriod || 'all');
-    state.workFilterStartDate = String(range.start || '');
-    state.workFilterEndDate = String(range.end || '');
-
-    renderWorksSearchFilterOptions();
-
-    if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
-    if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
-    if (el['works-filter-task-category']) el['works-filter-task-category'].value = state.workFilterTaskCategory || '';
-
-    renderWorksSearchFilterOptions();
-
-    if (el['works-filter-task-name']) el['works-filter-task-name'].value = state.workFilterTaskName || '';
-    if (el['works-stats-period']) el['works-stats-period'].value = state.workStatsPeriod || 'all';
-
-    renderWorks();
-
-    const target = el['works-list'];
-    if (target && typeof target.scrollIntoView === 'function') {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }
-
-  function renderWorksStats(filteredRows) {
-    ensureWorksStatsPanel();
-
-    const summaryEl = document.getElementById('works-stats-summary');
-    const topTasksEl = document.getElementById('works-stats-top-tasks');
-    const monthlyEl = document.getElementById('works-stats-monthly');
-    const categoriesEl = document.getElementById('works-stats-categories');
-    if (!summaryEl || !topTasksEl || !monthlyEl || !categoriesEl) return;
-
-    const rows = Array.isArray(filteredRows) ? filteredRows : [];
-    const range = getWorkStatsRange(state.workStatsPeriod || 'all');
-    const scopeText = state.workStatsPeriod === 'month'
-      ? '이번달'
-      : state.workStatsPeriod === 'year'
-        ? '올해'
-        : state.workStatsPeriod === 'season'
-          ? (range.label || '현재시즌')
-          : '전체';
-
-    const dateSet = new Set(rows.map(item => String(item.start_date || '')).filter(Boolean));
-    summaryEl.innerHTML = `
-      <div class="works-stats-card">
-        <span>통계 범위</span>
-        <strong>${escapeHtml(scopeText)}</strong>
-      </div>
-      <div class="works-stats-card">
-        <span>작업 건수</span>
-        <strong>${formatNumber(rows.length)}</strong>
-      </div>
-      <div class="works-stats-card">
-        <span>작업일 수</span>
-        <strong>${formatNumber(dateSet.size)}</strong>
-      </div>
-    `;
-
-    if (!rows.length) {
-      topTasksEl.innerHTML = `<div class="empty-msg">해당 기간 작업 없음</div>`;
-      monthlyEl.innerHTML = `<div class="empty-msg">표시할 월별 데이터 없음</div>`;
-      categoriesEl.innerHTML = `<div class="empty-msg">표시할 작업분류 데이터 없음</div>`;
-      return;
-    }
-
-    const taskMap = new Map();
-    const monthMap = new Map();
-    const categoryMap = new Map();
-
-    rows.forEach(work => {
-      const taskName = String(work.task_name || '').trim() || '미입력';
-      taskMap.set(taskName, (taskMap.get(taskName) || 0) + 1);
-
-      const monthKey = String(work.start_date || '').slice(0, 7) || '미정';
-      monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + 1);
-
-      const categoryName = String(work.task_category || '').trim() || '미분류';
-      categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + 1);
-    });
-
-    const topTasks = [...taskMap.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 8);
-
-    topTasksEl.innerHTML = topTasks.map(([name, count]) => `
-      <button type="button" class="works-stats-chip" data-stats-task="${escapeHtml(name)}">
-        <span>${escapeHtml(name)}</span>
-        <strong>${formatNumber(count)}회</strong>
-      </button>
-    `).join('');
-
-    topTasksEl.querySelectorAll('[data-stats-task]').forEach(btn => {
-      btn.addEventListener('click', () => openWorkListByTopTask(btn.dataset.statsTask || ''));
-    });
-
-    const monthlyRows = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-    monthlyEl.innerHTML = monthlyRows.map(([monthLabel, count]) => `
-      <div class="works-stats-line">
-        <span>${escapeHtml(monthLabel)}</span>
-        <strong>${formatNumber(count)}회</strong>
-      </div>
-    `).join('');
-
-    const totalCount = rows.length || 1;
-    const categoryRows = [...categoryMap.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    categoriesEl.innerHTML = categoryRows.map(([name, count]) => {
-      const percent = Math.round((count / totalCount) * 100);
-      return `
-        <div class="works-stats-category-item">
-          <div class="works-stats-category-head">
-            <span>${escapeHtml(name)}</span>
-            <strong>${formatNumber(count)}회 · ${percent}%</strong>
-          </div>
-          <div class="works-stats-bar">
-            <div class="works-stats-bar-fill" style="width:${Math.max(percent, 4)}%"></div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  function renderWorks() {
-    const wrap = el['works-list'];
-    if (!wrap) return;
-
-    const filtered = getFilteredWorks();
-    const statsRows = getWorksForStats();
-    renderWorksStats(statsRows);
 
     if (!filtered.length) {
       wrap.innerHTML = `<div class="empty-msg">작업 내역 없음</div>`;
@@ -4752,7 +4033,8 @@ function filterChipOptions(type, keyword) {
           qty: Number(item.qty || 0),
           method: item.method || '',
           installment_months: Number(item.installment_months || 0),
-          action: normalizeMaterialAction(item.action || item.behavior || item.type || '사용'),
+          material_type: item.material_type || '재고형',
+          action: item.action || '사용',
           cost_included: item.cost_included !== false
         })),
         labor_rows: laborRows,

@@ -211,6 +211,34 @@
     .page-header-actions{display:flex; gap:8px;}
 
     .works-search-box{padding:14px 16px;}
+    .works-stats-box{padding:16px;}
+    .works-stats-header{display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:14px; flex-wrap:wrap;}
+    .works-stats-title{font-size:20px; font-weight:800; color:#0f172a;}
+    .works-stats-subtitle{font-size:13px; color:#64748b; margin-top:4px; line-height:1.5;}
+    .works-stats-period-wrap{display:flex; flex-direction:column; gap:6px; min-width:180px;}
+    .works-stats-period-wrap select{width:100%;}
+    .works-stats-summary{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px;}
+    .works-stats-card{border:1px solid #dbe4f0; background:#f8fbff; border-radius:14px; padding:14px 16px;}
+    .works-stats-card span{display:block; font-size:12px; color:#64748b; margin-bottom:6px;}
+    .works-stats-card strong{font-size:22px; color:#0f172a;}
+    .works-stats-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
+    .works-stats-section{border:1px solid #e5e7eb; border-radius:14px; background:#fff; padding:14px;}
+    .works-stats-section-title{font-size:15px; font-weight:800; color:#0f172a; margin-bottom:10px;}
+    .works-stats-chip-list{display:flex; flex-wrap:wrap; gap:8px;}
+    .works-stats-chip{display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; border:1px solid #cbd5e1; background:#fff; border-radius:12px; padding:10px 12px; cursor:pointer; text-align:left;}
+    .works-stats-chip:hover{border-color:#2563eb; background:#eff6ff;}
+    .works-stats-chip span{font-size:14px; color:#0f172a;}
+    .works-stats-chip strong{font-size:13px; color:#2563eb; white-space:nowrap;}
+    .works-stats-month-list,.works-stats-category-list{display:grid; gap:10px;}
+    .works-stats-line{display:flex; justify-content:space-between; gap:10px; border-bottom:1px solid #eef2f7; padding-bottom:8px;}
+    .works-stats-line:last-child{border-bottom:0; padding-bottom:0;}
+    .works-stats-line span{color:#334155;}
+    .works-stats-line strong{color:#0f172a;}
+    .works-stats-category-item{display:grid; gap:6px;}
+    .works-stats-category-head{display:flex; justify-content:space-between; gap:10px; font-size:14px; color:#334155;}
+    .works-stats-category-head strong{white-space:nowrap; color:#0f172a;}
+    .works-stats-bar{height:10px; border-radius:999px; background:#e5e7eb; overflow:hidden;}
+    .works-stats-bar-fill{height:100%; border-radius:999px; background:#60a5fa;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
     .task-search-input{width:100%; padding:12px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:16px;}
     .task-chip-wrap, .task-option-chip-wrap{display:flex; flex-wrap:wrap; gap:8px;}
@@ -226,6 +254,8 @@
     .works-filter-grid input,.works-filter-grid select{width:100%;}
     @media (max-width: 1200px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:1fr;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
+    @media (max-width: 1200px){ .works-stats-grid{grid-template-columns:1fr;} }
+    @media (max-width: 700px){ .works-stats-summary{grid-template-columns:1fr;} .works-stats-header{flex-direction:column;} .works-stats-period-wrap{width:100%; min-width:0;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
       #page-works .page-header-actions{position:sticky; top:0; z-index:30; background:#f8fafc; padding:8px 0 10px;}
@@ -753,7 +783,7 @@
             <button id="btn-download-excel-current-season" class="btn">현재시즌 엑셀 다운로드</button>
           </div>
           <div class="inline-help" style="margin-top:12px;">
-            작업일지 / 금전내역 / 월별정산 / 시즌정산 시트가 하나의 엑셀 파일로 내려받아집니다.
+            작업일지 / 금전내역 / 월별정산 / 시즌정산 / 작업통계 시트가 하나의 엑셀 파일로 내려받아집니다.
           </div>
         </div>
       </section>

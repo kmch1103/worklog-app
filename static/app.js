@@ -27,6 +27,7 @@
     workFilterTaskCategory: '',
     workFilterTaskName: '',
     workFilterCrop: '',
+    workStatsPeriod: 'all',
     selectedMaterialsDetailed: [],
     materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
     mobileCalendarMode: 'current',
@@ -616,6 +617,7 @@
     renderOptions();
     renderMoney();
     ensureWorksSearchBar();
+    ensureWorksStatsPanel();
   }
 
   function switchPage(page, options = {}) {
@@ -649,6 +651,7 @@
     } else if (page === 'works') {
       renderWorks();
       ensureWorksSearchBar();
+      ensureWorksStatsPanel();
     } else if (page === 'materials') {
       renderMaterials();
     } else if (page === 'money') {
@@ -3858,14 +3861,44 @@ function filterChipOptions(type, keyword) {
     cropEl.value = state.workFilterCrop || '';
   }
 
-  function renderWorks() {
-    const wrap = el['works-list'];
-    if (!wrap) return;
+  function getWorkStatsRange(period) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
 
+    if (period === 'month') {
+      return {
+        start: fmtDate(new Date(year, month, 1)),
+        end: fmtDate(new Date(year, month + 1, 0))
+      };
+    }
+
+    if (period === 'year') {
+      return {
+        start: `${year}-01-01`,
+        end: `${year}-12-31`
+      };
+    }
+
+    if (period === 'season') {
+      const currentSeason = (state.seasons || []).find(item => Number(item.is_current || 0) === 1);
+      if (currentSeason && currentSeason.start_date && currentSeason.end_date) {
+        return {
+          start: String(currentSeason.start_date || ''),
+          end: String(currentSeason.end_date || ''),
+          label: String(currentSeason.season_name || '현재시즌')
+        };
+      }
+    }
+
+    return { start: '', end: '' };
+  }
+
+  function getFilteredWorks() {
     const q = (state.workSearchKeyword || '').trim().toLowerCase();
     const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
 
-    const filtered = works.filter(work => {
+    return works.filter(work => {
       const meta = parseMemo(work.memo);
       const text = [
         work.start_date,
@@ -3890,6 +3923,220 @@ function filterChipOptions(type, keyword) {
 
       return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
     });
+  }
+
+  function getWorksForStats() {
+    const baseRows = getFilteredWorks();
+    const range = getWorkStatsRange(state.workStatsPeriod || 'all');
+    const start = String(range.start || '');
+    const end = String(range.end || '');
+
+    return baseRows.filter(work => {
+      const date = String(work.start_date || '');
+      if (start && date < start) return false;
+      if (end && date > end) return false;
+      return true;
+    });
+  }
+
+  function ensureWorksStatsPanel() {
+    const page = el['page-works'];
+    if (!page) return;
+
+    let box = page.querySelector('.works-stats-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'works-stats-box panel';
+      box.style.marginBottom = '12px';
+      box.innerHTML = `
+        <div class="works-stats-header">
+          <div>
+            <div class="works-stats-title">작업 통계</div>
+            <div class="works-stats-subtitle">기간을 바꾸면 통계가 바로 갱신되고, TOP 작업을 누르면 해당 작업 목록으로 이동합니다.</div>
+          </div>
+          <div class="works-stats-period-wrap">
+            <label class="inline-help" for="works-stats-period">통계 기간</label>
+            <select id="works-stats-period">
+              <option value="all">전체</option>
+              <option value="month">이번달</option>
+              <option value="year">올해</option>
+              <option value="season">현재시즌</option>
+            </select>
+          </div>
+        </div>
+        <div id="works-stats-summary" class="works-stats-summary"></div>
+        <div class="works-stats-grid">
+          <div class="works-stats-section">
+            <div class="works-stats-section-title">가장 많이 한 작업 TOP</div>
+            <div id="works-stats-top-tasks" class="works-stats-chip-list"></div>
+          </div>
+          <div class="works-stats-section">
+            <div class="works-stats-section-title">월별 작업 횟수</div>
+            <div id="works-stats-monthly" class="works-stats-month-list"></div>
+          </div>
+          <div class="works-stats-section">
+            <div class="works-stats-section-title">작업분류별 비율</div>
+            <div id="works-stats-categories" class="works-stats-category-list"></div>
+          </div>
+        </div>
+      `;
+
+      const worksList = el['works-list'];
+      if (worksList && worksList.parentNode === page) {
+        page.insertBefore(box, worksList);
+      } else {
+        page.appendChild(box);
+      }
+
+      const periodEl = box.querySelector('#works-stats-period');
+      if (periodEl) {
+        el['works-stats-period'] = periodEl;
+        periodEl.addEventListener('change', (e) => {
+          state.workStatsPeriod = e.target.value || 'all';
+          renderWorks();
+        });
+      }
+    }
+
+    if (el['works-stats-period']) {
+      el['works-stats-period'].value = state.workStatsPeriod || 'all';
+    }
+  }
+
+  function openWorkListByTopTask(taskName) {
+    state.workFilterTaskName = String(taskName || '').trim();
+
+    const matchedWork = (state.works || []).find(item => String(item.task_name || '').trim() === state.workFilterTaskName);
+    state.workFilterTaskCategory = matchedWork ? String(matchedWork.task_category || '').trim() : '';
+
+    const range = getWorkStatsRange(state.workStatsPeriod || 'all');
+    state.workFilterStartDate = String(range.start || '');
+    state.workFilterEndDate = String(range.end || '');
+
+    renderWorksSearchFilterOptions();
+
+    if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
+    if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
+    if (el['works-filter-task-category']) el['works-filter-task-category'].value = state.workFilterTaskCategory || '';
+
+    renderWorksSearchFilterOptions();
+
+    if (el['works-filter-task-name']) el['works-filter-task-name'].value = state.workFilterTaskName || '';
+    if (el['works-stats-period']) el['works-stats-period'].value = state.workStatsPeriod || 'all';
+
+    renderWorks();
+
+    const target = el['works-list'];
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function renderWorksStats(filteredRows) {
+    ensureWorksStatsPanel();
+
+    const summaryEl = document.getElementById('works-stats-summary');
+    const topTasksEl = document.getElementById('works-stats-top-tasks');
+    const monthlyEl = document.getElementById('works-stats-monthly');
+    const categoriesEl = document.getElementById('works-stats-categories');
+    if (!summaryEl || !topTasksEl || !monthlyEl || !categoriesEl) return;
+
+    const rows = Array.isArray(filteredRows) ? filteredRows : [];
+    const range = getWorkStatsRange(state.workStatsPeriod || 'all');
+    const scopeText = state.workStatsPeriod === 'month'
+      ? '이번달'
+      : state.workStatsPeriod === 'year'
+        ? '올해'
+        : state.workStatsPeriod === 'season'
+          ? (range.label || '현재시즌')
+          : '전체';
+
+    const dateSet = new Set(rows.map(item => String(item.start_date || '')).filter(Boolean));
+    summaryEl.innerHTML = `
+      <div class="works-stats-card">
+        <span>통계 범위</span>
+        <strong>${escapeHtml(scopeText)}</strong>
+      </div>
+      <div class="works-stats-card">
+        <span>작업 건수</span>
+        <strong>${formatNumber(rows.length)}</strong>
+      </div>
+      <div class="works-stats-card">
+        <span>작업일 수</span>
+        <strong>${formatNumber(dateSet.size)}</strong>
+      </div>
+    `;
+
+    if (!rows.length) {
+      topTasksEl.innerHTML = `<div class="empty-msg">해당 기간 작업 없음</div>`;
+      monthlyEl.innerHTML = `<div class="empty-msg">표시할 월별 데이터 없음</div>`;
+      categoriesEl.innerHTML = `<div class="empty-msg">표시할 작업분류 데이터 없음</div>`;
+      return;
+    }
+
+    const taskMap = new Map();
+    const monthMap = new Map();
+    const categoryMap = new Map();
+
+    rows.forEach(work => {
+      const taskName = String(work.task_name || '').trim() || '미입력';
+      taskMap.set(taskName, (taskMap.get(taskName) || 0) + 1);
+
+      const monthKey = String(work.start_date || '').slice(0, 7) || '미정';
+      monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + 1);
+
+      const categoryName = String(work.task_category || '').trim() || '미분류';
+      categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + 1);
+    });
+
+    const topTasks = [...taskMap.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 8);
+
+    topTasksEl.innerHTML = topTasks.map(([name, count]) => `
+      <button type="button" class="works-stats-chip" data-stats-task="${escapeHtml(name)}">
+        <span>${escapeHtml(name)}</span>
+        <strong>${formatNumber(count)}회</strong>
+      </button>
+    `).join('');
+
+    topTasksEl.querySelectorAll('[data-stats-task]').forEach(btn => {
+      btn.addEventListener('click', () => openWorkListByTopTask(btn.dataset.statsTask || ''));
+    });
+
+    const monthlyRows = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    monthlyEl.innerHTML = monthlyRows.map(([monthLabel, count]) => `
+      <div class="works-stats-line">
+        <span>${escapeHtml(monthLabel)}</span>
+        <strong>${formatNumber(count)}회</strong>
+      </div>
+    `).join('');
+
+    const totalCount = rows.length || 1;
+    const categoryRows = [...categoryMap.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    categoriesEl.innerHTML = categoryRows.map(([name, count]) => {
+      const percent = Math.round((count / totalCount) * 100);
+      return `
+        <div class="works-stats-category-item">
+          <div class="works-stats-category-head">
+            <span>${escapeHtml(name)}</span>
+            <strong>${formatNumber(count)}회 · ${percent}%</strong>
+          </div>
+          <div class="works-stats-bar">
+            <div class="works-stats-bar-fill" style="width:${Math.max(percent, 4)}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderWorks() {
+    const wrap = el['works-list'];
+    if (!wrap) return;
+
+    const filtered = getFilteredWorks();
+    const statsRows = getWorksForStats();
+    renderWorksStats(statsRows);
 
     if (!filtered.length) {
       wrap.innerHTML = `<div class="empty-msg">작업 내역 없음</div>`;

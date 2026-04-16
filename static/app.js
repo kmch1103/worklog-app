@@ -37,8 +37,7 @@
     editingSeasonId: null,
     editingTaskOptionId: null,
     editingIncomeId: null,
-    seasonPanelCollapsed: true,
-    worksStatsCollapsed: false
+    seasonPanelCollapsed: true
   };
 
   const el = {};
@@ -610,7 +609,6 @@
     renderOptions();
     renderMoney();
     ensureWorksSearchBar();
-    ensureWorksStatsPanel();
   }
 
   function switchPage(page, options = {}) {
@@ -644,7 +642,6 @@
     } else if (page === 'works') {
       renderWorks();
       ensureWorksSearchBar();
-      ensureWorksStatsPanel();
     } else if (page === 'materials') {
       renderMaterials();
     } else if (page === 'money') {
@@ -3742,224 +3739,6 @@ function filterChipOptions(type, keyword) {
     if (searchInput) searchInput.value = state.workSearchKeyword || '';
   }
 
-  function ensureWorksStatsPanel() {
-    const page = el['page-works'];
-    if (!page) return;
-
-    let panel = page.querySelector('.works-stats-panel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.className = 'works-stats-panel panel';
-      panel.style.marginBottom = '12px';
-      panel.innerHTML = `
-        <div class="works-stats-header">
-          <div>
-            <div class="works-stats-title">작업 통계</div>
-            <div class="works-stats-subtitle">현재 작업일지 필터 결과 기준</div>
-          </div>
-          <button type="button" class="btn" id="btn-toggle-works-stats">접기</button>
-        </div>
-        <div class="works-stats-body">
-          <div id="works-stats-summary" class="works-stats-summary"></div>
-          <div class="works-stats-grid">
-            <div class="works-stats-block">
-              <div class="works-stats-block-title">가장 많이 한 작업 TOP</div>
-              <div id="works-stats-top-tasks"></div>
-            </div>
-            <div class="works-stats-block">
-              <div class="works-stats-block-title">월별 작업 횟수</div>
-              <div id="works-stats-monthly"></div>
-            </div>
-            <div class="works-stats-block">
-              <div class="works-stats-block-title">작업분류별 비율</div>
-              <div id="works-stats-category-ratio"></div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      const searchBox = page.querySelector('.works-search-box');
-      const worksList = el['works-list'];
-      if (searchBox && searchBox.parentNode === page) {
-        page.insertBefore(panel, searchBox.nextSibling);
-      } else if (worksList && worksList.parentNode === page) {
-        page.insertBefore(panel, worksList);
-      } else {
-        page.appendChild(panel);
-      }
-
-      el['btn-toggle-works-stats'] = panel.querySelector('#btn-toggle-works-stats');
-      el['works-stats-summary'] = panel.querySelector('#works-stats-summary');
-      el['works-stats-top-tasks'] = panel.querySelector('#works-stats-top-tasks');
-      el['works-stats-monthly'] = panel.querySelector('#works-stats-monthly');
-      el['works-stats-category-ratio'] = panel.querySelector('#works-stats-category-ratio');
-
-      el['btn-toggle-works-stats'].addEventListener('click', () => {
-        state.worksStatsCollapsed = !state.worksStatsCollapsed;
-        renderWorksStatsPanel(getFilteredWorks());
-      });
-    }
-
-    renderWorksStatsPanel(getFilteredWorks());
-  }
-
-  function getFilteredWorks() {
-    const q = (state.workSearchKeyword || '').trim().toLowerCase();
-    const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
-
-    return works.filter(work => {
-      const meta = parseMemo(work.memo);
-      const text = [
-        work.start_date,
-        work.end_date,
-        work.weather,
-        work.task_category,
-        work.task_name,
-        work.crops,
-        work.pests,
-        work.machines,
-        meta.memo_text,
-        (meta.materials || []).map(m => `${m.name || ''} ${m.qty || ''} ${m.unit || ''}`).join(' ')
-      ].join(' ').toLowerCase();
-
-      const inKeyword = text.includes(q);
-      const inStart = !state.workFilterStartDate || String(work.start_date || '') >= state.workFilterStartDate;
-      const inEnd = !state.workFilterEndDate || String(work.start_date || '') <= state.workFilterEndDate;
-      const inCategory = !state.workFilterTaskCategory || String(work.task_category || '') === state.workFilterTaskCategory;
-      const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
-      const cropValues = splitCsv(work.crops);
-      const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
-
-      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
-    });
-  }
-
-  function buildWorkStats(filteredWorks) {
-    const rows = Array.isArray(filteredWorks) ? filteredWorks : [];
-    const totalCount = rows.length;
-    const dateSet = new Set();
-    const taskMap = new Map();
-    const monthMap = new Map();
-    const categoryMap = new Map();
-
-    rows.forEach(work => {
-      const startDate = String(work.start_date || '').trim();
-      const taskName = String(work.task_name || '').trim() || '미입력';
-      const categoryName = String(work.task_category || '').trim() || '미분류';
-      if (startDate) dateSet.add(startDate);
-      taskMap.set(taskName, (taskMap.get(taskName) || 0) + 1);
-      categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + 1);
-      if (startDate.length >= 7) {
-        const monthKey = startDate.slice(0, 7);
-        monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + 1);
-      }
-    });
-
-    const topTasks = Array.from(taskMap.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-
-    const monthlyCounts = Array.from(monthMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, count]) => ({ month, count }));
-
-    const categoryRatios = Array.from(categoryMap.entries())
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([name, count]) => ({
-        name,
-        count,
-        ratio: totalCount > 0 ? Math.round((count / totalCount) * 1000) / 10 : 0
-      }));
-
-    return {
-      totalCount,
-      totalDates: dateSet.size,
-      topTasks,
-      monthlyCounts,
-      categoryRatios
-    };
-  }
-
-  function renderWorksStatsPanel(filteredWorks) {
-    const panel = document.querySelector('#page-works .works-stats-panel');
-    if (!panel) return;
-
-    const body = panel.querySelector('.works-stats-body');
-    const toggleBtn = el['btn-toggle-works-stats'];
-    if (body) body.style.display = state.worksStatsCollapsed ? 'none' : '';
-    if (toggleBtn) toggleBtn.textContent = state.worksStatsCollapsed ? '펼치기' : '접기';
-
-    const stats = buildWorkStats(filteredWorks);
-    const topMax = Math.max(1, ...stats.topTasks.map(item => item.count), 1);
-    const monthMax = Math.max(1, ...stats.monthlyCounts.map(item => item.count), 1);
-
-    if (el['works-stats-summary']) {
-      el['works-stats-summary'].innerHTML = `
-        <div class="works-stat-card">
-          <div class="works-stat-card-label">작업 건수</div>
-          <div class="works-stat-card-value">${escapeHtml(String(stats.totalCount))}</div>
-        </div>
-        <div class="works-stat-card">
-          <div class="works-stat-card-label">작업 일수</div>
-          <div class="works-stat-card-value">${escapeHtml(String(stats.totalDates))}</div>
-        </div>
-        <div class="works-stat-card">
-          <div class="works-stat-card-label">작업분류 수</div>
-          <div class="works-stat-card-value">${escapeHtml(String(stats.categoryRatios.length))}</div>
-        </div>
-      `;
-    }
-
-    if (el['works-stats-top-tasks']) {
-      if (!stats.topTasks.length) {
-        el['works-stats-top-tasks'].innerHTML = '<div class="empty-msg">표시할 작업이 없습니다.</div>';
-      } else {
-        el['works-stats-top-tasks'].innerHTML = stats.topTasks.map((item, index) => `
-          <div class="works-stat-row">
-            <div class="works-stat-row-head">
-              <strong>${index + 1}. ${escapeHtml(item.name)}</strong>
-              <span>${item.count}회</span>
-            </div>
-            <div class="works-stat-bar"><div class="works-stat-bar-fill" style="width:${Math.max(8, Math.round((item.count / topMax) * 100))}%"></div></div>
-          </div>
-        `).join('');
-      }
-    }
-
-    if (el['works-stats-monthly']) {
-      if (!stats.monthlyCounts.length) {
-        el['works-stats-monthly'].innerHTML = '<div class="empty-msg">월별 데이터가 없습니다.</div>';
-      } else {
-        el['works-stats-monthly'].innerHTML = stats.monthlyCounts.map(item => `
-          <div class="works-stat-row">
-            <div class="works-stat-row-head">
-              <strong>${escapeHtml(item.month)}</strong>
-              <span>${item.count}건</span>
-            </div>
-            <div class="works-stat-bar"><div class="works-stat-bar-fill alt" style="width:${Math.max(8, Math.round((item.count / monthMax) * 100))}%"></div></div>
-          </div>
-        `).join('');
-      }
-    }
-
-    if (el['works-stats-category-ratio']) {
-      if (!stats.categoryRatios.length) {
-        el['works-stats-category-ratio'].innerHTML = '<div class="empty-msg">작업분류 데이터가 없습니다.</div>';
-      } else {
-        el['works-stats-category-ratio'].innerHTML = stats.categoryRatios.map(item => `
-          <div class="works-stat-row">
-            <div class="works-stat-row-head">
-              <strong>${escapeHtml(item.name)}</strong>
-              <span>${item.ratio}% · ${item.count}건</span>
-            </div>
-            <div class="works-stat-bar"><div class="works-stat-bar-fill soft" style="width:${Math.max(8, Math.round(item.ratio))}%"></div></div>
-          </div>
-        `).join('');
-      }
-    }
-  }
-
   function renderWorksSearchFilterOptions() {
     const categoryEl = el['works-filter-task-category'];
     const taskEl = el['works-filter-task-name'];
@@ -4000,8 +3779,34 @@ function filterChipOptions(type, keyword) {
     const wrap = el['works-list'];
     if (!wrap) return;
 
-    const filtered = getFilteredWorks();
-    renderWorksStatsPanel(filtered);
+    const q = (state.workSearchKeyword || '').trim().toLowerCase();
+    const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
+
+    const filtered = works.filter(work => {
+      const meta = parseMemo(work.memo);
+      const text = [
+        work.start_date,
+        work.end_date,
+        work.weather,
+        work.task_category,
+        work.task_name,
+        work.crops,
+        work.pests,
+        work.machines,
+        meta.memo_text,
+        (meta.materials || []).map(m => `${m.name || ''} ${m.qty || ''} ${m.unit || ''}`).join(' ')
+      ].join(' ').toLowerCase();
+
+      const inKeyword = text.includes(q);
+      const inStart = !state.workFilterStartDate || String(work.start_date || '') >= state.workFilterStartDate;
+      const inEnd = !state.workFilterEndDate || String(work.start_date || '') <= state.workFilterEndDate;
+      const inCategory = !state.workFilterTaskCategory || String(work.task_category || '') === state.workFilterTaskCategory;
+      const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
+      const cropValues = splitCsv(work.crops);
+      const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
+
+      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
+    });
 
     if (!filtered.length) {
       wrap.innerHTML = `<div class="empty-msg">작업 내역 없음</div>`;

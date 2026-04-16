@@ -345,12 +345,28 @@ def current_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def get_preferred_current_season(conn):
+    row = conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY id DESC LIMIT 1").fetchone()
+    if row:
+        return row
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    row = conn.execute(
+        "SELECT * FROM seasons WHERE start_date <= ? AND end_date >= ? ORDER BY start_date DESC, id DESC LIMIT 1",
+        (today, today)
+    ).fetchone()
+    if row:
+        return row
+
+    return conn.execute("SELECT * FROM seasons ORDER BY end_date DESC, start_date DESC, id DESC LIMIT 1").fetchone()
+
+
 def get_season_row(conn, season_id):
     if season_id in (None, '', 'all'):
         return None
 
     if season_id == 'current':
-        return conn.execute("SELECT * FROM seasons WHERE is_current = 1 ORDER BY id DESC LIMIT 1").fetchone()
+        return get_preferred_current_season(conn)
 
     try:
         sid = int(season_id)
@@ -1197,10 +1213,62 @@ def backup_season(season_id):
     return jsonify(payload)
 
 
-@app.route("/api/backup/auto", methods=["POST"])
-def auto_backup_db():
+def ensure_backup_dir():
     backup_dir = os.path.join(app.root_path, "backups")
     os.makedirs(backup_dir, exist_ok=True)
+    return backup_dir
+
+
+def list_backup_files():
+    backup_dir = ensure_backup_dir()
+    rows = []
+    for name in sorted(os.listdir(backup_dir), reverse=True):
+        path = os.path.join(backup_dir, name)
+        if not os.path.isfile(path):
+            continue
+        size = os.path.getsize(path)
+        modified = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
+        rows.append({
+            "name": name,
+            "size": size,
+            "size_text": f"{round(size / 1024, 1)} KB" if size < 1024 * 1024 else f"{round(size / (1024 * 1024), 2)} MB",
+            "modified_at": modified
+        })
+    return rows
+
+
+@app.route("/api/backups", methods=["GET"])
+def get_backups():
+    return jsonify(list_backup_files())
+
+
+@app.route("/api/backups/<path:filename>", methods=["GET"])
+def download_backup_file(filename):
+    safe_name = os.path.basename(filename)
+    backup_dir = ensure_backup_dir()
+    backup_path = os.path.join(backup_dir, safe_name)
+    if not os.path.exists(backup_path) or not os.path.isfile(backup_path):
+        return jsonify({"ok": False, "error": "backup file not found"}), 404
+    return send_file(backup_path, as_attachment=True, download_name=safe_name)
+
+
+@app.route("/api/backup/manual", methods=["POST"])
+def manual_backup_db():
+    backup_dir = ensure_backup_dir()
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"worklog_manual_{stamp}.db"
+    backup_path = os.path.join(backup_dir, backup_name)
+
+    try:
+        shutil.copy2(DB, backup_path)
+        return jsonify({"ok": True, "backup_file": backup_name})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backup/auto", methods=["POST"])
+def auto_backup_db():
+    backup_dir = ensure_backup_dir()
 
     stamp = datetime.now().strftime("%Y%m%d")
     backup_name = f"worklog_auto_{stamp}.db"

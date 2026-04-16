@@ -791,6 +791,14 @@
       <section id="page-backup" class="page">
         <div class="page-header"><h2>백업</h2></div>
         <div class="inline-help" style="margin-bottom:12px;">앱 접속 시 하루 1회 자동백업이 실행됩니다. 아래 가져오기 기능은 그대로 사용할 수 있습니다.</div>
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="page-header-actions">
+            <button id="btn-create-backup-now" class="btn primary">지금 백업 만들기</button>
+          </div>
+          <div class="inline-help" style="margin-top:10px;">자동백업 파일은 서버의 worklog-app/backups 폴더에 저장되며, 아래 목록에서 바로 다운로드할 수 있습니다.</div>
+          <div id="backup-file-list" style="margin-top:12px;"></div>
+          <div id="backup-empty" class="empty-msg">아직 생성된 백업 파일이 없습니다.</div>
+        </div>
         <div class="panel">
           <div class="field">
             <span>기존 worklog.db 가져오기</span>

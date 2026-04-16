@@ -42,7 +42,8 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    lowStockItems: []
+    lowStockItems: [],
+    backupFiles: []
   };
 
   const el = {};
@@ -60,12 +61,14 @@
     bindIncomeButtons();
     bindOptionButtons();
     bindExcelButtons();
+    bindBackupButtons();
     bindCalendarDetailModal();
 
     bindHistoryNavigation();
 
     await loadAll();
     await loadMoney();
+    await loadBackupFiles();
     renderAll();
     await runAutoBackupIfNeeded();
     renderLowStockBanner();
@@ -131,7 +134,8 @@
 
       'money-start','money-end','money-period-filter','money-season-filter','money-type-filter','money-method-filter','money-keyword-filter',
       'btn-money-filter','money-list','money-total','money-income-total','money-net-profit','money-cash','money-transfer','money-card-lump','money-card-install','money-credit','money-credit-list','money-scope-label','money-scope-month-count','money-scope-row-count','money-monthly-list','money-monthly-empty','btn-open-income-modal','income-modal','income-modal-title','btn-close-income-modal','btn-cancel-income','btn-save-income','income_date','income_type','income_amount','income_method','income_note',
-      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season'
+      'task-option-modal','task-option-modal-title','btn-close-task-option-modal','btn-cancel-task-option','btn-save-task-option','edit-task-category','edit-task-name','btn-download-excel-all','btn-download-excel-current-season',
+      'backup-file-input','btn-import-old-db','backup-import-status','btn-create-backup-now','backup-file-list','backup-empty'
     ];
 
     ids.forEach(id => {
@@ -425,6 +429,90 @@
   }
 
 
+
+  function bindBackupButtons() {
+    on(el['btn-import-old-db'], 'click', importOldDbFile);
+    on(el['btn-create-backup-now'], 'click', createBackupNow);
+  }
+
+  async function importOldDbFile() {
+    const input = el['backup-file-input'];
+    const statusNode = el['backup-import-status'];
+    const file = input?.files?.[0];
+    if (!file) {
+      alert('가져올 DB 파일을 선택하세요.');
+      return;
+    }
+
+    const form = new FormData();
+    form.append('file', file);
+    if (statusNode) statusNode.textContent = '기존 DB 가져오는 중...';
+
+    try {
+      const res = await fetch('/api/import_old_db', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || '기존 DB 가져오기에 실패했습니다.');
+      }
+      if (statusNode) statusNode.textContent = '기존 DB 가져오기가 완료되었습니다.';
+      await loadAll();
+      await loadMoney();
+      await loadBackupFiles();
+      renderAll();
+      alert('기존 DB를 가져왔습니다.');
+    } catch (e) {
+      console.error(e);
+      if (statusNode) statusNode.textContent = `가져오기 실패: ${e.message || e}`;
+      alert(`기존 DB 가져오기 실패: ${e.message || e}`);
+    }
+  }
+
+  async function createBackupNow() {
+    try {
+      const result = await apiPost('/api/backup/manual', {});
+      await loadBackupFiles();
+      renderBackupFiles();
+      alert(`백업을 만들었습니다. (${result.backup_file || ''})`);
+    } catch (e) {
+      console.error(e);
+      alert(`백업 생성 실패: ${e.message || e}`);
+    }
+  }
+
+  async function loadBackupFiles() {
+    try {
+      state.backupFiles = await apiGet('/api/backups');
+    } catch (e) {
+      console.error(e);
+      state.backupFiles = [];
+    }
+  }
+
+  function renderBackupFiles() {
+    const listNode = el['backup-file-list'];
+    const emptyNode = el['backup-empty'];
+    if (!listNode) return;
+
+    const files = Array.isArray(state.backupFiles) ? state.backupFiles : [];
+    if (!files.length) {
+      listNode.innerHTML = '';
+      if (emptyNode) emptyNode.classList.remove('hidden');
+      return;
+    }
+
+    if (emptyNode) emptyNode.classList.add('hidden');
+    listNode.innerHTML = files.map(file => `
+      <div class="day-item">
+        <div><strong>${escapeHtml(file.name || '')}</strong></div>
+        <div>생성시각: ${escapeHtml(file.modified_at || '')}</div>
+        <div>크기: ${escapeHtml(file.size_text || '')}</div>
+        <div class="item-actions">
+          <a class="btn" href="/api/backups/${encodeURIComponent(file.name || '')}" download>다운로드</a>
+        </div>
+      </div>
+    `).join('');
+  }
+
   function bindExcelButtons() {
     on(el['btn-download-excel-all'], 'click', () => {
       window.location.href = '/api/export_excel';
@@ -620,6 +708,7 @@
     renderLowStockBanner();
     renderOptions();
     renderMoney();
+    renderBackupFiles();
     ensureWorksSearchBar();
     ensureWorksStatsPanel();
   }
@@ -2415,7 +2504,7 @@ function filterChipOptions(type, keyword) {
       el['season-panel-toggle-text'].textContent = state.seasonPanelCollapsed ? '펼치기' : '접기';
     }
     if (el['season-panel-summary']) {
-      const currentSeason = (state.seasons || []).find(season => Number(season.is_current || 0) === 1);
+      const currentSeason = getPreferredCurrentSeason();
       const total = (state.seasons || []).length;
       if (currentSeason) {
         el['season-panel-summary'].textContent = `현재시즌: ${currentSeason.season_name || currentSeason.name || ''} · 등록 ${total}개`;
@@ -3917,7 +4006,7 @@ function filterChipOptions(type, keyword) {
     if (!value) return { start: '', end: '', label: '전체' };
     let season = null;
     if (value === 'current') {
-      season = (state.seasons || []).find(item => Number(item.is_current || 0) === 1);
+      season = getPreferredCurrentSeason();
       return season ? { start: String(season.start_date || ''), end: String(season.end_date || ''), label: String(season.season_name || '현재시즌') } : { start: '', end: '', label: '현재시즌' };
     }
     season = (state.seasons || []).find(item => String(item.id) === value);

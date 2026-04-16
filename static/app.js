@@ -124,7 +124,7 @@
       'material-search-input','material-search-results','default-material-method','btn-apply-material-method','selected-materials-detailed',
       'task-name-search','btn-clear-task-name','task-name-datalist','recent-task-picks','task-name-options','task-recommend-wrap','task-recommend-box','task-material-recommend-wrap','task-material-recommend-box','pest-search-input','recent-material-picks',
 
-      'recommended-materials-wrap','recommended-materials-box','material-list-search',
+      'recommended-materials-wrap','recommended-materials-box','pest-recent-material-wrap','pest-recent-material-box','material-list-search',
 
       'season-panel','season-panel-header','btn-toggle-season-panel','season-panel-toggle-text','season-panel-summary','season-panel-body',
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
@@ -1719,31 +1719,103 @@ function getRecentWorkQuickLabel(work) {
   return task || category || '최근 작업';
 }
 
+function getCurrentAssistTaskContext() {
+  return {
+    category: String(el.task_category?.value || '').trim(),
+    task: String(el.task_name?.value || el['task-name-search']?.value || '').trim(),
+    pests: getSelectedChipValues('pests')
+  };
+}
+
+function getSimilarWorkAssistRows(categoryName = '', taskName = '') {
+  const category = String(categoryName || '').trim();
+  const task = String(taskName || '').trim();
+  let rows = Array.isArray(state.works) ? [...state.works] : [];
+  if (task) {
+    rows = rows.filter(work => String(work.task_name || '').trim() === task);
+  } else if (category) {
+    rows = rows.filter(work => String(work.task_category || '').trim() === category);
+  } else {
+    return [];
+  }
+  return rows
+    .filter(work => !state.editingWorkId || String(work.id) !== String(state.editingWorkId))
+    .sort((a, b) => {
+      const ad = String(a.start_date || '');
+      const bd = String(b.start_date || '');
+      if (bd !== ad) return bd.localeCompare(ad);
+      return Number(b.id || 0) - Number(a.id || 0);
+    })
+    .slice(0, 5);
+}
+
+function getAssistWorkButtonLabel(work) {
+  const date = String(work?.start_date || '').trim();
+  const meta = parseMemo(work?.memo);
+  const materials = Array.isArray(meta.materials) ? meta.materials : [];
+  const firstMaterial = materials.length ? String(materials[0].name || '').trim() : '';
+  if (firstMaterial) return `${date} · ${firstMaterial}`;
+  return date || getRecentWorkQuickLabel(work);
+}
+
 function renderRecentTaskPicks() {
   const box = el['recent-task-picks'];
   if (!box) return;
 
   const rows = getRecentWorkQuickRows();
-  if (!rows.length) {
+  const ctx = getCurrentAssistTaskContext();
+  const similarRows = getSimilarWorkAssistRows(ctx.category, ctx.task);
+
+  if (!rows.length && !similarRows.length) {
     box.innerHTML = '';
     box.classList.add('hidden');
     return;
   }
 
+  const sections = [];
+
+  if (rows.length) {
+    sections.push(`
+      <div class="task-quick-section">
+        <div class="task-quick-section-title">최근 작업 빠른불러오기</div>
+        <div class="task-chip-wrap">
+          ${rows.map(work => `
+            <button type="button" class="quick-pick-chip" data-recent-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(String(work.start_date || ''))}">
+              ${escapeHtml(getRecentWorkQuickLabel(work))}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `);
+  }
+
+  if (similarRows.length) {
+    const title = ctx.task
+      ? `같은 세부작업 최근기록 · ${escapeHtml(ctx.task)}`
+      : `같은 작업분류 최근기록 · ${escapeHtml(ctx.category)}`;
+    sections.push(`
+      <div class="task-quick-section">
+        <div class="task-quick-section-title">${title}</div>
+        <div class="task-chip-wrap">
+          ${similarRows.map(work => `
+            <button type="button" class="quick-pick-chip" data-assist-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(getRecentWorkQuickLabel(work))}">
+              ${escapeHtml(getAssistWorkButtonLabel(work))}
+            </button>
+          `).join('')}
+        </div>
+        <div class="inline-help">눌러서 시간, 메모, 자재를 빠르게 불러옵니다.</div>
+      </div>
+    `);
+  }
+
   box.classList.remove('hidden');
-  box.innerHTML = `
-    <div class="task-quick-section-title">최근 작업 빠른불러오기</div>
-    <div class="task-chip-wrap">
-      ${rows.map(work => `
-        <button type="button" class="quick-pick-chip" data-recent-work-id="${escapeHtml(String(work.id || ''))}" title="${escapeHtml(String(work.start_date || ''))}">
-          ${escapeHtml(getRecentWorkQuickLabel(work))}
-        </button>
-      `).join('')}
-    </div>
-  `;
+  box.innerHTML = sections.join('');
 
   box.querySelectorAll('[data-recent-work-id]').forEach(btn => {
     btn.addEventListener('click', () => applyRecentWorkQuickPick(btn.dataset.recentWorkId || ''));
+  });
+  box.querySelectorAll('[data-assist-work-id]').forEach(btn => {
+    btn.addEventListener('click', () => applyAssistWorkQuickFill(btn.dataset.assistWorkId || ''));
   });
 }
 
@@ -1784,6 +1856,53 @@ function applyRecentWorkQuickPick(workId) {
   showFavoriteWorkStatus(`최근 작업 불러옴: ${getRecentWorkQuickLabel(work)}`);
 }
 
+function applyAssistWorkQuickFill(workId) {
+  const work = (state.works || []).find(item => String(item.id) === String(workId));
+  if (!work) {
+    alert('불러올 추천 작업을 찾지 못했습니다.');
+    return;
+  }
+
+  const meta = parseMemo(work.memo);
+  if (el.start_time) el.start_time.value = meta.start_time || '';
+  if (el.end_time) el.end_time.value = meta.end_time || '';
+  if (el.work_hours) el.work_hours.value = work.work_hours || meta.work_hours || 0;
+  if (el.memo) {
+    const nextMemo = String(meta.memo_text || '').trim();
+    if (nextMemo) {
+      const currentMemo = String(el.memo.value || '').trim();
+      el.memo.value = currentMemo ? `${currentMemo}
+${nextMemo}` : nextMemo;
+    }
+  }
+
+  const materials = Array.isArray(meta.materials) ? meta.materials : [];
+  materials.forEach(item => {
+    const name = String(item.name || '').trim();
+    if (!name) return;
+    const exists = state.selectedMaterialsDetailed.find(m => String(m.name || '').trim() === name);
+    if (exists) {
+      if (!(Number(exists.qty || 0) > 0) && Number(item.qty || 0) > 0) exists.qty = Number(item.qty || 0);
+      if (!exists.method && item.method) exists.method = item.method;
+      return;
+    }
+    state.selectedMaterialsDetailed.push({
+      id: item.id || '',
+      name,
+      unit: item.unit || '',
+      price: Number(item.price || item.unit_price || 0),
+      qty: Number(item.qty || 1) || 1,
+      method: item.method || getDefaultMaterialMethod(),
+      installment_months: Number(item.installment_months || 0)
+    });
+  });
+
+  renderSelectedMaterialsDetailed();
+  syncWorkTimeFields('time');
+  updateMoneySummary();
+  showFavoriteWorkStatus(`추천 작업 적용: ${getRecentWorkQuickLabel(work)}`);
+}
+
 function addRecentMaterialByName(name) {
   const target = String(name || '').trim().toLowerCase();
   if (!target) return;
@@ -1808,6 +1927,7 @@ function clearTaskSelection() {
   renderTaskQuickOptions(currentCategory, '');
   renderTaskCategoryRecommendations(currentCategory);
   renderTaskMaterialRecommendations('');
+  renderRecentTaskPicks();
 }
 
 function syncTaskNameDatalist(categoryName = '') {
@@ -1849,6 +1969,7 @@ function selectTaskNameValue(value, syncSearch = false) {
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
   renderTaskMaterialRecommendations(target);
+  renderRecentTaskPicks();
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -1929,6 +2050,7 @@ function syncTaskNameSearchToSelect(keyword) {
     selectTaskNameValue(q, false);
   }
   renderTaskQuickOptions(el.task_category?.value || '', q);
+  renderRecentTaskPicks();
 }
 
 
@@ -2126,6 +2248,7 @@ function filterChipOptions(type, keyword) {
 
         if (type === 'pests') {
           renderRecommendedMaterials();
+          renderRecentTaskPicks();
         }
       });
     });
@@ -2135,6 +2258,7 @@ function filterChipOptions(type, keyword) {
         input.closest('.chip')?.classList.toggle('active', input.checked);
         if (type === 'pests') {
           renderRecommendedMaterials();
+          renderRecentTaskPicks();
         }
       });
     });
@@ -2149,6 +2273,7 @@ function filterChipOptions(type, keyword) {
     box.querySelectorAll('.chip').forEach(chip => {
       chip.classList.remove('active');
     });
+    if (type === 'pests') renderPestRecentMaterialRecommendations();
   }
 
   function setChipSelections(type, values) {
@@ -2160,6 +2285,7 @@ function filterChipOptions(type, keyword) {
       input.checked = valueSet.has(input.value);
       input.closest('.chip')?.classList.toggle('active', input.checked);
     });
+    if (type === 'pests') renderPestRecentMaterialRecommendations();
   }
 
   function getLaborTotal() {
@@ -2475,6 +2601,55 @@ function filterChipOptions(type, keyword) {
     });
   }
 
+  function getPestRecentMaterialRecommendationNames(selectedPests = []) {
+    const names = Array.isArray(selectedPests) ? selectedPests.map(v => String(v || '').trim()).filter(Boolean) : [];
+    if (!names.length) return [];
+
+    const scoreMap = new Map();
+    (state.works || []).forEach(work => {
+      const workPests = splitCsv(work.pests);
+      if (!workPests.some(name => names.includes(name))) return;
+      const meta = parseMemo(work.memo);
+      const materials = Array.isArray(meta.materials) ? meta.materials : [];
+      materials.forEach(item => {
+        const materialName = String(item.name || '').trim();
+        if (!materialName) return;
+        scoreMap.set(materialName, (scoreMap.get(materialName) || 0) + (Number(item.qty || 0) || 1));
+      });
+    });
+
+    return Array.from(scoreMap.entries())
+      .sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return a[0].localeCompare(b[0], 'ko');
+      })
+      .map(([name]) => name)
+      .slice(0, 8);
+  }
+
+  function renderPestRecentMaterialRecommendations() {
+    const wrap = el['pest-recent-material-wrap'];
+    const box = el['pest-recent-material-box'];
+    if (!wrap || !box) return;
+
+    const selectedPests = getSelectedChipValues('pests');
+    const names = getPestRecentMaterialRecommendationNames(selectedPests);
+    if (!selectedPests.length || !names.length) {
+      wrap.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+
+    wrap.classList.remove('hidden');
+    box.innerHTML = names.map(name => `
+      <button type="button" class="search-result-item" data-pest-recent-material="${escapeHtml(name)}">${escapeHtml(name)}</button>
+    `).join('');
+
+    box.querySelectorAll('[data-pest-recent-material]').forEach(btn => {
+      btn.addEventListener('click', () => addRecommendedMaterialName(btn.dataset.pestRecentMaterial || ''));
+    });
+  }
+
   function renderRecommendedMaterials() {
     const wrap = el['recommended-materials-wrap'];
     const box = el['recommended-materials-box'];
@@ -2494,6 +2669,7 @@ function filterChipOptions(type, keyword) {
     if (!names.length) {
       wrap.classList.add('hidden');
       box.innerHTML = `<div class="recommended-materials-empty">추천 자재 없음</div>`;
+      renderPestRecentMaterialRecommendations();
       return;
     }
 
@@ -2508,6 +2684,7 @@ function filterChipOptions(type, keyword) {
         addRecommendedMaterialName(name);
       });
     });
+    renderPestRecentMaterialRecommendations();
   }
 
   function getSelectedChipValues(type) {

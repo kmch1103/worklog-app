@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import uuid
+import shutil
 from datetime import datetime
 from io import BytesIO
 from openpyxl import Workbook
@@ -1194,6 +1195,23 @@ def backup_season(season_id):
         }
     }
     return jsonify(payload)
+
+
+@app.route("/api/backup/auto", methods=["POST"])
+def auto_backup_db():
+    backup_dir = os.path.join(app.root_path, "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+
+    stamp = datetime.now().strftime("%Y%m%d")
+    backup_name = f"worklog_auto_{stamp}.db"
+    backup_path = os.path.join(backup_dir, backup_name)
+
+    try:
+        if not os.path.exists(backup_path):
+            shutil.copy2(DB, backup_path)
+        return jsonify({"ok": True, "backup_file": backup_name})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # =========================

@@ -27,7 +27,10 @@
     workFilterTaskCategory: '',
     workFilterTaskName: '',
     workFilterCrop: '',
-    workStatsPeriod: 'all',
+    workSeasonFilter: 'current',
+    workStatsPeriod: 'season',
+    workStatsSeasonFilter: 'current',
+    moneySeasonFilter: 'current',
     selectedMaterialsDetailed: [],
     materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
     mobileCalendarMode: 'current',
@@ -64,6 +67,7 @@
     await loadAll();
     await loadMoney();
     renderAll();
+    await runAutoBackupIfNeeded();
     renderLowStockBanner();
     updateMobileCalendarMode();
     initializeHistoryState();
@@ -472,7 +476,7 @@
     on(el['btn-cancel-task-option'], 'click', closeTaskOptionModal);
     on(el['btn-save-task-option'], 'click', saveTaskOptionEdit);
     on(el['new-task-category'], 'change', () => renderTaskOptionList());
-    on(el['money-season-filter'], 'change', async () => { await loadMoney(); renderMoney(); });
+    on(el['money-season-filter'], 'change', async () => { state.moneySeasonFilter = el['money-season-filter']?.value || 'current'; await loadMoney(); renderMoney(); });
   }
 
   function autoFillMaterialName(keyword) {
@@ -556,7 +560,7 @@
 
   async function loadMoney() {
     try {
-      const seasonId = el['money-season-filter']?.value || '';
+      const seasonId = el['money-season-filter']?.value || state.moneySeasonFilter || 'current';
       const url = seasonId ? `/api/money?season_id=${encodeURIComponent(seasonId)}` : '/api/money';
       const incomeUrl = seasonId ? `/api/incomes?season_id=${encodeURIComponent(seasonId)}` : '/api/incomes';
       const [moneyRows, incomeRows] = await Promise.all([
@@ -2453,7 +2457,7 @@ function filterChipOptions(type, keyword) {
     const node = el['money-season-filter'];
     if (!node) return;
 
-    const current = node.value || '';
+    const current = state.moneySeasonFilter || node.value || 'current';
     const options = [
       '<option value="">전체 시즌</option>',
       '<option value="current">현재 시즌</option>'
@@ -2464,8 +2468,12 @@ function filterChipOptions(type, keyword) {
     }));
 
     node.innerHTML = options.join('');
-    if (current && Array.from(node.options).some(opt => opt.value === current)) {
+    if (Array.from(node.options).some(opt => opt.value === current)) {
       node.value = current;
+      state.moneySeasonFilter = current;
+    } else {
+      node.value = 'current';
+      state.moneySeasonFilter = 'current';
     }
   }
 
@@ -3239,6 +3247,22 @@ function filterChipOptions(type, keyword) {
     banner.classList.remove('hidden');
   }
 
+
+  function getAutoBackupKey() {
+    return `worklog_auto_backup_done_${fmtDate(new Date())}`;
+  }
+
+  async function runAutoBackupIfNeeded() {
+    try {
+      const key = getAutoBackupKey();
+      if (localStorage.getItem(key) === '1') return;
+      await apiPost('/api/backup/auto', {});
+      localStorage.setItem(key, '1');
+    } catch (e) {
+      console.error('auto backup failed', e);
+    }
+  }
+
   function applyMoneyQuickPeriod() {
     const period = el['money-period-filter']?.value || '';
     const today = new Date();
@@ -3733,6 +3757,10 @@ function filterChipOptions(type, keyword) {
       box.innerHTML = `
         <div class="works-filter-grid">
           <div>
+            <label class="inline-help">시즌</label>
+            <select id="works-filter-season"></select>
+          </div>
+          <div>
             <label class="inline-help">시작일</label>
             <input type="date" id="works-filter-start">
           </div>
@@ -3768,6 +3796,7 @@ function filterChipOptions(type, keyword) {
         page.insertBefore(box, page.firstChild);
       }
 
+      el['works-filter-season'] = box.querySelector('#works-filter-season');
       el['works-filter-start'] = box.querySelector('#works-filter-start');
       el['works-filter-end'] = box.querySelector('#works-filter-end');
       el['works-filter-task-category'] = box.querySelector('#works-filter-task-category');
@@ -3778,6 +3807,11 @@ function filterChipOptions(type, keyword) {
 
       input.addEventListener('input', (e) => {
         state.workSearchKeyword = (e.target.value || '').trim();
+        renderWorks();
+      });
+      el['works-filter-season'].addEventListener('change', (e) => {
+        state.workSeasonFilter = e.target.value || 'current';
+        renderWorksSearchFilterOptions();
         renderWorks();
       });
       el['works-filter-start'].addEventListener('change', (e) => {
@@ -3804,12 +3838,14 @@ function filterChipOptions(type, keyword) {
       });
       resetBtn.addEventListener('click', () => {
         state.workSearchKeyword = '';
+        state.workSeasonFilter = 'current';
         state.workFilterStartDate = '';
         state.workFilterEndDate = '';
         state.workFilterTaskCategory = '';
         state.workFilterTaskName = '';
         state.workFilterCrop = '';
         renderWorksSearchFilterOptions();
+        if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter || 'current';
         if (el['works-filter-start']) el['works-filter-start'].value = '';
         if (el['works-filter-end']) el['works-filter-end'].value = '';
         const searchInput = box.querySelector('#works-search-input');
@@ -3819,6 +3855,7 @@ function filterChipOptions(type, keyword) {
     }
 
     renderWorksSearchFilterOptions();
+    if (el['works-filter-season']) el['works-filter-season'].value = state.workSeasonFilter || 'current';
     if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
     if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
     const searchInput = box.querySelector('#works-search-input');
@@ -3826,10 +3863,24 @@ function filterChipOptions(type, keyword) {
   }
 
   function renderWorksSearchFilterOptions() {
+    const seasonEl = el['works-filter-season'];
     const categoryEl = el['works-filter-task-category'];
     const taskEl = el['works-filter-task-name'];
     const cropEl = el['works-filter-crop'];
     if (!categoryEl || !taskEl || !cropEl) return;
+
+    if (seasonEl) {
+      const seasonOptions = [
+        '<option value="">전체 시즌</option>',
+        '<option value="current">현재시즌</option>'
+      ].concat((state.seasons || []).map(season => {
+        const seasonId = String(season.id || '');
+        const seasonName = season.season_name || season.name || '';
+        return `<option value="${escapeHtml(seasonId)}">${escapeHtml(seasonName)}</option>`;
+      }));
+      seasonEl.innerHTML = seasonOptions.join('');
+      seasonEl.value = state.workSeasonFilter || 'current';
+    }
 
     const categoryOptions = ['<option value="">전체 작업분류</option>']
       .concat((state.options.task_categories || []).map(item => {
@@ -3861,6 +3912,18 @@ function filterChipOptions(type, keyword) {
     cropEl.value = state.workFilterCrop || '';
   }
 
+  function getSeasonRangeByValue(seasonValue) {
+    const value = String(seasonValue || '').trim();
+    if (!value) return { start: '', end: '', label: '전체' };
+    let season = null;
+    if (value === 'current') {
+      season = (state.seasons || []).find(item => Number(item.is_current || 0) === 1);
+      return season ? { start: String(season.start_date || ''), end: String(season.end_date || ''), label: String(season.season_name || '현재시즌') } : { start: '', end: '', label: '현재시즌' };
+    }
+    season = (state.seasons || []).find(item => String(item.id) === value);
+    return season ? { start: String(season.start_date || ''), end: String(season.end_date || ''), label: String(season.season_name || '선택시즌') } : { start: '', end: '', label: '전체' };
+  }
+
   function getWorkStatsRange(period) {
     const today = new Date();
     const year = today.getFullYear();
@@ -3881,14 +3944,7 @@ function filterChipOptions(type, keyword) {
     }
 
     if (period === 'season') {
-      const currentSeason = (state.seasons || []).find(item => Number(item.is_current || 0) === 1);
-      if (currentSeason && currentSeason.start_date && currentSeason.end_date) {
-        return {
-          start: String(currentSeason.start_date || ''),
-          end: String(currentSeason.end_date || ''),
-          label: String(currentSeason.season_name || '현재시즌')
-        };
-      }
+      return getSeasonRangeByValue(state.workStatsSeasonFilter || 'current');
     }
 
     return { start: '', end: '' };
@@ -3914,14 +3970,17 @@ function filterChipOptions(type, keyword) {
       ].join(' ').toLowerCase();
 
       const inKeyword = text.includes(q);
-      const inStart = !state.workFilterStartDate || String(work.start_date || '') >= state.workFilterStartDate;
-      const inEnd = !state.workFilterEndDate || String(work.start_date || '') <= state.workFilterEndDate;
+      const seasonRange = getSeasonRangeByValue(state.workSeasonFilter || 'current');
+      const dateValue = String(work.start_date || '');
+      const inSeason = !seasonRange.start || (dateValue >= seasonRange.start && dateValue <= seasonRange.end);
+      const inStart = !state.workFilterStartDate || dateValue >= state.workFilterStartDate;
+      const inEnd = !state.workFilterEndDate || dateValue <= state.workFilterEndDate;
       const inCategory = !state.workFilterTaskCategory || String(work.task_category || '') === state.workFilterTaskCategory;
       const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
       const cropValues = splitCsv(work.crops);
       const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
 
-      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
+      return inKeyword && inSeason && inStart && inEnd && inCategory && inTask && inCrop;
     });
   }
 
@@ -3957,11 +4016,12 @@ function filterChipOptions(type, keyword) {
           <div class="works-stats-period-wrap">
             <label class="inline-help" for="works-stats-period">통계 기간</label>
             <select id="works-stats-period">
+              <option value="season">시즌</option>
               <option value="all">전체</option>
               <option value="month">이번달</option>
               <option value="year">올해</option>
-              <option value="season">현재시즌</option>
             </select>
+            <select id="works-stats-season"></select>
           </div>
         </div>
         <div id="works-stats-summary" class="works-stats-summary"></div>
@@ -3989,17 +4049,33 @@ function filterChipOptions(type, keyword) {
       }
 
       const periodEl = box.querySelector('#works-stats-period');
+      const seasonEl = box.querySelector('#works-stats-season');
       if (periodEl) {
         el['works-stats-period'] = periodEl;
         periodEl.addEventListener('change', (e) => {
-          state.workStatsPeriod = e.target.value || 'all';
+          state.workStatsPeriod = e.target.value || 'season';
+          renderWorks();
+        });
+      }
+      if (seasonEl) {
+        el['works-stats-season'] = seasonEl;
+        seasonEl.addEventListener('change', (e) => {
+          state.workStatsSeasonFilter = e.target.value || 'current';
           renderWorks();
         });
       }
     }
 
     if (el['works-stats-period']) {
-      el['works-stats-period'].value = state.workStatsPeriod || 'all';
+      el['works-stats-period'].value = state.workStatsPeriod || 'season';
+    }
+    if (el['works-stats-season']) {
+      const node = el['works-stats-season'];
+      const current = state.workStatsSeasonFilter || 'current';
+      const options = ['<option value="current">현재시즌</option>', '<option value="">전체 시즌</option>']
+        .concat((state.seasons || []).map(season => `<option value="${escapeHtml(String(season.id || ''))}">${escapeHtml(season.season_name || season.name || '')}</option>`));
+      node.innerHTML = options.join('');
+      if (Array.from(node.options).some(opt => opt.value === current)) node.value = current;
     }
   }
 

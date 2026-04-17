@@ -642,6 +642,7 @@
     renderOptions();
     renderMoney();
     ensureWorksSearchBar();
+    updateScrollJumpButtons();
   }
 
   function switchPage(page, options = {}) {

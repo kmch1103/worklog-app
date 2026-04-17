@@ -48,6 +48,7 @@
 
   async function init() {
     cacheElements();
+    syncCurrentPageFromDom();
     bindMenu();
     bindQuickExitButton();
     bindScrollJumpButtons();
@@ -148,6 +149,17 @@
     });
   }
 
+  function syncCurrentPageFromDom() {
+    const activeMenu = (el.menuButtons || []).find(btn => btn.classList.contains('active'));
+    if (activeMenu?.dataset?.page) {
+      state.currentPage = activeMenu.dataset.page;
+      return;
+    }
+    const activePage = ['calendar','works','materials','money','options','excel','backup']
+      .find(key => el[`page-${key}`] && el[`page-${key}`].classList.contains('active'));
+    if (activePage) state.currentPage = activePage;
+  }
+
 
   function bindQuickExitButton() {
     on(el['btn-mobile-quick-exit'], 'click', handleQuickExit);
@@ -174,12 +186,27 @@
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
-    const isWorksPage = state.currentPage === 'works';
+    const worksPage = el['page-works'];
+    const isWorksPage = !!(worksPage && worksPage.classList.contains('active') && worksPage.style.display !== 'none');
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
     const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
     const nearBottom = scrollTop + viewport >= docHeight - 40;
     const canScroll = docHeight > viewport + 40;
+
+    topBtn.style.position = 'fixed';
+    bottomBtn.style.position = 'fixed';
+    topBtn.style.zIndex = '10050';
+    bottomBtn.style.zIndex = '10050';
+    topBtn.style.right = window.innerWidth <= 900 ? '14px' : '20px';
+    bottomBtn.style.right = window.innerWidth <= 900 ? '14px' : '20px';
+    if (window.innerWidth <= 900) {
+      topBtn.style.bottom = '120px';
+      bottomBtn.style.bottom = '68px';
+    } else {
+      topBtn.style.bottom = '74px';
+      bottomBtn.style.bottom = '20px';
+    }
 
     topBtn.classList.toggle('hidden', !isWorksPage || !canScroll || scrollTop < 120);
     bottomBtn.classList.toggle('hidden', !isWorksPage || !canScroll || nearBottom);

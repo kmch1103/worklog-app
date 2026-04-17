@@ -169,38 +169,26 @@
     });
   }
 
-  function isScrollJumpTargetPage() {
-    const allowed = ['works', 'materials', 'money', 'options'];
-    if (allowed.includes(state.currentPage)) return true;
-
-    return allowed.some(page => {
-      const node = el[`page-${page}`];
-      return !!node && node.classList.contains('active') && node.style.display !== 'none';
-    });
-  }
-
   function updateScrollJumpButtons() {
     const topBtn = el['btn-scroll-top'];
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
-    const isTargetPage = isScrollJumpTargetPage();
+    const allowedPages = ['works', 'materials', 'money', 'options'];
+    const activePage = document.querySelector('.page.active');
+    const activePageId = activePage ? activePage.id : '';
+    const domPage = activePageId.replace('page-', '');
+    const current = state.currentPage || domPage;
+    const isAllowedPage = allowedPages.includes(current) || allowedPages.includes(domPage);
+
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
     const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
     const nearBottom = scrollTop + viewport >= docHeight - 40;
     const canScroll = docHeight > viewport + 40;
 
-    topBtn.classList.toggle('hidden', !isTargetPage || !canScroll || scrollTop < 120);
-    bottomBtn.classList.toggle('hidden', !isTargetPage || !canScroll || nearBottom);
-
-    if (isTargetPage && canScroll) {
-      topBtn.style.display = scrollTop < 120 ? 'none' : 'flex';
-      bottomBtn.style.display = nearBottom ? 'none' : 'flex';
-    } else {
-      topBtn.style.display = 'none';
-      bottomBtn.style.display = 'none';
-    }
+    topBtn.classList.toggle('hidden', !isAllowedPage || !canScroll || scrollTop < 120);
+    bottomBtn.classList.toggle('hidden', !isAllowedPage || !canScroll || nearBottom);
   }
 
   function bindCalendarButtons() {

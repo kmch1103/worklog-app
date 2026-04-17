@@ -71,13 +71,11 @@
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
       stabilizeWorksFloatingButton();
-    updateScrollJumpButtons();
       updateScrollJumpButtons();
     });
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
     stabilizeWorksFloatingButton();
-    updateScrollJumpButtons();
     updateScrollJumpButtons();
   }
 
@@ -176,13 +174,15 @@
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
+    const isWorksPage = state.currentPage === 'works';
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
     const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
     const nearBottom = scrollTop + viewport >= docHeight - 40;
+    const canScroll = docHeight > viewport + 40;
 
-    topBtn.classList.toggle('hidden', scrollTop < 120);
-    bottomBtn.classList.toggle('hidden', nearBottom || docHeight <= viewport + 40);
+    topBtn.classList.toggle('hidden', !isWorksPage || !canScroll || scrollTop < 120);
+    bottomBtn.classList.toggle('hidden', !isWorksPage || !canScroll || nearBottom);
   }
 
   function bindCalendarButtons() {
@@ -669,15 +669,13 @@
     });
 
     stabilizeWorksFloatingButton();
-    updateScrollJumpButtons();
 
     if (page === 'calendar') {
       renderCalendar();
       updateMobileCalendarMode();
     } else if (page === 'works') {
-      ensureWorksSearchBar();
       renderWorks();
-      updateScrollJumpButtons();
+      ensureWorksSearchBar();
     } else if (page === 'materials') {
       renderMaterials();
     } else if (page === 'money') {
@@ -685,6 +683,8 @@
     } else if (page === 'options') {
       renderOptions();
     }
+
+    updateScrollJumpButtons();
   }
 
   function renderMenuState() {
@@ -3679,14 +3679,12 @@ function filterChipOptions(type, keyword) {
     if (!node) return;
     node.classList.remove('hidden');
     stabilizeWorksFloatingButton();
-    updateScrollJumpButtons();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
     stabilizeWorksFloatingButton();
-    updateScrollJumpButtons();
   }
 
   function fmtDate(date) {
@@ -3790,31 +3788,31 @@ function filterChipOptions(type, keyword) {
       box.style.marginBottom = '12px';
       box.innerHTML = `
         <div class="works-filter-grid">
-          <div>
+          <div class="works-filter-item works-filter-half">
             <label class="inline-help">시작일</label>
             <input type="date" id="works-filter-start">
           </div>
-          <div>
+          <div class="works-filter-item works-filter-half">
             <label class="inline-help">종료일</label>
             <input type="date" id="works-filter-end">
           </div>
-          <div>
+          <div class="works-filter-item works-filter-half">
             <label class="inline-help">작업분류</label>
             <select id="works-filter-task-category"></select>
           </div>
-          <div>
+          <div class="works-filter-item works-filter-half">
             <label class="inline-help">세부작업</label>
             <select id="works-filter-task-name"></select>
           </div>
-          <div>
+          <div class="works-filter-item works-filter-half">
             <label class="inline-help">작물</label>
             <select id="works-filter-crop"></select>
           </div>
-          <div>
+          <div class="works-filter-item works-filter-half">
             <label class="inline-help">시즌</label>
             <select id="works-filter-season"></select>
           </div>
-          <div>
+          <div class="works-filter-item works-filter-full">
             <label class="inline-help">검색</label>
             <input type="text" id="works-search-input" placeholder="메모/자재/작업 검색">
           </div>
@@ -3880,7 +3878,6 @@ function filterChipOptions(type, keyword) {
         renderWorksSearchFilterOptions();
         if (el['works-filter-start']) el['works-filter-start'].value = '';
         if (el['works-filter-end']) el['works-filter-end'].value = '';
-        if (el['works-filter-season']) el['works-filter-season'].value = 'current';
         const searchInput = box.querySelector('#works-search-input');
         if (searchInput) searchInput.value = '';
         renderWorks();
@@ -3900,7 +3897,7 @@ function filterChipOptions(type, keyword) {
     const taskEl = el['works-filter-task-name'];
     const cropEl = el['works-filter-crop'];
     const seasonEl = el['works-filter-season'];
-    if (!categoryEl || !taskEl || !cropEl || !seasonEl) return;
+    if (!categoryEl || !taskEl || !cropEl) return;
 
     const categoryOptions = ['<option value="">전체 작업분류</option>']
       .concat((state.options.task_categories || []).map(item => {
@@ -3930,54 +3927,47 @@ function filterChipOptions(type, keyword) {
       .concat(Array.from(cropSet).sort().map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
     cropEl.innerHTML = cropOptions.join('');
     cropEl.value = state.workFilterCrop || '';
-    const seasonOptions = ['<option value="all">전체 시즌</option>', '<option value="current">현재시즌</option>']
-      .concat((state.seasons || []).map(item => {
-        const label = item.season_name || `${item.start_date || ''} ~ ${item.end_date || ''}`;
-        return `<option value="${escapeHtml(String(item.id))}">${escapeHtml(label)}</option>`;
-      }));
-    seasonEl.innerHTML = seasonOptions.join('');
-    seasonEl.value = state.workFilterSeason || 'current';
+
+    if (seasonEl) {
+      const seasonOptions = ['<option value="all">전체시즌</option>', '<option value="current">현재시즌</option>']
+        .concat((state.seasons || []).map(season => {
+          const seasonId = String(season.id);
+          const seasonName = season.season_name || season.name || `시즌 ${seasonId}`;
+          return `<option value="${escapeHtml(seasonId)}">${escapeHtml(seasonName)}</option>`;
+        }));
+      seasonEl.innerHTML = seasonOptions.join('');
+      seasonEl.value = state.workFilterSeason || 'current';
+    }
   }
 
 
-  function getPreferredCurrentSeason() {
-    const seasons = Array.isArray(state.seasons) ? state.seasons : [];
-    if (!seasons.length) return null;
+  function getActiveWorkSeasonFilter() {
+    const value = String(state.workFilterSeason || 'current');
+    if (value === 'all') return null;
+    if (value && value !== 'current') {
+      const picked = (state.seasons || []).find(season => String(season.id) === value);
+      if (picked) return picked;
+    }
 
-    const explicit = seasons.find(item => Number(item.is_current || 0) === 1);
-    if (explicit) return explicit;
+    const explicitCurrent = (state.seasons || []).find(season => Number(season.is_current || 0) === 1);
+    if (explicitCurrent) return explicitCurrent;
 
     const today = fmtDate(new Date());
-    const active = seasons.find(item => {
-      const start = String(item.start_date || '');
-      const end = String(item.end_date || '');
-      return start && end && start <= today && today <= end;
-    });
-    if (active) return active;
+    const byToday = (state.seasons || []).find(season => String(season.start_date || '') <= today && String(season.end_date || '') >= today);
+    if (byToday) return byToday;
 
-    return [...seasons].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')))[0] || null;
+    const sorted = [...(state.seasons || [])].sort((a, b) => String(b.end_date || '').localeCompare(String(a.end_date || '')));
+    return sorted[0] || null;
   }
 
-  function isWorkInSelectedSeason(work) {
-    const seasonValue = state.workFilterSeason || 'current';
-    if (seasonValue === 'all') return true;
-
-    let season = null;
-    if (seasonValue === 'current') {
-      season = getPreferredCurrentSeason();
-    } else {
-      season = (state.seasons || []).find(item => String(item.id) === String(seasonValue));
-    }
+  function isWorkInSeasonRange(work, season) {
     if (!season) return true;
-
-    const start = String(season.start_date || '');
-    const end = String(season.end_date || '');
-    if (!start || !end) return true;
-
     const workStart = String(work.start_date || '');
     const workEnd = String(work.end_date || work.start_date || '');
-    if (!workStart) return false;
-    return workStart <= end && workEnd >= start;
+    const seasonStart = String(season.start_date || '');
+    const seasonEnd = String(season.end_date || '');
+    if (!workStart || !seasonStart || !seasonEnd) return true;
+    return !(workEnd < seasonStart || workStart > seasonEnd);
   }
 
   function renderWorks() {
@@ -3986,6 +3976,8 @@ function filterChipOptions(type, keyword) {
 
     const q = (state.workSearchKeyword || '').trim().toLowerCase();
     const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
+
+    const activeSeason = getActiveWorkSeasonFilter();
 
     const filtered = works.filter(work => {
       const meta = parseMemo(work.memo);
@@ -4009,7 +4001,7 @@ function filterChipOptions(type, keyword) {
       const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
       const cropValues = splitCsv(work.crops);
       const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
-      const inSeason = isWorkInSelectedSeason(work);
+      const inSeason = isWorkInSeasonRange(work, activeSeason);
 
       return inKeyword && inStart && inEnd && inCategory && inTask && inCrop && inSeason;
     });

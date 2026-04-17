@@ -223,10 +223,12 @@
     .task-option-empty{font-size:13px; color:#64748b; padding:8px 2px;}
     .task-select-field select{min-height:48px;}
     .works-filter-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
+    .works-filter-item{min-width:0;}
+    .works-filter-item.works-filter-full{grid-column:1 / -1;}
     .works-filter-actions{display:flex; justify-content:flex-end; margin-top:12px;}
     .works-filter-grid input,.works-filter-grid select{width:100%;}
     @media (max-width: 1200px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
-    @media (max-width: 700px){ .works-filter-grid{grid-template-columns:1fr;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
+    @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
       #page-works .page-header-actions{position:sticky; top:0; z-index:30; background:#f8fafc; padding:8px 0 10px;}
@@ -438,7 +440,7 @@
     }
 
   
-    .scroll-jump-btn{position:fixed; right:20px; z-index:255; min-width:86px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+    .scroll-jump-btn{position:fixed; right:20px; z-index:10050; min-width:86px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); cursor:pointer; display:flex; align-items:center; justify-content:center;}
     .scroll-jump-btn.hidden{display:none !important;}
     #btn-scroll-bottom{bottom:20px;}
     #btn-scroll-top{bottom:74px;}
@@ -1208,7 +1210,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=8"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
 
 
 

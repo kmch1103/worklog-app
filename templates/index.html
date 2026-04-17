@@ -402,6 +402,13 @@
       .option-mobile-tabs .btn{font-size:11px; padding:7px 1px; letter-spacing:-0.5px;}
     }
   
+
+    .scroll-jump-buttons{position:fixed; right:14px; bottom:76px; z-index:255; display:flex; flex-direction:column; gap:10px;}
+    .scroll-jump-buttons.hidden{display:none;}
+    .scroll-jump-btn{display:flex; align-items:center; justify-content:center; min-width:88px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1e293b; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18);}
+    .scroll-jump-btn.hidden{display:none;}
+    .scroll-jump-btn:active{transform:translateY(1px);}
+
     .mobile-quick-exit{display:none;}
     @media (max-width: 900px){
       body{padding-bottom:84px;}
@@ -425,6 +432,11 @@
         box-shadow:0 10px 24px rgba(0,0,0,.18);
       }
       .mobile-quick-exit:active{transform:translateY(1px);}
+      .scroll-jump-buttons{right:14px; bottom:calc(env(safe-area-inset-bottom, 0px) + 72px); gap:8px;}
+      .scroll-jump-btn{min-width:74px; height:40px; font-size:13px; padding:0 12px;}
+    }
+    @media (min-width: 901px){
+      .scroll-jump-buttons{right:20px; bottom:20px;}
     }
 
   
@@ -1199,6 +1211,10 @@
   <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
 
 
+  <div class="scroll-jump-buttons" id="scroll-jump-buttons">
+    <button id="btn-scroll-top" class="scroll-jump-btn hidden" type="button">↑ 맨위</button>
+    <button id="btn-scroll-bottom" class="scroll-jump-btn hidden" type="button">↓ 맨아래</button>
+  </div>
   <button id="btn-mobile-quick-exit" class="mobile-quick-exit" type="button">종료</button>
 </body>
 </html>

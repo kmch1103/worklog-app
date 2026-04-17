@@ -70,9 +70,9 @@
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
       stabilizeWorksFloatingButton();
-    updateScrollJumpButtons();
       updateScrollJumpButtons();
     });
+
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
     stabilizeWorksFloatingButton();
@@ -82,7 +82,7 @@
   function cacheElements() {
     const ids = [
       'page-calendar','page-works','page-materials','page-money','page-options','page-excel','page-backup',
-      'btn-prev-month','btn-next-month','btn-mobile-current','btn-mobile-previous','btn-mobile-quick-exit',
+      'btn-prev-month','btn-next-month','btn-mobile-current','btn-mobile-previous','btn-mobile-quick-exit','btn-scroll-top','btn-scroll-bottom',
       'calendar-title','calendar-current-title','calendar-grid',
       'calendar-compare-title','calendar-compare-grid','calendar-compare-wrap',
 
@@ -120,7 +120,7 @@
 
       'season-panel','season-panel-header','btn-toggle-season-panel','season-panel-toggle-text','season-panel-summary','season-panel-body',
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
-      'btn-save-season','btn-reset-season','season-list','btn-scroll-top','btn-scroll-bottom',
+      'btn-save-season','btn-reset-season','season-list',
 
       'labor-rows-wrap','btn-add-labor-row',
 
@@ -164,8 +164,8 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     on(el['btn-scroll-bottom'], 'click', () => {
-      const target = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-      window.scrollTo({ top: target, behavior: 'smooth' });
+      const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: maxY, behavior: 'smooth' });
     });
   }
 
@@ -174,13 +174,15 @@
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
-    const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
-    const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    const nearBottom = scrollTop + viewport >= docHeight - 40;
+    const isWorksPage = state.currentPage === 'works';
+    const top = window.scrollY || document.documentElement.scrollTop || 0;
+    const doc = document.documentElement;
+    const maxY = Math.max(0, doc.scrollHeight - window.innerHeight);
+    const showTop = isWorksPage && top > 160;
+    const showBottom = isWorksPage && maxY > 160 && top < (maxY - 120);
 
-    topBtn.classList.toggle('hidden', scrollTop < 120);
-    bottomBtn.classList.toggle('hidden', nearBottom || docHeight <= viewport + 40);
+    topBtn.classList.toggle('hidden', !showTop);
+    bottomBtn.classList.toggle('hidden', !showBottom);
   }
 
   function bindCalendarButtons() {
@@ -666,6 +668,7 @@
     });
 
     stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -3978,6 +3981,8 @@ function filterChipOptions(type, keyword) {
     wrap.querySelectorAll('[data-work-delete]').forEach(btn => {
       btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
     });
+
+    updateScrollJumpButtons();
   }
 
   function renderWorkCard(work) {

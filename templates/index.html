@@ -438,22 +438,18 @@
     }
 
   
-    .scroll-jump-btn{position:fixed; right:14px; z-index:255; min-width:88px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#0f172a; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); display:flex; align-items:center; justify-content:center;}
-    .scroll-jump-btn:active{transform:translateY(1px);}
-    #btn-scroll-top{bottom:118px;}
-    #btn-scroll-bottom{bottom:66px;}
-    @media (min-width: 901px){
-      .scroll-jump-btn{right:20px; min-width:86px; height:42px; font-size:13px;}
-      #btn-scroll-top{bottom:76px;}
-      #btn-scroll-bottom{bottom:24px;}
-    }
+    .scroll-jump-btn{position:fixed; right:20px; z-index:255; min-width:86px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+    .scroll-jump-btn.hidden{display:none !important;}
+    #btn-scroll-bottom{bottom:20px;}
+    #btn-scroll-top{bottom:74px;}
     @media (max-width: 900px){
-      #btn-scroll-top{bottom:122px;}
-      #btn-scroll-bottom{bottom:68px;}
-      #btn-mobile-quick-exit{bottom:14px;}
+      .scroll-jump-btn{right:14px; min-width:82px; height:42px; font-size:13px;}
+      #btn-scroll-bottom{bottom:calc(env(safe-area-inset-bottom, 0px) + 68px);}
+      #btn-scroll-top{bottom:calc(env(safe-area-inset-bottom, 0px) + 120px);}
+      .mobile-quick-exit{bottom:calc(env(safe-area-inset-bottom, 0px) + 14px) !important;}
     }
 
-</style>
+  </style>
 </head>
 <body>
   <div class="app">
@@ -1217,7 +1213,8 @@
 
 
   <button id="btn-scroll-top" class="scroll-jump-btn hidden" type="button">↑ 맨위</button>
-  <button id="btn-scroll-bottom" class="scroll-jump-btn hidden" type="button">↓ 맨아래</button>
+  <button id="btn-scroll-bottom" class="scroll-jump-btn" type="button">↓ 맨아래</button>
+
   <button id="btn-mobile-quick-exit" class="mobile-quick-exit" type="button">종료</button>
 </body>
 </html>

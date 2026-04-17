@@ -45,8 +45,6 @@
     }
     .grid.three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
     .grid.six{display:grid; grid-template-columns:120px 90px 120px 130px 1fr 70px; gap:8px; align-items:center;}
-    .works-filter-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:12px; align-items:end;}
-    .works-filter-actions{display:flex; justify-content:flex-end; margin-top:10px;}
     .inline-help{font-size:12px; color:#64748b; margin-top:4px;}
     .option-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #eef2f7;}
     .option-item:last-child{border-bottom:0;}
@@ -437,6 +435,18 @@
     @media (max-width: 768px){
       .works-floating-action{right:14px !important; bottom:calc(env(safe-area-inset-bottom, 0px) + 110px) !important; left:auto !important; justify-content:flex-end !important;}
       .works-floating-action .btn{padding:13px 16px;}
+    }
+
+  
+    .scroll-jump-btn{position:fixed; right:20px; z-index:255; min-width:86px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); cursor:pointer; display:flex; align-items:center; justify-content:center;}
+    .scroll-jump-btn.hidden{display:none !important;}
+    #btn-scroll-bottom{bottom:20px;}
+    #btn-scroll-top{bottom:74px;}
+    @media (max-width: 900px){
+      .scroll-jump-btn{right:14px; min-width:82px; height:42px; font-size:13px;}
+      #btn-scroll-bottom{bottom:calc(env(safe-area-inset-bottom, 0px) + 68px);}
+      #btn-scroll-top{bottom:calc(env(safe-area-inset-bottom, 0px) + 120px);}
+      .mobile-quick-exit{bottom:calc(env(safe-area-inset-bottom, 0px) + 14px) !important;}
     }
 
   </style>
@@ -1198,11 +1208,12 @@
     </div>
   </div>
 
-  <button id="btn-scroll-top" class="btn scroll-jump-btn hidden" type="button">↑ 맨위</button>
-  <button id="btn-scroll-bottom" class="btn scroll-jump-btn hidden" type="button">↓ 맨아래</button>
+  <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=8"></script>
 
+
+  <button id="btn-scroll-top" class="scroll-jump-btn hidden" type="button">↑ 맨위</button>
+  <button id="btn-scroll-bottom" class="scroll-jump-btn" type="button">↓ 맨아래</button>
 
   <button id="btn-mobile-quick-exit" class="mobile-quick-exit" type="button">종료</button>
 </body>

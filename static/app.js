@@ -38,8 +38,7 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    recentQuickVisible: false,
-    workFilterSeason: 'all'
+    recentQuickVisible: false
   };
 
   const el = {};
@@ -50,6 +49,7 @@
     cacheElements();
     bindMenu();
     bindQuickExitButton();
+    bindScrollJumpButtons();
     bindCalendarButtons();
     bindMobileCalendarButtons();
     bindWorkButtons();
@@ -58,7 +58,6 @@
     bindOptionButtons();
     bindExcelButtons();
     bindCalendarDetailModal();
-    bindScrollButtons();
 
     bindHistoryNavigation();
 
@@ -71,9 +70,13 @@
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
       stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
+      updateScrollJumpButtons();
     });
+    window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
     stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
   }
 
   function cacheElements() {
@@ -117,7 +120,7 @@
 
       'season-panel','season-panel-header','btn-toggle-season-panel','season-panel-toggle-text','season-panel-summary','season-panel-body',
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
-      'btn-save-season','btn-reset-season','season-list',
+      'btn-save-season','btn-reset-season','season-list','btn-scroll-top','btn-scroll-bottom',
 
       'labor-rows-wrap','btn-add-labor-row',
 
@@ -150,39 +153,34 @@
     on(el['btn-mobile-quick-exit'], 'click', handleQuickExit);
   }
 
-  function bindScrollButtons() {
-    on(el['btn-scroll-top'], 'click', () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-    on(el['btn-scroll-bottom'], 'click', () => {
-      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-    });
-
-    const update = () => updateScrollButtonVisibility();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    setTimeout(update, 0);
-  }
-
-  function updateScrollButtonVisibility() {
-    const topBtn = el['btn-scroll-top'];
-    const bottomBtn = el['btn-scroll-bottom'];
-    if (!topBtn || !bottomBtn) return;
-
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-    const nearTop = scrollTop < 120;
-    const nearBottom = scrollTop + viewportHeight > docHeight - 120;
-
-    topBtn.classList.toggle('hidden', nearTop);
-    bottomBtn.classList.toggle('hidden', nearBottom || docHeight <= viewportHeight + 80);
-  }
-
   function handleQuickExit() {
     closeAllModals();
     switchPage('calendar', { skipHistory: true });
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function bindScrollJumpButtons() {
+    on(el['btn-scroll-top'], 'click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    on(el['btn-scroll-bottom'], 'click', () => {
+      const target = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      window.scrollTo({ top: target, behavior: 'smooth' });
+    });
+  }
+
+  function updateScrollJumpButtons() {
+    const topBtn = el['btn-scroll-top'];
+    const bottomBtn = el['btn-scroll-bottom'];
+    if (!topBtn || !bottomBtn) return;
+
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+    const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    const nearBottom = scrollTop + viewport >= docHeight - 40;
+
+    topBtn.classList.toggle('hidden', scrollTop < 120);
+    bottomBtn.classList.toggle('hidden', nearBottom || docHeight <= viewport + 40);
   }
 
   function bindCalendarButtons() {
@@ -642,7 +640,6 @@
     renderOptions();
     renderMoney();
     ensureWorksSearchBar();
-    updateScrollButtonVisibility();
   }
 
   function switchPage(page, options = {}) {
@@ -683,7 +680,6 @@
     } else if (page === 'options') {
       renderOptions();
     }
-    updateScrollButtonVisibility();
   }
 
   function renderMenuState() {
@@ -3788,10 +3784,6 @@ function filterChipOptions(type, keyword) {
       box.innerHTML = `
         <div class="works-filter-grid">
           <div>
-            <label class="inline-help">시즌</label>
-            <select id="works-filter-season"></select>
-          </div>
-          <div>
             <label class="inline-help">시작일</label>
             <input type="date" id="works-filter-start">
           </div>
@@ -3827,7 +3819,6 @@ function filterChipOptions(type, keyword) {
         page.insertBefore(box, page.firstChild);
       }
 
-      el['works-filter-season'] = box.querySelector('#works-filter-season');
       el['works-filter-start'] = box.querySelector('#works-filter-start');
       el['works-filter-end'] = box.querySelector('#works-filter-end');
       el['works-filter-task-category'] = box.querySelector('#works-filter-task-category');
@@ -3836,10 +3827,6 @@ function filterChipOptions(type, keyword) {
       const input = box.querySelector('#works-search-input');
       const resetBtn = box.querySelector('#btn-works-filter-reset');
 
-      el['works-filter-season'].addEventListener('change', (e) => {
-        state.workFilterSeason = e.target.value || 'all';
-        renderWorks();
-      });
       input.addEventListener('input', (e) => {
         state.workSearchKeyword = (e.target.value || '').trim();
         renderWorks();
@@ -3867,7 +3854,6 @@ function filterChipOptions(type, keyword) {
         renderWorks();
       });
       resetBtn.addEventListener('click', () => {
-        state.workFilterSeason = 'all';
         state.workSearchKeyword = '';
         state.workFilterStartDate = '';
         state.workFilterEndDate = '';
@@ -3875,7 +3861,6 @@ function filterChipOptions(type, keyword) {
         state.workFilterTaskName = '';
         state.workFilterCrop = '';
         renderWorksSearchFilterOptions();
-        if (el['works-filter-season']) el['works-filter-season'].value = 'all';
         if (el['works-filter-start']) el['works-filter-start'].value = '';
         if (el['works-filter-end']) el['works-filter-end'].value = '';
         const searchInput = box.querySelector('#works-search-input');
@@ -3885,7 +3870,6 @@ function filterChipOptions(type, keyword) {
     }
 
     renderWorksSearchFilterOptions();
-    if (el['works-filter-season']) el['works-filter-season'].value = state.workFilterSeason || 'all';
     if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
     if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
     const searchInput = box.querySelector('#works-search-input');
@@ -3893,16 +3877,10 @@ function filterChipOptions(type, keyword) {
   }
 
   function renderWorksSearchFilterOptions() {
-    const seasonEl = el['works-filter-season'];
     const categoryEl = el['works-filter-task-category'];
     const taskEl = el['works-filter-task-name'];
     const cropEl = el['works-filter-crop'];
-    if (!seasonEl || !categoryEl || !taskEl || !cropEl) return;
-
-    const seasonOptions = ['<option value="all">전체 시즌</option>', '<option value="current">현재시즌</option>']
-      .concat((state.seasons || []).map(item => `<option value="${escapeHtml(String(item.id))}">${escapeHtml(item.season_name || `${item.start_date || ''} ~ ${item.end_date || ''}`)}</option>`));
-    seasonEl.innerHTML = seasonOptions.join('');
-    seasonEl.value = state.workFilterSeason || 'all';
+    if (!categoryEl || !taskEl || !cropEl) return;
 
     const categoryOptions = ['<option value="">전체 작업분류</option>']
       .concat((state.options.task_categories || []).map(item => {
@@ -3934,31 +3912,12 @@ function filterChipOptions(type, keyword) {
     cropEl.value = state.workFilterCrop || '';
   }
 
-  function getCurrentSeasonLike() {
-    const seasons = state.seasons || [];
-    if (!seasons.length) return null;
-    const explicit = seasons.find(item => Number(item.is_current) === 1);
-    if (explicit) return explicit;
-    const today = fmtDate(new Date());
-    const byDate = seasons.find(item => String(item.start_date || '') <= today && String(item.end_date || '') >= today);
-    if (byDate) return byDate;
-    return [...seasons].sort((a, b) => String(b.end_date || '').localeCompare(String(a.end_date || '')))[0] || null;
-  }
-
-  function getSelectedWorkSeason() {
-    const value = state.workFilterSeason || 'all';
-    if (value === 'all') return null;
-    if (value === 'current') return getCurrentSeasonLike();
-    return (state.seasons || []).find(item => String(item.id) === String(value)) || null;
-  }
-
   function renderWorks() {
     const wrap = el['works-list'];
     if (!wrap) return;
 
     const q = (state.workSearchKeyword || '').trim().toLowerCase();
     const works = [...state.works].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')));
-    const selectedSeason = getSelectedWorkSeason();
 
     const filtered = works.filter(work => {
       const meta = parseMemo(work.memo);
@@ -3975,7 +3934,6 @@ function filterChipOptions(type, keyword) {
         (meta.materials || []).map(m => `${m.name || ''} ${m.qty || ''} ${m.unit || ''}`).join(' ')
       ].join(' ').toLowerCase();
 
-      const inSeason = !selectedSeason || (String(work.start_date || '') >= String(selectedSeason.start_date || '') && String(work.start_date || '') <= String(selectedSeason.end_date || ''));
       const inKeyword = text.includes(q);
       const inStart = !state.workFilterStartDate || String(work.start_date || '') >= state.workFilterStartDate;
       const inEnd = !state.workFilterEndDate || String(work.start_date || '') <= state.workFilterEndDate;
@@ -3984,7 +3942,7 @@ function filterChipOptions(type, keyword) {
       const cropValues = splitCsv(work.crops);
       const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
 
-      return inSeason && inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
+      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
     });
 
     if (!filtered.length) {

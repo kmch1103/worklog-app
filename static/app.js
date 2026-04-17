@@ -27,6 +27,7 @@
     workFilterTaskCategory: '',
     workFilterTaskName: '',
     workFilterCrop: '',
+    workFilterSeason: 'current',
     selectedMaterialsDetailed: [],
     materialUnits: ['개', '병', '통', '봉', '포', 'kg', 'L', 'ml', '말', 'M'],
     mobileCalendarMode: 'current',
@@ -76,6 +77,7 @@
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
     stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
     updateScrollJumpButtons();
   }
 
@@ -640,6 +642,7 @@
     renderOptions();
     renderMoney();
     ensureWorksSearchBar();
+    updateScrollJumpButtons();
   }
 
   function switchPage(page, options = {}) {
@@ -666,13 +669,15 @@
     });
 
     stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
 
     if (page === 'calendar') {
       renderCalendar();
       updateMobileCalendarMode();
     } else if (page === 'works') {
-      renderWorks();
       ensureWorksSearchBar();
+      renderWorks();
+      updateScrollJumpButtons();
     } else if (page === 'materials') {
       renderMaterials();
     } else if (page === 'money') {
@@ -3674,12 +3679,14 @@ function filterChipOptions(type, keyword) {
     if (!node) return;
     node.classList.remove('hidden');
     stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
     stabilizeWorksFloatingButton();
+    updateScrollJumpButtons();
   }
 
   function fmtDate(date) {
@@ -3804,6 +3811,10 @@ function filterChipOptions(type, keyword) {
             <select id="works-filter-crop"></select>
           </div>
           <div>
+            <label class="inline-help">시즌</label>
+            <select id="works-filter-season"></select>
+          </div>
+          <div>
             <label class="inline-help">검색</label>
             <input type="text" id="works-search-input" placeholder="메모/자재/작업 검색">
           </div>
@@ -3824,6 +3835,7 @@ function filterChipOptions(type, keyword) {
       el['works-filter-task-category'] = box.querySelector('#works-filter-task-category');
       el['works-filter-task-name'] = box.querySelector('#works-filter-task-name');
       el['works-filter-crop'] = box.querySelector('#works-filter-crop');
+      el['works-filter-season'] = box.querySelector('#works-filter-season');
       const input = box.querySelector('#works-search-input');
       const resetBtn = box.querySelector('#btn-works-filter-reset');
 
@@ -3853,6 +3865,10 @@ function filterChipOptions(type, keyword) {
         state.workFilterCrop = e.target.value || '';
         renderWorks();
       });
+      el['works-filter-season'].addEventListener('change', (e) => {
+        state.workFilterSeason = e.target.value || 'current';
+        renderWorks();
+      });
       resetBtn.addEventListener('click', () => {
         state.workSearchKeyword = '';
         state.workFilterStartDate = '';
@@ -3860,9 +3876,11 @@ function filterChipOptions(type, keyword) {
         state.workFilterTaskCategory = '';
         state.workFilterTaskName = '';
         state.workFilterCrop = '';
+        state.workFilterSeason = 'current';
         renderWorksSearchFilterOptions();
         if (el['works-filter-start']) el['works-filter-start'].value = '';
         if (el['works-filter-end']) el['works-filter-end'].value = '';
+        if (el['works-filter-season']) el['works-filter-season'].value = 'current';
         const searchInput = box.querySelector('#works-search-input');
         if (searchInput) searchInput.value = '';
         renderWorks();
@@ -3872,6 +3890,7 @@ function filterChipOptions(type, keyword) {
     renderWorksSearchFilterOptions();
     if (el['works-filter-start']) el['works-filter-start'].value = state.workFilterStartDate || '';
     if (el['works-filter-end']) el['works-filter-end'].value = state.workFilterEndDate || '';
+    if (el['works-filter-season']) el['works-filter-season'].value = state.workFilterSeason || 'current';
     const searchInput = box.querySelector('#works-search-input');
     if (searchInput) searchInput.value = state.workSearchKeyword || '';
   }
@@ -3880,7 +3899,8 @@ function filterChipOptions(type, keyword) {
     const categoryEl = el['works-filter-task-category'];
     const taskEl = el['works-filter-task-name'];
     const cropEl = el['works-filter-crop'];
-    if (!categoryEl || !taskEl || !cropEl) return;
+    const seasonEl = el['works-filter-season'];
+    if (!categoryEl || !taskEl || !cropEl || !seasonEl) return;
 
     const categoryOptions = ['<option value="">전체 작업분류</option>']
       .concat((state.options.task_categories || []).map(item => {
@@ -3910,6 +3930,54 @@ function filterChipOptions(type, keyword) {
       .concat(Array.from(cropSet).sort().map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
     cropEl.innerHTML = cropOptions.join('');
     cropEl.value = state.workFilterCrop || '';
+    const seasonOptions = ['<option value="all">전체 시즌</option>', '<option value="current">현재시즌</option>']
+      .concat((state.seasons || []).map(item => {
+        const label = item.season_name || `${item.start_date || ''} ~ ${item.end_date || ''}`;
+        return `<option value="${escapeHtml(String(item.id))}">${escapeHtml(label)}</option>`;
+      }));
+    seasonEl.innerHTML = seasonOptions.join('');
+    seasonEl.value = state.workFilterSeason || 'current';
+  }
+
+
+  function getPreferredCurrentSeason() {
+    const seasons = Array.isArray(state.seasons) ? state.seasons : [];
+    if (!seasons.length) return null;
+
+    const explicit = seasons.find(item => Number(item.is_current || 0) === 1);
+    if (explicit) return explicit;
+
+    const today = fmtDate(new Date());
+    const active = seasons.find(item => {
+      const start = String(item.start_date || '');
+      const end = String(item.end_date || '');
+      return start && end && start <= today && today <= end;
+    });
+    if (active) return active;
+
+    return [...seasons].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')))[0] || null;
+  }
+
+  function isWorkInSelectedSeason(work) {
+    const seasonValue = state.workFilterSeason || 'current';
+    if (seasonValue === 'all') return true;
+
+    let season = null;
+    if (seasonValue === 'current') {
+      season = getPreferredCurrentSeason();
+    } else {
+      season = (state.seasons || []).find(item => String(item.id) === String(seasonValue));
+    }
+    if (!season) return true;
+
+    const start = String(season.start_date || '');
+    const end = String(season.end_date || '');
+    if (!start || !end) return true;
+
+    const workStart = String(work.start_date || '');
+    const workEnd = String(work.end_date || work.start_date || '');
+    if (!workStart) return false;
+    return workStart <= end && workEnd >= start;
   }
 
   function renderWorks() {
@@ -3941,12 +4009,14 @@ function filterChipOptions(type, keyword) {
       const inTask = !state.workFilterTaskName || String(work.task_name || '') === state.workFilterTaskName;
       const cropValues = splitCsv(work.crops);
       const inCrop = !state.workFilterCrop || cropValues.includes(state.workFilterCrop);
+      const inSeason = isWorkInSelectedSeason(work);
 
-      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop;
+      return inKeyword && inStart && inEnd && inCategory && inTask && inCrop && inSeason;
     });
 
     if (!filtered.length) {
       wrap.innerHTML = `<div class="empty-msg">작업 내역 없음</div>`;
+      updateScrollJumpButtons();
       return;
     }
 
@@ -3978,6 +4048,8 @@ function filterChipOptions(type, keyword) {
     wrap.querySelectorAll('[data-work-delete]').forEach(btn => {
       btn.addEventListener('click', () => deleteWork(btn.dataset.workDelete));
     });
+
+    updateScrollJumpButtons();
   }
 
   function renderWorkCard(work) {

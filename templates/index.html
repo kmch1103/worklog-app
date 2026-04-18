@@ -211,21 +211,9 @@
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
     #page-works .page-header,
-    #page-materials .page-header{
-      position:sticky;
-      top:0;
-      z-index:45;
-      background:#f8fafc;
-      padding:8px 0 10px;
-      margin-bottom:12px;
-      box-shadow:0 6px 16px rgba(15,23,42,.08);
-    }
+    #page-materials .page-header{position:sticky; top:0; z-index:50; background:#f8fafc; padding:8px 0 10px; margin-bottom:12px;}
     #page-works .page-header-actions,
-    #page-materials .page-header-actions{
-      position:static;
-      padding:0;
-      background:transparent;
-    }
+    #page-materials .page-header-actions{display:flex; gap:8px;}
 
     .works-search-box{padding:14px 16px;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
@@ -1226,7 +1214,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=8"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
 
 
 

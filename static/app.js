@@ -39,7 +39,8 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    recentQuickVisible: false
+    recentQuickVisible: false,
+    favoriteWorks: []
   };
 
   const el = {};
@@ -97,7 +98,7 @@
       'calendar-detail-modal','calendar-detail-title','calendar-detail-body',
       'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
 
-      'work-modal','work-modal-title','btn-close-work-modal','btn-close-work-modal-mobile','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work','favorite-work-status',
+      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work','favorite-work-status',
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
@@ -158,13 +159,6 @@
     switchPage('calendar', { skipHistory: true });
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
-
-  function togglePageActionButtons(isHidden) {
-    document.querySelectorAll('#page-works .page-header-actions, #page-materials .page-header-actions').forEach(node => {
-      node.style.display = isHidden ? 'none' : '';
-    });
-  }
-
 
   function bindScrollJumpButtons() {
     on(el['btn-scroll-top'], 'click', () => {
@@ -250,7 +244,6 @@
   function bindWorkButtons() {
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
-    on(el['btn-close-work-modal-mobile'], 'click', closeWorkModal);
     on(el['btn-load-recent-work'], 'click', loadRecentWorkIntoForm);
     on(el['btn-save-favorite-work'], 'click', saveCurrentWorkAsFavorite);
     on(el['btn-load-favorite-work'], 'click', loadFavoriteWorkIntoForm);
@@ -527,7 +520,8 @@
       loadPlans(),
       loadMaterials(),
       loadOptions(),
-      loadSeasons()
+      loadSeasons(),
+      loadFavoriteWorks()
     ]);
   }
 
@@ -589,6 +583,16 @@
     } catch (e) {
       console.error(e);
       state.seasons = [];
+    }
+  }
+
+  async function loadFavoriteWorks() {
+    try {
+      const rows = await apiGet('/api/favorite_works');
+      state.favoriteWorks = Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.error(e);
+      state.favoriteWorks = [];
     }
   }
 
@@ -1052,7 +1056,7 @@
     }
   }
 
-  function openWorkModal(options = {}) {
+  async function openWorkModal(options = {}) {
     state.editingWorkId = null;
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
 
@@ -1062,21 +1066,21 @@
     if (el.start_date) el.start_date.value = defaultDate;
     if (el.repeat_days) el.repeat_days.value = 1;
     updateEndDateFromRepeatDays();
+    await loadFavoriteWorks();
+    await loadFavoriteWorks();
     renderFavoriteWorkSelect();
     syncFavoriteWorkButtons();
     renderRecentQuickPicks();
     updatePestSectionVisibility(false);
     clearTaskSelection(false);
 
-    togglePageActionButtons(true);
-    togglePageActionButtons(true);
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'work');
     }
   }
 
-  function openWorkModalById(id, options = {}) {
+  async function openWorkModalById(id, options = {}) {
     const work = state.works.find(w => String(w.id) === String(id));
     if (!work) return;
 
@@ -1120,31 +1124,12 @@
   }
 
 
-  function getFavoriteWorkStorageKey() {
-    return 'worklog_favorite_works_v1';
-  }
-
   function getFavoriteWorks() {
-    try {
-      const raw = localStorage.getItem(getFavoriteWorkStorageKey()) || '[]';
-      const rows = JSON.parse(raw);
-      return Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      console.error(e);
-      return [];
-    }
+    return Array.isArray(state.favoriteWorks) ? state.favoriteWorks : [];
   }
 
-
-  function setFavoriteWorks(rows) {
-    try {
-      localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
-      return true;
-    } catch (e) {
-      console.error(e);
-      showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
-      return false;
-    }
+  function getSelectedChips(type) {
+    return getSelectedChipValues(type);
   }
 
   function showFavoriteWorkStatus(message) {
@@ -1255,7 +1240,7 @@
     updateMoneySummary();
   }
 
-  function saveCurrentWorkAsFavorite() {
+  async function saveCurrentWorkAsFavorite() {
     const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
     const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
     if (name == null) return;
@@ -1266,30 +1251,29 @@
       return;
     }
 
-    const rows = getFavoriteWorks();
-    const newItem = {
-      id: `${Date.now()}`,
-      name: trimmed,
-      template: buildWorkTemplateFromForm()
-    };
-    rows.push(newItem);
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
-      alert('즐겨찾기 저장 실패');
-      return;
+    try {
+      const created = await apiPost('/api/favorite_works', {
+        name: trimmed,
+        template: buildWorkTemplateFromForm()
+      });
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect(created?.id ? String(created.id) : '');
+      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+      alert('즐겨찾기로 저장했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 저장 실패: ${e.message || e}`);
     }
-    renderFavoriteWorkSelect(newItem.id);
-    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-    alert('즐겨찾기로 저장했습니다.');
   }
 
-  function loadFavoriteWorkIntoForm() {
+  async function loadFavoriteWorkIntoForm() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('불러올 즐겨찾기를 선택하세요.');
       return;
     }
 
+    await loadFavoriteWorks();
     const item = getFavoriteWorks().find(row => String(row.id) === String(selectedId));
     if (!item) {
       alert('선택한 즐겨찾기를 찾을 수 없습니다.');
@@ -1303,7 +1287,7 @@
     showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
-  function deleteFavoriteWork() {
+  async function deleteFavoriteWork() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('삭제할 즐겨찾기를 선택하세요.');
@@ -1311,19 +1295,19 @@
     }
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
-    const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
-      alert('즐겨찾기 삭제 실패');
-      return;
+    try {
+      await apiDelete(`/api/favorite_works/${encodeURIComponent(selectedId)}`);
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect('');
+      showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 삭제 실패: ${e.message || e}`);
     }
-    renderFavoriteWorkSelect('');
-    showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
   }
 
   function closeWorkModal() {
     addHidden(el['work-modal']);
-    togglePageActionButtons(false);
     state.editingWorkId = null;
     clearTaskSelection(false);
   }
@@ -3082,8 +3066,6 @@ function filterChipOptions(type, keyword) {
     state.editingMaterialId = null;
     if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 추가';
     resetMaterialForm();
-    togglePageActionButtons(true);
-    togglePageActionButtons(true);
     removeHidden(el['material-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'material');
@@ -3113,7 +3095,6 @@ function filterChipOptions(type, keyword) {
 
   function closeMaterialModal() {
     addHidden(el['material-modal']);
-    togglePageActionButtons(false);
     state.editingMaterialId = null;
   }
 

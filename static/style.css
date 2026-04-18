@@ -1244,3 +1244,9 @@ th, td{
     font-size: 14px;
   }
 }
+
+.scroll-jump-btn {
+  position: fixed;
+  right: 20px;
+  z-index: 9999;
+}

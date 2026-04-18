@@ -1245,8 +1245,3 @@ th, td{
   }
 }
 
-.scroll-jump-btn {
-  position: fixed;
-  right: 20px;
-  z-index: 9999;
-}

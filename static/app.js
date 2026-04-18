@@ -39,7 +39,8 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    recentQuickVisible: false
+    recentQuickVisible: false,
+    favoriteWorks: []
   };
 
   const el = {};
@@ -186,7 +187,7 @@
     const canScroll = docHeight > viewport + 40;
 
     topBtn.classList.toggle('hidden', !isWorksPage || scrollTop < 120);
-    bottomBtn.classList.toggle('hidden', !isWorksPage);
+    bottomBtn.classList.toggle('hidden', !isWorksPage || nearBottom);
   }
 
   function bindCalendarButtons() {
@@ -519,7 +520,8 @@
       loadPlans(),
       loadMaterials(),
       loadOptions(),
-      loadSeasons()
+      loadSeasons(),
+      loadFavoriteWorks()
     ]);
   }
 
@@ -1044,7 +1046,7 @@
     }
   }
 
-  function openWorkModal(options = {}) {
+  async function openWorkModal(options = {}) {
     state.editingWorkId = null;
     if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
 
@@ -1054,6 +1056,8 @@
     if (el.start_date) el.start_date.value = defaultDate;
     if (el.repeat_days) el.repeat_days.value = 1;
     updateEndDateFromRepeatDays();
+    await loadFavoriteWorks();
+    await loadFavoriteWorks();
     renderFavoriteWorkSelect();
     syncFavoriteWorkButtons();
     renderRecentQuickPicks();
@@ -1066,7 +1070,7 @@
     }
   }
 
-  function openWorkModalById(id, options = {}) {
+  async function openWorkModalById(id, options = {}) {
     const work = state.works.find(w => String(w.id) === String(id));
     if (!work) return;
 
@@ -1096,6 +1100,8 @@
 
     const currentStartDate = el.start_date?.value || fmtDate(new Date());
     const currentRepeatDays = Number(el.repeat_days?.value || 1);
+    const editingId = state.editingWorkId;
+    const wasEditing = !!editingId;
 
     fillWorkForm(recent);
 
@@ -1103,38 +1109,31 @@
     if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
     updateEndDateFromRepeatDays();
 
-    state.editingWorkId = null;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+    if (wasEditing) {
+      state.editingWorkId = editingId;
+      if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
+    } else {
+      state.editingWorkId = null;
+      if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+    }
     state.recentQuickVisible = true;
     renderRecentQuickPicks();
   }
 
 
-  function getFavoriteWorkStorageKey() {
-    return 'worklog_favorite_works_v1';
+  async function loadFavoriteWorks() {
+    try {
+      const rows = await apiGet('/api/favorite_works');
+      state.favoriteWorks = Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.error(e);
+      state.favoriteWorks = [];
+      showFavoriteWorkStatus('즐겨찾기 목록을 불러오지 못했습니다.');
+    }
   }
 
   function getFavoriteWorks() {
-    try {
-      const raw = localStorage.getItem(getFavoriteWorkStorageKey()) || '[]';
-      const rows = JSON.parse(raw);
-      return Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      console.error(e);
-      return [];
-    }
-  }
-
-
-  function setFavoriteWorks(rows) {
-    try {
-      localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
-      return true;
-    } catch (e) {
-      console.error(e);
-      showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
-      return false;
-    }
+    return Array.isArray(state.favoriteWorks) ? state.favoriteWorks : [];
   }
 
   function showFavoriteWorkStatus(message) {
@@ -1245,7 +1244,7 @@
     updateMoneySummary();
   }
 
-  function saveCurrentWorkAsFavorite() {
+  async function saveCurrentWorkAsFavorite() {
     const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
     const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
     if (name == null) return;
@@ -1256,21 +1255,20 @@
       return;
     }
 
-    const rows = getFavoriteWorks();
-    const newItem = {
-      id: `${Date.now()}`,
-      name: trimmed,
-      template: buildWorkTemplateFromForm()
-    };
-    rows.push(newItem);
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
-      alert('즐겨찾기 저장 실패');
-      return;
+    try {
+      const saved = await apiPost('/api/favorite_works', {
+        name: trimmed,
+        template: buildWorkTemplateFromForm()
+      });
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect(saved?.id ? String(saved.id) : '');
+      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+      alert('즐겨찾기로 저장했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 저장 실패
+${e.message || e}`);
     }
-    renderFavoriteWorkSelect(newItem.id);
-    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-    alert('즐겨찾기로 저장했습니다.');
   }
 
   function loadFavoriteWorkIntoForm() {
@@ -1287,13 +1285,20 @@
       return;
     }
 
+    const editingId = state.editingWorkId;
+    const wasEditing = !!editingId;
     applyWorkTemplateToForm(item.template || {});
-    state.editingWorkId = null;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+    if (wasEditing) {
+      state.editingWorkId = editingId;
+      if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
+    } else {
+      state.editingWorkId = null;
+      if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+    }
     showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
-  function deleteFavoriteWork() {
+  async function deleteFavoriteWork() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('삭제할 즐겨찾기를 선택하세요.');
@@ -1301,14 +1306,16 @@
     }
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
-    const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
-      alert('즐겨찾기 삭제 실패');
-      return;
+    try {
+      await apiDelete(`/api/favorite_works/${selectedId}`);
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect('');
+      showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 삭제 실패
+${e.message || e}`);
     }
-    renderFavoriteWorkSelect('');
-    showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
   }
 
   function closeWorkModal() {
@@ -1672,6 +1679,8 @@ function applyRecentWorkQuickPick(workId) {
 
   const currentStartDate = el.start_date?.value || fmtDate(new Date());
   const currentRepeatDays = Number(el.repeat_days?.value || 1);
+  const editingId = state.editingWorkId;
+  const wasEditing = !!editingId;
 
   fillWorkForm(work);
 
@@ -1679,8 +1688,13 @@ function applyRecentWorkQuickPick(workId) {
   if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
   updateEndDateFromRepeatDays();
 
-  state.editingWorkId = null;
-  if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+  if (wasEditing) {
+    state.editingWorkId = editingId;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 수정';
+  } else {
+    state.editingWorkId = null;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
+  }
   showFavoriteWorkStatus(`최근 작업 불러옴: ${getRecentWorkQuickLabel(work)}`);
 }
 

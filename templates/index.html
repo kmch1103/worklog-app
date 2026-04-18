@@ -210,10 +210,37 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
-    #page-works .page-header,
-    #page-materials .page-header{padding-right:180px;}
     #page-works .page-header-actions,
-    #page-materials .page-header-actions{position:fixed; top:18px; right:20px; z-index:10060; background:transparent; padding:0; margin:0;}
+    #page-materials .page-header-actions{position:sticky; top:0; z-index:40; background:#f8fafc; padding:8px 0 10px;}
+
+    .work-modal-toolbar{display:grid; gap:10px; margin-bottom:14px;}
+    .work-modal-toolbar .favorite-select-wrap select{width:100%;}
+    .work-modal-toolbar .favorite-action-row,
+    .work-modal-toolbar .favorite-sub-row{display:grid; gap:8px; grid-template-columns:repeat(3,minmax(0,1fr));}
+    .work-modal-toolbar .favorite-sub-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .work-modal-toolbar .favorite-status{font-size:12px; color:#64748b; min-height:18px; padding:0 2px;}
+    .work-modal-inline-two{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;}
+    .work-modal-inline-two .field{min-width:0;}
+    .work-modal-inline-three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
+    .work-modal-inline-three .field{min-width:0;}
+    .task-entry-stack.compact{margin-top:0;}
+    @media (max-width: 900px){
+      #work-modal .modal-header{align-items:center;}
+      #work-modal .modal-header > div:last-child{display:none !important;}
+      #work-modal .modal-body{padding-top:14px;}
+      .work-modal-toolbar .favorite-action-row{grid-template-columns:repeat(3,minmax(0,1fr));}
+      .work-modal-toolbar .favorite-sub-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+      .work-modal-inline-three{grid-template-columns:1.2fr .8fr 1.2fr;}
+      .work-modal-inline-two{grid-template-columns:repeat(2,minmax(0,1fr));}
+      #work-modal .inline-help.time-help{margin-bottom:6px;}
+    }
+    @media (max-width: 560px){
+      .work-modal-toolbar .favorite-action-row{grid-template-columns:repeat(3,minmax(0,1fr));}
+      .work-modal-toolbar .favorite-action-row .btn,
+      .work-modal-toolbar .favorite-sub-row .btn,
+      .work-modal-toolbar .favorite-select-wrap select{min-height:44px; padding:10px 8px; font-size:14px;}
+      .work-modal-toolbar .favorite-status{grid-column:1 / -1;}
+    }
 
     .works-search-box{padding:14px 16px;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
@@ -235,12 +262,8 @@
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
-      #page-works .page-header,
-      #page-materials .page-header{padding-right:0;}
-      #page-works .page-header-actions,
-      #page-materials .page-header-actions{top:72px; right:14px;}
       #page-works .page-header-actions .btn,
-      #page-materials .page-header-actions .btn{width:auto; justify-content:center;}
+      #page-materials .page-header-actions .btn{width:100%; justify-content:center;}
       .grid.two.task-grid{grid-template-columns:1fr;}
     }
 
@@ -402,7 +425,6 @@
 
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
-    }
     @media (max-width: 420px){
       body{padding-top:124px;}
       .mobile-menu-row .menu-btn{font-size:12px; padding:8px 4px;}
@@ -867,20 +889,30 @@
       <div class="modal-header">
         <h3 id="work-modal-title">새 작업 입력</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
-          <select id="favorite-work-select" class="btn" style="min-width:180px;">
-            <option value="">즐겨찾기 선택</option>
-          </select>
-          <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
-          <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
-          <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
-          <span id="favorite-work-status" class="inline-help" style="margin-left:8px;"></span>
-          <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
           <button id="btn-close-work-modal" class="btn">닫기</button>
         </div>
       </div>
 
       <div class="modal-body">
-        <div class="grid three">
+        <div class="work-modal-toolbar">
+          <div class="favorite-select-wrap">
+            <select id="favorite-work-select" class="btn">
+              <option value="">즐겨찾기 선택</option>
+            </select>
+          </div>
+          <div class="favorite-action-row">
+            <button id="btn-load-favorite-work" class="btn" disabled>불러오기</button>
+            <button id="btn-save-favorite-work" class="btn">저장</button>
+            <button id="btn-delete-favorite-work" class="btn" disabled>삭제</button>
+          </div>
+          <div id="favorite-work-status" class="favorite-status"></div>
+          <div class="favorite-sub-row">
+            <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
+            <button id="btn-close-work-modal-mobile" class="btn">닫기</button>
+          </div>
+        </div>
+
+        <div class="work-modal-inline-three">
           <label class="field">
             <span>시작일</span>
             <input type="date" id="start_date">
@@ -897,7 +929,7 @@
           </label>
         </div>
 
-        <div class="grid three">
+        <div class="work-modal-inline-three">
           <label class="field">
             <span>시작시간</span>
             <input type="time" id="start_time">
@@ -911,25 +943,31 @@
             <input type="time" id="end_time">
           </label>
         </div>
-        <div class="inline-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
+        <div class="inline-help time-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
 
-        <div class="field">
-          <span>작물</span>
-          <div id="crops-box" class="checks"></div>
-        </div>
-
-        <div class="grid two task-grid">
+        <div class="work-modal-inline-two">
           <label class="field">
             <span>날씨</span>
             <select id="weather"></select>
           </label>
+          <div class="field">
+            <span>작물</span>
+            <div id="crops-box" class="checks"></div>
+          </div>
+        </div>
+
+        <div class="work-modal-inline-two">
           <label class="field">
             <span>작업분류</span>
             <select id="task_category"></select>
           </label>
+          <label class="field task-select-field">
+            <span>세부작업</span>
+            <select id="task_name"></select>
+          </label>
         </div>
 
-        <div class="task-entry-stack">
+        <div class="task-entry-stack compact">
           <label class="field">
             <span>세부작업 빠른찾기</span>
             <input type="text" id="task-name-search" class="task-search-input" list="task-name-datalist" placeholder="세부작업 검색 또는 직접입력">
@@ -943,11 +981,6 @@
             <div id="task-recommend-box" class="recommended-materials-box"></div>
             <div class="inline-help">이전에 자주 입력한 세부작업을 추천합니다.</div>
           </div>
-
-          <label class="field task-select-field">
-            <span>선택된 세부작업</span>
-            <select id="task_name"></select>
-          </label>
 
           <div class="field hidden" id="task-material-recommend-wrap">
             <span>세부작업 추천자재</span>
@@ -1219,11 +1252,11 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=10"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
 
 
 
-  <button id="btn-scroll-top" class="scroll-jump-btn" type="button">↑ 맨위</button>
+  <button id="btn-scroll-top" class="scroll-jump-btn hidden" type="button">↑ 맨위</button>
   <button id="btn-scroll-bottom" class="scroll-jump-btn" type="button">↓ 맨아래</button>
 
   <button id="btn-mobile-quick-exit" class="mobile-quick-exit" type="button">종료</button>

@@ -97,7 +97,7 @@
       'calendar-detail-modal','calendar-detail-title','calendar-detail-body',
       'btn-close-calendar-detail','btn-calendar-add-plan','btn-calendar-add-work',
 
-      'work-modal','work-modal-title','btn-close-work-modal','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work','favorite-work-status',
+      'work-modal','work-modal-title','btn-close-work-modal','btn-close-work-modal-mobile','btn-load-recent-work','favorite-work-select','btn-load-favorite-work','btn-save-favorite-work','btn-delete-favorite-work','favorite-work-status',
       'btn-new-work',
 
       'start_date','repeat_days','end_date','start_time','end_time',
@@ -158,6 +158,13 @@
     switchPage('calendar', { skipHistory: true });
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
+
+  function togglePageActionButtons(isHidden) {
+    document.querySelectorAll('#page-works .page-header-actions, #page-materials .page-header-actions').forEach(node => {
+      node.style.display = isHidden ? 'none' : '';
+    });
+  }
+
 
   function bindScrollJumpButtons() {
     on(el['btn-scroll-top'], 'click', () => {
@@ -243,6 +250,7 @@
   function bindWorkButtons() {
     on(el['btn-new-work'], 'click', () => openWorkModal());
     on(el['btn-close-work-modal'], 'click', closeWorkModal);
+    on(el['btn-close-work-modal-mobile'], 'click', closeWorkModal);
     on(el['btn-load-recent-work'], 'click', loadRecentWorkIntoForm);
     on(el['btn-save-favorite-work'], 'click', saveCurrentWorkAsFavorite);
     on(el['btn-load-favorite-work'], 'click', loadFavoriteWorkIntoForm);
@@ -1060,6 +1068,8 @@
     updatePestSectionVisibility(false);
     clearTaskSelection(false);
 
+    togglePageActionButtons(true);
+    togglePageActionButtons(true);
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'work');
@@ -1313,6 +1323,7 @@
 
   function closeWorkModal() {
     addHidden(el['work-modal']);
+    togglePageActionButtons(false);
     state.editingWorkId = null;
     clearTaskSelection(false);
   }
@@ -2492,10 +2503,6 @@ function filterChipOptions(type, keyword) {
     });
   }
 
-  function getSelectedChips(type) {
-    return getSelectedChipValues(type);
-  }
-
   function getSelectedChipValues(type) {
     const box = el[`${type}-box`];
     if (!box) return [];
@@ -3075,6 +3082,8 @@ function filterChipOptions(type, keyword) {
     state.editingMaterialId = null;
     if (el['material-modal-title']) el['material-modal-title'].textContent = '자재 추가';
     resetMaterialForm();
+    togglePageActionButtons(true);
+    togglePageActionButtons(true);
     removeHidden(el['material-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'material');
@@ -3104,6 +3113,7 @@ function filterChipOptions(type, keyword) {
 
   function closeMaterialModal() {
     addHidden(el['material-modal']);
+    togglePageActionButtons(false);
     state.editingMaterialId = null;
   }
 

@@ -174,15 +174,19 @@
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
-    const isWorksPage = state.currentPage === 'works';
+    const allowedPages = ['works', 'materials', 'money', 'options'];
+    const activePage = document.querySelector('.page.active');
+    const activePageId = activePage ? activePage.id.replace('page-', '') : '';
+    const currentPage = state.currentPage || activePageId;
+    const isWorksPage = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
     const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
     const nearBottom = scrollTop + viewport >= docHeight - 40;
     const canScroll = docHeight > viewport + 40;
 
-    topBtn.classList.toggle('hidden', !isWorksPage || !canScroll || scrollTop < 120);
-    bottomBtn.classList.toggle('hidden', !isWorksPage || !canScroll || nearBottom);
+    topBtn.classList.toggle('hidden', !isWorksPage || scrollTop < 120);
+    bottomBtn.classList.toggle('hidden', !isWorksPage || nearBottom);
   }
 
   function bindCalendarButtons() {

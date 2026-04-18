@@ -210,12 +210,10 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
+    #page-works .page-header,
+    #page-materials .page-header{padding-right:180px;}
     #page-works .page-header-actions,
-    #page-materials .page-header-actions{position:fixed; right:20px; z-index:10060; display:flex; flex-direction:column; align-items:flex-end; gap:8px; background:transparent; padding:0; pointer-events:none;}
-    #page-works .page-header-actions .btn,
-    #page-materials .page-header-actions .btn{pointer-events:auto; border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
-    #page-works .page-header-actions{bottom:128px;}
-    #page-materials .page-header-actions{bottom:128px;}
+    #page-materials .page-header-actions{position:fixed; top:18px; right:20px; z-index:10060; background:transparent; padding:0; margin:0;}
 
     .works-search-box{padding:14px 16px;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
@@ -237,12 +235,12 @@
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
+      #page-works .page-header,
+      #page-materials .page-header{padding-right:0;}
       #page-works .page-header-actions,
-      #page-materials .page-header-actions{right:14px; gap:8px;}
-      #page-works .page-header-actions{bottom:172px;}
-      #page-materials .page-header-actions{bottom:172px;}
+      #page-materials .page-header-actions{top:72px; right:14px;}
       #page-works .page-header-actions .btn,
-      #page-materials .page-header-actions .btn{width:auto; justify-content:center; padding:13px 16px;}
+      #page-materials .page-header-actions .btn{width:auto; justify-content:center;}
       .grid.two.task-grid{grid-template-columns:1fr;}
     }
 
@@ -1220,7 +1218,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=9"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=10"></script>
 
 
 

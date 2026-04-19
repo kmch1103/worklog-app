@@ -432,13 +432,13 @@
     }
 
   
-    .works-floating-action,.materials-floating-action{position:fixed !important; right:18px !important; bottom:18px !important; z-index:9999 !important; display:flex; justify-content:flex-end; pointer-events:none;}
-    .works-floating-action .btn,.materials-floating-action .btn{pointer-events:auto;}
-    @media (min-width: 901px){ .works-floating-action,.materials-floating-action{left:278px !important; right:20px !important; justify-content:flex-end;} }
-    .works-floating-action .btn,.materials-floating-action .btn{border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
+    .works-floating-action{position:fixed !important; right:18px !important; bottom:18px !important; z-index:9999 !important; display:flex; justify-content:flex-end; pointer-events:none;}
+    .works-floating-action .btn{pointer-events:auto;}
+    @media (min-width: 901px){ .works-floating-action{left:278px !important; right:20px !important; justify-content:flex-end;} }
+    .works-floating-action .btn{border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
     @media (max-width: 768px){
-      .works-floating-action,.materials-floating-action{right:14px !important; bottom:calc(env(safe-area-inset-bottom, 0px) + 110px) !important; left:auto !important; justify-content:flex-end !important;}
-      .works-floating-action .btn,.materials-floating-action .btn{padding:13px 16px;}
+      .works-floating-action{right:14px !important; bottom:calc(env(safe-area-inset-bottom, 0px) + 110px) !important; left:auto !important; justify-content:flex-end !important;}
+      .works-floating-action .btn{padding:13px 16px;}
     }
 
   
@@ -451,6 +451,22 @@
       #btn-scroll-bottom{bottom:calc(env(safe-area-inset-bottom, 0px) + 68px);}
       #btn-scroll-top{bottom:calc(env(safe-area-inset-bottom, 0px) + 120px);}
       .mobile-quick-exit{bottom:calc(env(safe-area-inset-bottom, 0px) + 14px) !important;}
+    }
+
+  
+    /* v3 fix: 상단 고정 액션 + 내용 가림 방지 */
+    #page-works, #page-materials{overflow:visible;}
+    #page-works .page-header,
+    #page-materials .page-header{position:sticky; top:0; z-index:60; background:#f8fafc; padding-bottom:10px; margin-bottom:12px;}
+    #page-works .page-header-actions,
+    #page-materials .page-header-actions{position:static; padding:0; background:transparent;}
+    .works-top-action, .materials-top-action{display:flex; justify-content:flex-end; align-items:center;}
+    .works-top-action .btn, .materials-top-action .btn{border-radius:999px; padding:12px 18px; box-shadow:0 8px 20px rgba(37,99,235,.18);}
+    @media (max-width: 900px){
+      #page-works .page-header,
+      #page-materials .page-header{top:112px;}
+      .works-top-action, .materials-top-action{justify-content:flex-end;}
+      .works-top-action .btn, .materials-top-action .btn{width:auto !important; padding:12px 16px;}
     }
 
   </style>
@@ -521,7 +537,7 @@
       <section id="page-works" class="page">
         <div class="page-header">
           <h2>작업일지</h2>
-          <div class="page-header-actions works-floating-action">
+          <div class="page-header-actions works-top-action">
             <button id="btn-new-work" class="btn primary">+ 새 작업 입력</button>
           </div>
         </div>
@@ -531,7 +547,7 @@
       <section id="page-materials" class="page">
         <div class="page-header">
           <h2>자재관리</h2>
-          <div class="page-header-actions materials-floating-action">
+          <div class="page-header-actions materials-top-action">
             <button id="btn-open-material-modal" class="btn primary">+ 자재 추가</button>
           </div>
         </div>

@@ -2519,6 +2519,10 @@ function filterChipOptions(type, keyword) {
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
   }
 
+  function getSelectedChips(type) {
+    return getSelectedChipValues(type);
+  }
+
   function renderOptions() {
     renderOptionList('weather', state.options.weather, el['options-weather'], el['new-weather']);
     renderOptionList('crops', state.options.crops, el['options-crops'], el['new-crops']);

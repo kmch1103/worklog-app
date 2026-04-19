@@ -497,17 +497,16 @@ def init_db():
     ensure_column(cur, "incomes", "note", "TEXT DEFAULT ''")
     ensure_column(cur, "incomes", "created_at", "TEXT DEFAULT ''")
 
-    # favorite work templates
     cur.execute("""
     CREATE TABLE IF NOT EXISTS favorite_work_templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
         template_json TEXT DEFAULT '{}',
         created_at TEXT DEFAULT '',
         updated_at TEXT DEFAULT ''
     )
     """)
-    ensure_column(cur, "favorite_work_templates", "template_json", "TEXT DEFAULT '{}' ")
+    ensure_column(cur, "favorite_work_templates", "template_json", "TEXT DEFAULT '{}'")
     ensure_column(cur, "favorite_work_templates", "created_at", "TEXT DEFAULT ''")
     ensure_column(cur, "favorite_work_templates", "updated_at", "TEXT DEFAULT ''")
 
@@ -516,6 +515,61 @@ def init_db():
 
 
 init_db()
+
+
+@app.route("/api/favorite-work-templates", methods=["GET"])
+def get_favorite_work_templates():
+    conn = db()
+    rows = conn.execute("SELECT * FROM favorite_work_templates ORDER BY id DESC").fetchall()
+    conn.close()
+
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["template"] = json.loads(item.get("template_json") or "{}")
+        except Exception:
+            item["template"] = {}
+        result.append({
+            "id": item.get("id"),
+            "name": item.get("name", ""),
+            "template": item.get("template", {}),
+            "created_at": item.get("created_at", ""),
+            "updated_at": item.get("updated_at", "")
+        })
+    return jsonify(result)
+
+
+@app.route("/api/favorite-work-templates", methods=["POST"])
+def create_favorite_work_template():
+    data = request.get_json(force=True) or {}
+    name = normalize_name(data.get("name"))
+    template = data.get("template") or {}
+
+    if not name:
+        return jsonify({"ok": False, "error": "즐겨찾기 이름이 없습니다."}), 400
+
+    now = current_timestamp()
+    conn = db()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO favorite_work_templates (name, template_json, created_at, updated_at) VALUES (?, ?, ?, ?)",
+        (name, json.dumps(template, ensure_ascii=False), now, now)
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "id": new_id, "name": name})
+
+
+@app.route("/api/favorite-work-templates/<int:item_id>", methods=["DELETE"])
+def delete_favorite_work_template(item_id):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM favorite_work_templates WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/")
@@ -1886,80 +1940,3 @@ def export_excel():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-# =========================
-# FAVORITE WORK TEMPLATES
-# =========================
-@app.route("/api/favorite-work-templates", methods=["GET"])
-def get_favorite_work_templates():
-    conn = db()
-    rows = conn.execute("""
-        SELECT id, name, template_json, created_at, updated_at
-        FROM favorite_work_templates
-        ORDER BY name COLLATE NOCASE ASC, id DESC
-    """).fetchall()
-    conn.close()
-
-    result = []
-    for row in rows_to_dicts(rows):
-        template = {}
-        try:
-            template = json.loads(row.get("template_json") or "{}")
-            if not isinstance(template, dict):
-                template = {}
-        except Exception:
-            template = {}
-        result.append({
-            "id": row.get("id"),
-            "name": row.get("name") or "",
-            "template": template,
-            "created_at": row.get("created_at") or "",
-            "updated_at": row.get("updated_at") or ""
-        })
-    return jsonify(result)
-
-
-@app.route("/api/favorite-work-templates", methods=["POST"])
-def save_favorite_work_template():
-    data = request.get_json(force=True) or {}
-    name = normalize_name(data.get("name"))
-    template = data.get("template") or {}
-
-    if not name:
-        return jsonify({"ok": False, "error": "즐겨찾기 이름이 없습니다."}), 400
-    if not isinstance(template, dict):
-        return jsonify({"ok": False, "error": "즐겨찾기 데이터 형식이 올바르지 않습니다."}), 400
-
-    now = current_timestamp()
-    template_json = json.dumps(template, ensure_ascii=False)
-
-    conn = db()
-    cur = conn.cursor()
-    existing = cur.execute("SELECT id FROM favorite_work_templates WHERE name = ?", (name,)).fetchone()
-
-    if existing:
-        cur.execute(
-            "UPDATE favorite_work_templates SET template_json = ?, updated_at = ? WHERE id = ?",
-            (template_json, now, existing["id"])
-        )
-        favorite_id = existing["id"]
-    else:
-        cur.execute(
-            "INSERT INTO favorite_work_templates (name, template_json, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (name, template_json, now, now)
-        )
-        favorite_id = cur.lastrowid
-
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True, "id": favorite_id, "name": name})
-
-
-@app.route("/api/favorite-work-templates/<int:favorite_id>", methods=["DELETE"])
-def delete_favorite_work_template(favorite_id):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM favorite_work_templates WHERE id = ?", (favorite_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})

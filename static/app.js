@@ -51,7 +51,6 @@
     cacheElements();
     bindMenu();
     bindQuickExitButton();
-    ensureScrollJumpButtons();
     bindScrollJumpButtons();
     bindCalendarButtons();
     bindMobileCalendarButtons();
@@ -66,7 +65,6 @@
 
     await loadAll();
     await loadMoney();
-    await loadFavoriteWorks();
     renderAll();
     updateMobileCalendarMode();
     initializeHistoryState();
@@ -74,13 +72,11 @@
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
       stabilizePageActionButtons();
-    ensureScrollJumpButtons();
       updateScrollJumpButtons();
     });
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
     stabilizePageActionButtons();
-    ensureScrollJumpButtons();
     updateScrollJumpButtons();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -175,47 +171,7 @@
     });
   }
 
-  
-function ensureScrollJumpButtons() {
-    const existingTop = document.getElementById('btn-scroll-top');
-    const existingBottom = document.getElementById('btn-scroll-bottom');
-    const buttons = [
-      { node: existingTop, id: 'btn-scroll-top', text: '↑ 맨위', bottom: '74px' },
-      { node: existingBottom, id: 'btn-scroll-bottom', text: '↓ 맨아래', bottom: '20px' }
-    ];
-
-    buttons.forEach((item) => {
-      let node = item.node;
-      if (!node) {
-        node = document.createElement('button');
-        node.id = item.id;
-        node.type = 'button';
-        node.textContent = item.text;
-        document.body.appendChild(node);
-      } else if (node.parentElement !== document.body) {
-        document.body.appendChild(node);
-      }
-      node.className = 'scroll-jump-btn';
-      node.style.position = 'fixed';
-      node.style.right = window.innerWidth <= 900 ? '14px' : '20px';
-      node.style.bottom = window.innerWidth <= 900
-        ? (item.id === 'btn-scroll-top' ? '120px' : '68px')
-        : item.bottom;
-      node.style.zIndex = '10050';
-      node.style.display = 'flex';
-      node.style.alignItems = 'center';
-      node.style.justifyContent = 'center';
-      node.style.visibility = 'visible';
-      node.style.opacity = '1';
-      node.style.pointerEvents = 'auto';
-    });
-
-    el['btn-scroll-top'] = document.getElementById('btn-scroll-top');
-    el['btn-scroll-bottom'] = document.getElementById('btn-scroll-bottom');
-  }
-
   function updateScrollJumpButtons() {
-    ensureScrollJumpButtons();
     const topBtn = el['btn-scroll-top'];
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
@@ -226,18 +182,33 @@ function ensureScrollJumpButtons() {
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
-    const displayValue = (!shouldShow || hideForModal) ? 'none' : 'flex';
+    const scrollingEl = document.scrollingElement || document.documentElement || document.body;
+    const scrollTop = Number(scrollingEl.scrollTop || window.pageYOffset || 0);
+    const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
+    const scrollHeight = Number(Math.max(
+      scrollingEl.scrollHeight || 0,
+      document.documentElement.scrollHeight || 0,
+      document.body.scrollHeight || 0
+    ));
+    const canScroll = scrollHeight > viewportHeight + 10;
+    const nearTop = scrollTop <= 20;
+    const nearBottom = scrollTop + viewportHeight >= scrollHeight - 20;
 
-    [topBtn, bottomBtn].forEach((btn) => {
-      btn.classList.remove('hidden');
-      btn.style.display = displayValue;
-      btn.style.visibility = displayValue === 'none' ? 'hidden' : 'visible';
-      btn.style.opacity = displayValue === 'none' ? '0' : '1';
-    });
+    if (!shouldShow || hideForModal || !canScroll) {
+      topBtn.classList.add('hidden');
+      bottomBtn.classList.add('hidden');
+      topBtn.style.display = 'none';
+      bottomBtn.style.display = 'none';
+      return;
+    }
+
+    topBtn.classList.toggle('hidden', nearTop);
+    bottomBtn.classList.toggle('hidden', nearBottom);
+    topBtn.style.display = nearTop ? 'none' : 'flex';
+    bottomBtn.style.display = nearBottom ? 'none' : 'flex';
   }
 
   function bindCalendarButtons() {
-
     on(el['btn-prev-month'], 'click', () => {
       state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
       renderCalendar();
@@ -567,7 +538,8 @@ function ensureScrollJumpButtons() {
       loadPlans(),
       loadMaterials(),
       loadOptions(),
-      loadSeasons()
+      loadSeasons(),
+      loadFavoriteWorks()
     ]);
   }
 
@@ -629,6 +601,17 @@ function ensureScrollJumpButtons() {
     } catch (e) {
       console.error(e);
       state.seasons = [];
+    }
+  }
+
+  async function loadFavoriteWorks() {
+    try {
+      const rows = await apiGet('/api/favorite-work-templates');
+      state.favoriteWorks = Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.error(e);
+      state.favoriteWorks = [];
+      showFavoriteWorkStatus('즐겨찾기 목록을 불러오지 못했습니다.');
     }
   }
 
@@ -732,7 +715,6 @@ function ensureScrollJumpButtons() {
     });
 
     stabilizePageActionButtons();
-    ensureScrollJumpButtons();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -1172,16 +1154,6 @@ function ensureScrollJumpButtons() {
   }
 
 
-  async function loadFavoriteWorks() {
-    try {
-      const rows = await apiGet('/api/favorite-work-templates');
-      state.favoriteWorks = Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      console.error(e);
-      state.favoriteWorks = [];
-      showFavoriteWorkStatus('즐겨찾기 목록을 불러오지 못했습니다.');
-    }
-  }
 
   function getFavoriteWorks() {
     return Array.isArray(state.favoriteWorks) ? state.favoriteWorks : [];
@@ -1219,7 +1191,6 @@ function ensureScrollJumpButtons() {
   }
 
   function buildWorkTemplateFromForm() {
-
     const startTime = String(el.start_time?.value || '').trim();
     const endTime = String(el.end_time?.value || '').trim();
     const workHoursInput = Number(el.work_hours?.value || 0);
@@ -1296,8 +1267,7 @@ function ensureScrollJumpButtons() {
     updateMoneySummary();
   }
 
-  
-function saveCurrentWorkAsFavorite() {
+  async function saveCurrentWorkAsFavorite() {
     const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
     const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
     if (name == null) return;
@@ -1308,23 +1278,19 @@ function saveCurrentWorkAsFavorite() {
       return;
     }
 
-    const payload = {
-      name: trimmed,
-      template: buildWorkTemplateFromForm()
-    };
-
-    apiPost('/api/favorite-work-templates', payload)
-      .then(async (saved) => {
-        await loadFavoriteWorks();
-        renderFavoriteWorkSelect(String(saved?.id || ''));
-        showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-        alert('즐겨찾기로 저장했습니다.');
-      })
-      .catch((e) => {
-        console.error(e);
-        showFavoriteWorkStatus(`즐겨찾기 저장 실패: ${e.message || e}`);
-        alert(`즐겨찾기 저장 실패: ${e.message || e}`);
+    try {
+      const created = await apiPost('/api/favorite-work-templates', {
+        name: trimmed,
+        template: buildWorkTemplateFromForm()
       });
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect(created?.id || '');
+      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+      alert('즐겨찾기로 저장했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 저장 실패: ${e.message || e}`);
+    }
   }
 
   function loadFavoriteWorkIntoForm() {
@@ -1347,7 +1313,7 @@ function saveCurrentWorkAsFavorite() {
     showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
-  function deleteFavoriteWork() {
+  async function deleteFavoriteWork() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('삭제할 즐겨찾기를 선택하세요.');
@@ -1355,21 +1321,256 @@ function saveCurrentWorkAsFavorite() {
     }
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
-    apiDelete(`/api/favorite-work-templates/${selectedId}`)
-      .then(async () => {
-        await loadFavoriteWorks();
-        renderFavoriteWorkSelect('');
-        showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
-      })
-      .catch((e) => {
-        console.error(e);
-        showFavoriteWorkStatus(`즐겨찾기 삭제 실패: ${e.message || e}`);
-        alert(`즐겨찾기 삭제 실패: ${e.message || e}`);
-      });
+    try {
+      await apiDelete(`/api/favorite-work-templates/${selectedId}`);
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect('');
+      showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 삭제 실패: ${e.message || e}`);
+    }
   }
 
-function getRecentStorageKey(type) {
+  function closeWorkModal() {
+    addHidden(el['work-modal']);
+    state.editingWorkId = null;
+    clearTaskSelection(false);
+  }
 
+  function resetWorkForm() {
+    if (el.start_date) el.start_date.value = '';
+    if (el.repeat_days) el.repeat_days.value = 1;
+    if (el.end_date) el.end_date.value = '';
+    if (el.start_time) el.start_time.value = '';
+    if (el.end_time) el.end_time.value = '';
+    if (el.weather) el.weather.value = '';
+    if (el.task_category) el.task_category.value = '';
+    if (el.task_name) el.task_name.value = '';
+    if (el['task-name-search']) el['task-name-search'].value = '';
+    if (el['task-name-options']) el['task-name-options'].innerHTML = '';
+    if (el['pest-search-input']) el['pest-search-input'].value = '';
+    if (el.work_hours) el.work_hours.value = 0;
+    if (el.memo) el.memo.value = '';
+
+    clearChipSelections('crops');
+    clearChipSelections('pests');
+    clearChipSelections('machines');
+
+    resetMoneyFields();
+    resetLaborRows();
+    state.recentQuickVisible = false;
+    state.selectedMaterialsDetailed = [];
+    renderSelectedMaterialsDetailed();
+    renderRecommendedMaterials();
+    renderTaskOptionsByCategory('');
+    updatePestSectionVisibility(false);
+    syncFavoriteWorkButtons();
+  }
+
+  function fillWorkForm(work) {
+    const meta = parseMemo(work.memo);
+
+    if (el.start_date) el.start_date.value = work.start_date || '';
+    if (el.repeat_days) {
+      el.repeat_days.value = Number(meta.repeat_days || calcRepeatDays(work.start_date, work.end_date) || 1);
+    }
+    if (el.end_date) el.end_date.value = work.end_date || work.start_date || '';
+    if (el.start_time) el.start_time.value = meta.start_time || '';
+    if (el.end_time) el.end_time.value = meta.end_time || '';
+    if (el.weather) el.weather.value = work.weather || '';
+    if (el.task_category) el.task_category.value = work.task_category || '';
+    renderTaskOptionsByCategory(work.task_category || '');
+    if (el.task_name) el.task_name.value = work.task_name || '';
+    if (el['task-name-search']) el['task-name-search'].value = work.task_name || '';
+    renderTaskQuickOptions(work.task_category || '', work.task_name || '');
+    renderTaskMaterialRecommendations(work.task_name || '');
+    if (el.work_hours) el.work_hours.value = work.work_hours || meta.work_hours || 0;
+    if (el.memo) el.memo.value = meta.memo_text || '';
+
+    setChipSelections('crops', splitCsv(work.crops));
+    setChipSelections('pests', splitCsv(work.pests));
+    setChipSelections('machines', splitCsv(work.machines));
+    updatePestSectionVisibility(false);
+    renderRecommendedMaterials();
+
+    state.selectedMaterialsDetailed = Array.isArray(meta.materials)
+      ? meta.materials.map(m => ({
+          id: m.id || '',
+          name: m.name || '',
+          unit: m.unit || '',
+          price: Number(m.price || m.unit_price || 0),
+          qty: Number(m.qty || 0),
+          method: m.method || '',
+          installment_months: Number(m.installment_months || 0),
+          material_type: m.material_type || '재고형',
+          action: m.action || '사용',
+          cost_included: m.cost_included !== false
+        }))
+      : [];
+    renderSelectedMaterialsDetailed();
+
+    resetLaborRows();
+    if (Array.isArray(meta.labor_rows) && meta.labor_rows.length) {
+      meta.labor_rows.forEach(row => addLaborRow(row));
+    }
+
+    if (meta.money) {
+      if (el.has_money) el.has_money.checked = true;
+      toggleMoneyBox(true);
+      if (el.money_note) el.money_note.value = meta.money.note || '';
+      if (el.other_cost) el.other_cost.value = meta.money.other_total || 0;
+    } else {
+      resetMoneyFields();
+    }
+
+    updateEndDateFromRepeatDays();
+    syncWorkTimeFields('time');
+    updateMoneySummary();
+    renderRecommendedMaterials();
+  }
+
+  function updateWorkHoursFromTime() {
+    if (!el.start_time || !el.end_time || !el.work_hours) return;
+    const start = el.start_time.value;
+    const end = el.end_time.value;
+    if (!start || !end) return;
+
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    const diff = endMin - startMin;
+    if (diff >= 0) {
+      el.work_hours.value = (diff / 60).toFixed(1).replace('.0', '');
+    }
+  }
+
+  function updateEndTimeFromHours() {
+    if (!el.start_time || !el.end_time || !el.work_hours) return;
+    const start = el.start_time.value;
+    const hours = Number(el.work_hours.value || 0);
+    if (!start || hours <= 0) return;
+
+    const [sh, sm] = start.split(':').map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin = startMin + Math.round(hours * 60);
+    const eh = Math.floor(endMin / 60) % 24;
+    const em = endMin % 60;
+    el.end_time.value = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+  }
+
+  function syncWorkTimeFields(source) {
+    if (source === 'time') {
+      updateWorkHoursFromTime();
+    } else if (source === 'hours') {
+      updateEndTimeFromHours();
+    }
+  }
+
+  function updateEndDateFromRepeatDays() {
+    if (!el.start_date || !el.end_date || !el.repeat_days) return;
+
+    const start = el.start_date.value;
+    const repeatDays = Number(el.repeat_days.value || 1);
+
+    if (!start) {
+      el.end_date.value = '';
+      return;
+    }
+
+    const date = new Date(start);
+    if (Number.isNaN(date.getTime())) {
+      el.end_date.value = start;
+      return;
+    }
+
+    date.setDate(date.getDate() + Math.max(1, repeatDays) - 1);
+    el.end_date.value = fmtDate(date);
+  }
+
+  function calcRepeatDays(startDate, endDate) {
+    if (!startDate || !endDate) return 1;
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    const diff = Math.round((e - s) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff + 1 : 1;
+  }
+
+  function splitCsv(value) {
+    return String(value || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+  }
+
+  function optionName(item) {
+    if (item == null) return '';
+    return typeof item === 'string' ? item : (item.name || item.항목 || '');
+  }
+
+  function normalizeOptions(items) {
+    return (items || [])
+      .map(item => optionName(item))
+      .filter(Boolean);
+  }
+
+  function getTaskCategoryName(item) {
+    if (!item) return '';
+    if (typeof item === 'string') return '';
+    return item.category_name || item.category || '';
+  }
+
+  function renderWorkFormOptions() {
+    setSelectOptions(el.weather, state.options.weather, true);
+    setSelectOptions(el.task_category, state.options.task_categories, true, '작업분류 선택');
+    renderTaskOptionsByCategory(el.task_category?.value || '');
+    renderChipOptions('crops', state.options.crops);
+    renderChipOptions('pests', state.options.pests);
+    renderChipOptions('machines', state.options.machines);
+    renderRecommendedMaterials();
+    renderRecentQuickPicks();
+    updatePestSectionVisibility(false);
+    syncTaskNameDatalist(el.task_category?.value || '');
+    renderTaskCategoryRecommendations(el.task_category?.value || '');
+    renderTaskMaterialRecommendations(el.task_name?.value || '');
+    filterChipOptions('pests', el['pest-search-input']?.value || '');
+  }
+
+  function renderTaskOptionsByCategory(categoryName, keepCurrentValue = true) {
+    const selectEl = el.task_name;
+    if (!selectEl) return;
+
+    const current = keepCurrentValue ? (selectEl.value || '') : '';
+    const rawTasks = state.optionsRaw?.tasks || [];
+    const list = categoryName
+      ? rawTasks.filter(item => getTaskCategoryName(item) === categoryName)
+      : rawTasks;
+
+    const options = [`<option value="">세부작업 선택</option>`];
+    list.forEach(item => {
+      const name = optionName(item);
+      options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    });
+
+    selectEl.innerHTML = options.join('');
+    if (current && list.some(item => optionName(item) === current)) {
+      selectEl.value = current;
+    } else if (!keepCurrentValue) {
+      selectEl.value = '';
+    }
+
+    syncTaskNameDatalist(categoryName || '');
+    if (selectEl.value && el['task-name-search']) {
+      el['task-name-search'].value = selectEl.value;
+    }
+    renderTaskQuickOptions(categoryName || '', el['task-name-search']?.value || selectEl.value || '');
+    renderTaskCategoryRecommendations(categoryName || '');
+    renderTaskMaterialRecommendations(selectEl.value || '');
+  }
+
+
+function getRecentStorageKey(type) {
   return `worklog_recent_${type}_v1`;
 }
 

@@ -1,9 +1,82 @@
-/* 상단 여백 줄이기 패치 */
-.page { padding-top: 10px !important; }
-.page h2, .page-title { margin: 0 0 10px 0 !important; }
-.panel { margin-top: 10px !important; }
+/* APPEND THIS TO THE END OF YOUR EXISTING static/style.css */
 
-@media (max-width:768px){
-  .page { padding-top:6px !important; }
-  .page h2, .page-title { margin-bottom:8px !important; }
+/* ===== 상단 여백 축소 (안전 패치) ===== */
+
+/* 페이지 전체 위 여백 줄이기 */
+.page{
+  padding-top: 8px !important;
+}
+
+/* 페이지 제목 여백 줄이기 */
+.page h2,
+.page-title{
+  margin: 0 0 8px 0 !important;
+}
+
+/* 작업일지/자재관리 상단 카드 여백 */
+.panel{
+  margin-top: 8px !important;
+}
+
+/* 상단 고정 버튼과 간격 조정 */
+.page-header-actions{
+  top: 8px !important;
+}
+
+/* 모바일 */
+@media (max-width: 900px){
+  .page{
+    padding-top: 4px !important;
+  }
+
+  .page h2,
+  .page-title{
+    margin-bottom: 6px !important;
+  }
+
+  .page-header-actions{
+    top: 6px !important;
+  }
+}
+
+
+/* === appended patch === */
+
+/* ===== 상단 여백 축소 (안전 패치) ===== */
+
+/* 페이지 전체 위 여백 줄이기 */
+.page{
+  padding-top: 8px !important;
+}
+
+/* 페이지 제목 여백 줄이기 */
+.page h2,
+.page-title{
+  margin: 0 0 8px 0 !important;
+}
+
+/* 작업일지/자재관리 상단 카드 여백 */
+.panel{
+  margin-top: 8px !important;
+}
+
+/* 상단 고정 버튼과 간격 조정 */
+.page-header-actions{
+  top: 8px !important;
+}
+
+/* 모바일 */
+@media (max-width: 900px){
+  .page{
+    padding-top: 4px !important;
+  }
+
+  .page h2,
+  .page-title{
+    margin-bottom: 6px !important;
+  }
+
+  .page-header-actions{
+    top: 6px !important;
+  }
 }

@@ -51,7 +51,7 @@
     .option-item span{flex:1;}
     .option-item-main{display:flex; flex-direction:column; gap:4px; flex:1;}
     .option-subtext{font-size:12px; color:#64748b;}
-    .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+    .recommended-materials-box{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
     .recommended-materials-empty{font-size:13px; color:#64748b;}
     .options-grid{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; align-items:start;}
     .option-panel{min-width:0;}
@@ -68,7 +68,7 @@
     .option-mobile-tabs{display:none; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .btn[disabled]{opacity:.5; cursor:not-allowed;}
-    .season-panel{margin-top:16px;}
+    .season-panel{margin-top:4px;}
     @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
     @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
@@ -78,7 +78,7 @@
     .season-card.current{border-color:#2563eb; background:#eff6ff;}
     .season-card-title{font-weight:800; margin-bottom:6px;}
     .season-card-meta{font-size:13px; color:#475569; line-height:1.5;}
-    .season-panel.compact{margin-top:8px;}
+    .season-panel.compact{margin-top:4px;}
     .season-panel-header{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:0; cursor:pointer; user-select:none;}
     .season-panel-header h3{margin:0;}
     .season-panel-toggle{display:inline-flex; align-items:center; gap:6px; border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; color:#334155;}
@@ -109,7 +109,7 @@
     .money-monthly-table td:nth-child(2),
     .money-monthly-table td:nth-child(3),
     .money-monthly-table td:nth-child(4){text-align:right;}
-    .money-monthly-empty{color:#64748b; padding-top:8px;}
+    .money-monthly-empty{color:#64748b; padding-top:4px;}
     .money-table{width:100%;}
     .income-modal-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;}
     .income-note-field{grid-column:1 / -1;}
@@ -211,11 +211,11 @@
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
     #page-works,
-    #page-materials{padding-top:18px;}
+    #page-materials{padding-top:74px;}
     #page-works .page-header-actions,
     #page-materials .page-header-actions{
       position:fixed;
-      top:8px;
+      top:4px;
       right:20px;
       z-index:300;
       background:transparent;
@@ -251,9 +251,9 @@
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
       #page-works,
-      #page-materials{padding-top:12px;}
+      #page-materials{padding-top:68px;}
       #page-works .page-header-actions,
-      #page-materials .page-header-actions{top:8px; right:14px;}
+      #page-materials .page-header-actions{top:12px; right:14px;}
       #page-works .page-header-actions .btn,
       #page-materials .page-header-actions .btn{width:auto; justify-content:center; padding:12px 16px;}
       .grid.two.task-grid{grid-template-columns:1fr;}
@@ -295,7 +295,7 @@
     .mobile-menu-row{display:flex; flex-direction:column; gap:12px;}
     .mobile-menu-row::-webkit-scrollbar{height:6px;}
     .mobile-menu-row::-webkit-scrollbar-thumb{background:#94a3b8; border-radius:999px;}
-    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
+    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:4px;}
     .calendar-mobile-toggle{display:none; gap:8px; margin-bottom:12px;}
     .calendar-mobile-toggle .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .calendar-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
@@ -800,7 +800,7 @@
 
           <div id="backup-import-status" class="inline-help" style="margin-top:12px;"></div>
 
-          <div class="panel" style="margin-top:16px; background:#f8fafc;">
+          <div class="panel" style="margin-top:4px; background:#f8fafc;">
             <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
             <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
           </div>
@@ -826,7 +826,7 @@
         <label class="field">
           <span>계획 제목 검색</span>
           <input type="text" id="plan-search" placeholder="세부작업 검색">
-          <div id="plan-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+          <div id="plan-search-results" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;"></div>
         </label>
 
         <label class="field">
@@ -1021,7 +1021,7 @@
           </div>
         </div>
 
-        <div id="money-box" class="panel hidden" style="margin-top:8px;">
+        <div id="money-box" class="panel hidden" style="margin-top:4px;">
           <div class="grid two" style="margin-top:0;">
             <label class="field">
               <span>기타비용</span>
@@ -1063,7 +1063,7 @@
           </div>
           <div id="labor-rows-wrap"></div>
           <div class="inline-help">남자/여자, 인원수, 단가, 지급방법, 비고를 한 줄씩 입력합니다.</div>
-          <div style="margin-top:8px;">
+          <div style="margin-top:4px;">
             <button type="button" class="btn" id="btn-add-labor-row">+ 인건비 추가</button>
           </div>
         </div>
@@ -1093,7 +1093,7 @@
         <label class="field">
           <span>자재 검색</span>
           <input type="text" id="material-search-keyword" placeholder="기존 자재 검색 또는 새 자재명 입력">
-          <div id="material-search-box" style="margin-top:8px;"></div>
+          <div id="material-search-box" style="margin-top:4px;"></div>
         </label>
 
         <div class="grid two">

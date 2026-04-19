@@ -182,19 +182,8 @@
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
-    const scrollingEl = document.scrollingElement || document.documentElement || document.body;
-    const scrollTop = Number(scrollingEl.scrollTop || window.pageYOffset || 0);
-    const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
-    const scrollHeight = Number(Math.max(
-      scrollingEl.scrollHeight || 0,
-      document.documentElement.scrollHeight || 0,
-      document.body.scrollHeight || 0
-    ));
-    const canScroll = scrollHeight > viewportHeight + 10;
-    const nearTop = scrollTop <= 20;
-    const nearBottom = scrollTop + viewportHeight >= scrollHeight - 20;
 
-    if (!shouldShow || hideForModal || !canScroll) {
+    if (!shouldShow || hideForModal) {
       topBtn.classList.add('hidden');
       bottomBtn.classList.add('hidden');
       topBtn.style.display = 'none';
@@ -202,10 +191,10 @@
       return;
     }
 
-    topBtn.classList.toggle('hidden', nearTop);
-    bottomBtn.classList.toggle('hidden', nearBottom);
-    topBtn.style.display = nearTop ? 'none' : 'flex';
-    bottomBtn.style.display = nearBottom ? 'none' : 'flex';
+    topBtn.classList.remove('hidden');
+    bottomBtn.classList.remove('hidden');
+    topBtn.style.display = 'flex';
+    bottomBtn.style.display = 'flex';
   }
 
   function bindCalendarButtons() {
@@ -2517,10 +2506,6 @@ function filterChipOptions(type, keyword) {
     const box = el[`${type}-box`];
     if (!box) return [];
     return Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
-  }
-
-  function getSelectedChips(type) {
-    return getSelectedChipValues(type);
   }
 
   function renderOptions() {

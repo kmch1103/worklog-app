@@ -70,12 +70,12 @@
 
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
-      stabilizeWorksFloatingButton();
+      stabilizeFloatingButtons();
       updateScrollJumpButtons();
     });
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
-    stabilizeWorksFloatingButton();
+    stabilizeFloatingButtons();
     updateScrollJumpButtons();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -175,7 +175,7 @@
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
-    const allowedPages = ['works', 'materials', 'money', 'options'];
+    const allowedPages = ['calendar', 'works', 'materials', 'money', 'options', 'excel', 'backup'];
     const activePage = document.querySelector('.page.active');
     const activePageId = activePage ? activePage.id.replace('page-', '') : '';
     const currentPage = state.currentPage || activePageId;
@@ -621,21 +621,39 @@
     });
   }
 
-  function stabilizeWorksFloatingButton() {
-    const wrap = document.querySelector('#page-works .works-floating-action');
-    const btn = el['btn-new-work'];
-    if (!wrap || !btn) return;
-
+  function stabilizeFloatingButtons() {
     const isMobile = window.innerWidth <= 900;
-    wrap.style.position = 'fixed';
-    wrap.style.zIndex = '9999';
-    wrap.style.bottom = isMobile ? '74px' : '18px';
-    wrap.style.right = isMobile ? '14px' : '20px';
-    wrap.style.left = isMobile ? 'auto' : '278px';
-    wrap.style.display = state.currentPage === 'works' && !isBlockingModalOpen() ? 'flex' : 'none';
-    wrap.style.justifyContent = 'flex-end';
-    wrap.style.pointerEvents = 'none';
-    btn.style.pointerEvents = 'auto';
+    const sidebarLeft = isMobile ? 'auto' : '278px';
+
+    const configs = [
+      {
+        wrap: document.querySelector('#page-works .works-floating-action'),
+        btn: el['btn-new-work'],
+        visible: state.currentPage === 'works' && !isBlockingModalOpen(),
+        mobileBottom: '74px',
+        desktopBottom: '18px'
+      },
+      {
+        wrap: document.querySelector('#page-materials .materials-floating-action'),
+        btn: el['btn-open-material-modal'],
+        visible: state.currentPage === 'materials' && !isBlockingModalOpen(),
+        mobileBottom: '74px',
+        desktopBottom: '18px'
+      }
+    ];
+
+    configs.forEach(({ wrap, btn, visible, mobileBottom, desktopBottom }) => {
+      if (!wrap || !btn) return;
+      wrap.style.position = 'fixed';
+      wrap.style.zIndex = '9999';
+      wrap.style.bottom = isMobile ? mobileBottom : desktopBottom;
+      wrap.style.right = isMobile ? '14px' : '20px';
+      wrap.style.left = sidebarLeft;
+      wrap.style.display = visible ? 'flex' : 'none';
+      wrap.style.justifyContent = 'flex-end';
+      wrap.style.pointerEvents = 'none';
+      btn.style.pointerEvents = 'auto';
+    });
   }
 
   function renderAll() {
@@ -673,7 +691,7 @@
       node.style.display = key === page ? '' : 'none';
     });
 
-    stabilizeWorksFloatingButton();
+    stabilizeFloatingButtons();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -689,7 +707,13 @@
       renderOptions();
     }
 
-    updateScrollJumpButtons();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      updateScrollJumpButtons();
+    });
   }
 
   function renderMenuState() {
@@ -3683,13 +3707,13 @@ function filterChipOptions(type, keyword) {
   function removeHidden(node) {
     if (!node) return;
     node.classList.remove('hidden');
-    stabilizeWorksFloatingButton();
+    stabilizeFloatingButtons();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
-    stabilizeWorksFloatingButton();
+    stabilizeFloatingButtons();
   }
 
   function fmtDate(date) {

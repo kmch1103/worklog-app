@@ -210,37 +210,12 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
+    #page-works .page-header,
+    #page-materials .page-header{position:relative; min-height:52px; padding-right:170px;}
     #page-works .page-header-actions,
-    #page-materials .page-header-actions{position:sticky; top:0; z-index:40; background:#f8fafc; padding:8px 0 10px;}
-
-    .work-modal-toolbar{display:grid; gap:10px; margin-bottom:14px;}
-    .work-modal-toolbar .favorite-select-wrap select{width:100%;}
-    .work-modal-toolbar .favorite-action-row,
-    .work-modal-toolbar .favorite-sub-row{display:grid; gap:8px; grid-template-columns:repeat(3,minmax(0,1fr));}
-    .work-modal-toolbar .favorite-sub-row{grid-template-columns:repeat(2,minmax(0,1fr));}
-    .work-modal-toolbar .favorite-status{font-size:12px; color:#64748b; min-height:18px; padding:0 2px;}
-    .work-modal-inline-two{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;}
-    .work-modal-inline-two .field{min-width:0;}
-    .work-modal-inline-three{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
-    .work-modal-inline-three .field{min-width:0;}
-    .task-entry-stack.compact{margin-top:0;}
-    @media (max-width: 900px){
-      #work-modal .modal-header{align-items:center;}
-      #work-modal .modal-header > div:last-child{display:none !important;}
-      #work-modal .modal-body{padding-top:14px;}
-      .work-modal-toolbar .favorite-action-row{grid-template-columns:repeat(3,minmax(0,1fr));}
-      .work-modal-toolbar .favorite-sub-row{grid-template-columns:repeat(2,minmax(0,1fr));}
-      .work-modal-inline-three{grid-template-columns:1.2fr .8fr 1.2fr;}
-      .work-modal-inline-two{grid-template-columns:repeat(2,minmax(0,1fr));}
-      #work-modal .inline-help.time-help{margin-bottom:6px;}
-    }
-    @media (max-width: 560px){
-      .work-modal-toolbar .favorite-action-row{grid-template-columns:repeat(3,minmax(0,1fr));}
-      .work-modal-toolbar .favorite-action-row .btn,
-      .work-modal-toolbar .favorite-sub-row .btn,
-      .work-modal-toolbar .favorite-select-wrap select{min-height:44px; padding:10px 8px; font-size:14px;}
-      .work-modal-toolbar .favorite-status{grid-column:1 / -1;}
-    }
+    #page-materials .page-header-actions{position:fixed; top:18px; right:20px; z-index:10030; background:transparent; padding:0; display:flex; justify-content:flex-end; pointer-events:none;}
+    #page-works .page-header-actions .btn,
+    #page-materials .page-header-actions .btn{pointer-events:auto; border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
 
     .works-search-box{padding:14px 16px;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
@@ -262,8 +237,12 @@
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
+      #page-works .page-header,
+      #page-materials .page-header{padding-right:0;}
+      #page-works .page-header-actions,
+      #page-materials .page-header-actions{top:calc(env(safe-area-inset-top, 0px) + 122px); right:14px; left:auto; justify-content:flex-end;}
       #page-works .page-header-actions .btn,
-      #page-materials .page-header-actions .btn{width:100%; justify-content:center;}
+      #page-materials .page-header-actions .btn{width:auto; justify-content:center; padding:13px 16px;}
       .grid.two.task-grid{grid-template-columns:1fr;}
     }
 
@@ -274,6 +253,8 @@
     .labor-row{display:grid; grid-template-columns:110px 70px 100px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
     .labor-row input,.labor-row select{width:100%;}
     .labor-row .labor-installment{min-width:0;}
+    .labor-method-toolbar{display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin:8px 0 10px;}
+    .labor-method-toolbar .field{margin:0; min-width:220px;}
     .hidden{display:none !important;}
     .calendar-detail-group{margin-bottom:16px;}
     .calendar-detail-group h4{margin:0 0 10px; font-size:16px;}
@@ -376,6 +357,7 @@
       .labor-row-header{display:none;}
       .labor-row{grid-template-columns:1fr 1fr;}
       .labor-row .labor-installment{grid-column:1 / -1;}
+      .labor-method-toolbar{display:grid; grid-template-columns:1fr;}
       .work-date-row{display:grid; grid-template-columns:1fr;}
       .work-card{min-width:0;}
       .calendar-grid{gap:6px;}
@@ -425,6 +407,7 @@
 
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
+    }
     @media (max-width: 420px){
       body{padding-top:124px;}
       .mobile-menu-row .menu-btn{font-size:12px; padding:8px 4px;}
@@ -460,17 +443,7 @@
       .mobile-quick-exit:active{transform:translateY(1px);}
     }
 
-  
-    .works-floating-action{position:fixed !important; right:18px !important; bottom:18px !important; z-index:9999 !important; display:flex; justify-content:flex-end; pointer-events:none;}
-    .works-floating-action .btn{pointer-events:auto;}
-    @media (min-width: 901px){ .works-floating-action{left:278px !important; right:20px !important; justify-content:flex-end;} }
-    .works-floating-action .btn{border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
-    @media (max-width: 768px){
-      .works-floating-action{right:14px !important; bottom:calc(env(safe-area-inset-bottom, 0px) + 110px) !important; left:auto !important; justify-content:flex-end !important;}
-      .works-floating-action .btn{padding:13px 16px;}
-    }
 
-  
     .scroll-jump-btn{position:fixed; right:20px; z-index:10050; min-width:86px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); cursor:pointer; display:flex; align-items:center; justify-content:center;}
     .scroll-jump-btn.hidden{display:none !important;}
     #btn-scroll-bottom{bottom:20px;}
@@ -889,30 +862,20 @@
       <div class="modal-header">
         <h3 id="work-modal-title">새 작업 입력</h3>
         <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+          <select id="favorite-work-select" class="btn" style="min-width:180px;">
+            <option value="">즐겨찾기 선택</option>
+          </select>
+          <button id="btn-load-favorite-work" class="btn" disabled>즐겨찾기 불러오기</button>
+          <button id="btn-save-favorite-work" class="btn">즐겨찾기 저장</button>
+          <button id="btn-delete-favorite-work" class="btn" disabled>즐겨찾기 삭제</button>
+          <span id="favorite-work-status" class="inline-help" style="margin-left:8px;"></span>
+          <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
           <button id="btn-close-work-modal" class="btn">닫기</button>
         </div>
       </div>
 
       <div class="modal-body">
-        <div class="work-modal-toolbar">
-          <div class="favorite-select-wrap">
-            <select id="favorite-work-select" class="btn">
-              <option value="">즐겨찾기 선택</option>
-            </select>
-          </div>
-          <div class="favorite-action-row">
-            <button id="btn-load-favorite-work" class="btn" disabled>불러오기</button>
-            <button id="btn-save-favorite-work" class="btn">저장</button>
-            <button id="btn-delete-favorite-work" class="btn" disabled>삭제</button>
-          </div>
-          <div id="favorite-work-status" class="favorite-status"></div>
-          <div class="favorite-sub-row">
-            <button id="btn-load-recent-work" class="btn">최근 작업 불러오기</button>
-            <button id="btn-close-work-modal-mobile" class="btn">닫기</button>
-          </div>
-        </div>
-
-        <div class="work-modal-inline-three">
+        <div class="grid three">
           <label class="field">
             <span>시작일</span>
             <input type="date" id="start_date">
@@ -929,7 +892,7 @@
           </label>
         </div>
 
-        <div class="work-modal-inline-three">
+        <div class="grid three">
           <label class="field">
             <span>시작시간</span>
             <input type="time" id="start_time">
@@ -943,36 +906,31 @@
             <input type="time" id="end_time">
           </label>
         </div>
-        <div class="inline-help time-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
+        <div class="inline-help">시작시간과 종료시간을 입력하면 작업시간이 자동 계산됩니다.</div>
 
-        <div class="work-modal-inline-two">
+        <div class="field">
+          <span>작물</span>
+          <div id="crops-box" class="checks"></div>
+        </div>
+
+        <div class="grid two task-grid">
           <label class="field">
             <span>날씨</span>
             <select id="weather"></select>
           </label>
-          <div class="field">
-            <span>작물</span>
-            <div id="crops-box" class="checks"></div>
-          </div>
-        </div>
-
-        <div class="work-modal-inline-two">
           <label class="field">
             <span>작업분류</span>
             <select id="task_category"></select>
           </label>
-          <label class="field task-select-field">
-            <span>세부작업</span>
-            <select id="task_name"></select>
-          </label>
         </div>
 
-        <div class="task-entry-stack compact">
+        <div class="task-entry-stack">
           <label class="field">
             <span>세부작업 빠른찾기</span>
             <input type="text" id="task-name-search" class="task-search-input" list="task-name-datalist" placeholder="세부작업 검색 또는 직접입력">
             <datalist id="task-name-datalist"></datalist>
             <div class="inline-help">작업분류를 먼저 고르면 아래에 추천 세부작업이 표시됩니다.</div>
+            <div id="task-name-options" class="task-option-box"></div>
           </label>
 
           <div class="field hidden" id="recent-task-picks"></div>
@@ -981,6 +939,11 @@
             <div id="task-recommend-box" class="recommended-materials-box"></div>
             <div class="inline-help">이전에 자주 입력한 세부작업을 추천합니다.</div>
           </div>
+
+          <label class="field task-select-field">
+            <span>선택된 세부작업</span>
+            <select id="task_name"></select>
+          </label>
 
           <div class="field hidden" id="task-material-recommend-wrap">
             <span>세부작업 추천자재</span>
@@ -1079,6 +1042,24 @@
             <div>결제방식</div>
             <div>비고</div>
             <div>삭제</div>
+          </div>
+          <div class="labor-method-toolbar">
+            <label class="field">
+              <span>기본 인력 결제방식</span>
+              <select id="default-labor-method">
+                <option value="">선택</option>
+                <option value="현금">현금</option>
+                <option value="계좌이체">계좌이체</option>
+                <option value="카드일시불">카드일시불</option>
+                <option value="카드할부">카드할부</option>
+                <option value="외상">외상</option>
+              </select>
+            </label>
+            <label class="field" id="default-labor-installment-wrap" style="display:none; min-width:140px;">
+              <span>할부개월수</span>
+              <input type="number" id="default-labor-installment" min="2" step="1" value="2">
+            </label>
+            <button type="button" class="btn" id="btn-apply-labor-method">기본값을 전체 인력에 적용</button>
           </div>
           <div id="labor-rows-wrap"></div>
           <div class="inline-help">남자/여자, 인원수, 단가, 지급방법, 비고를 한 줄씩 입력합니다.</div>
@@ -1252,7 +1233,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=11"></script>
 
 
 

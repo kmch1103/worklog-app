@@ -210,12 +210,8 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
-    #page-works .page-header,
-    #page-materials .page-header{position:relative; min-height:52px; padding-right:170px;}
     #page-works .page-header-actions,
-    #page-materials .page-header-actions{position:fixed; top:18px; right:20px; z-index:10030; background:transparent; padding:0; display:flex; justify-content:flex-end; pointer-events:none;}
-    #page-works .page-header-actions .btn,
-    #page-materials .page-header-actions .btn{pointer-events:auto; border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
+    #page-materials .page-header-actions{position:sticky; top:0; z-index:40; background:#f8fafc; padding:8px 0 10px;}
 
     .works-search-box{padding:14px 16px;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
@@ -237,12 +233,8 @@
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
-      #page-works .page-header,
-      #page-materials .page-header{padding-right:0;}
-      #page-works .page-header-actions,
-      #page-materials .page-header-actions{top:calc(env(safe-area-inset-top, 0px) + 122px); right:14px; left:auto; justify-content:flex-end;}
       #page-works .page-header-actions .btn,
-      #page-materials .page-header-actions .btn{width:auto; justify-content:center; padding:13px 16px;}
+      #page-materials .page-header-actions .btn{width:100%; justify-content:center;}
       .grid.two.task-grid{grid-template-columns:1fr;}
     }
 
@@ -253,8 +245,6 @@
     .labor-row{display:grid; grid-template-columns:110px 70px 100px 110px 120px 1fr 70px; gap:8px; margin-bottom:8px; align-items:center;}
     .labor-row input,.labor-row select{width:100%;}
     .labor-row .labor-installment{min-width:0;}
-    .labor-method-toolbar{display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin:8px 0 10px;}
-    .labor-method-toolbar .field{margin:0; min-width:220px;}
     .hidden{display:none !important;}
     .calendar-detail-group{margin-bottom:16px;}
     .calendar-detail-group h4{margin:0 0 10px; font-size:16px;}
@@ -357,7 +347,6 @@
       .labor-row-header{display:none;}
       .labor-row{grid-template-columns:1fr 1fr;}
       .labor-row .labor-installment{grid-column:1 / -1;}
-      .labor-method-toolbar{display:grid; grid-template-columns:1fr;}
       .work-date-row{display:grid; grid-template-columns:1fr;}
       .work-card{min-width:0;}
       .calendar-grid{gap:6px;}
@@ -407,7 +396,6 @@
 
       .modal-body{padding:14px;}
       .modal-header,.modal-footer{padding:14px;}
-    }
     @media (max-width: 420px){
       body{padding-top:124px;}
       .mobile-menu-row .menu-btn{font-size:12px; padding:8px 4px;}
@@ -443,7 +431,17 @@
       .mobile-quick-exit:active{transform:translateY(1px);}
     }
 
+  
+    .works-floating-action{position:fixed !important; right:18px !important; bottom:18px !important; z-index:9999 !important; display:flex; justify-content:flex-end; pointer-events:none;}
+    .works-floating-action .btn{pointer-events:auto;}
+    @media (min-width: 901px){ .works-floating-action{left:278px !important; right:20px !important; justify-content:flex-end;} }
+    .works-floating-action .btn{border-radius:999px; padding:14px 18px; box-shadow:0 10px 24px rgba(37,99,235,.22);}
+    @media (max-width: 768px){
+      .works-floating-action{right:14px !important; bottom:calc(env(safe-area-inset-bottom, 0px) + 110px) !important; left:auto !important; justify-content:flex-end !important;}
+      .works-floating-action .btn{padding:13px 16px;}
+    }
 
+  
     .scroll-jump-btn{position:fixed; right:20px; z-index:10050; min-width:86px; height:44px; padding:0 14px; border:none; border-radius:999px; background:#1d4ed8; color:#fff; font-size:14px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.18); cursor:pointer; display:flex; align-items:center; justify-content:center;}
     .scroll-jump-btn.hidden{display:none !important;}
     #btn-scroll-bottom{bottom:20px;}
@@ -930,7 +928,6 @@
             <input type="text" id="task-name-search" class="task-search-input" list="task-name-datalist" placeholder="세부작업 검색 또는 직접입력">
             <datalist id="task-name-datalist"></datalist>
             <div class="inline-help">작업분류를 먼저 고르면 아래에 추천 세부작업이 표시됩니다.</div>
-            <div id="task-name-options" class="task-option-box"></div>
           </label>
 
           <div class="field hidden" id="recent-task-picks"></div>
@@ -1042,24 +1039,6 @@
             <div>결제방식</div>
             <div>비고</div>
             <div>삭제</div>
-          </div>
-          <div class="labor-method-toolbar">
-            <label class="field">
-              <span>기본 인력 결제방식</span>
-              <select id="default-labor-method">
-                <option value="">선택</option>
-                <option value="현금">현금</option>
-                <option value="계좌이체">계좌이체</option>
-                <option value="카드일시불">카드일시불</option>
-                <option value="카드할부">카드할부</option>
-                <option value="외상">외상</option>
-              </select>
-            </label>
-            <label class="field" id="default-labor-installment-wrap" style="display:none; min-width:140px;">
-              <span>할부개월수</span>
-              <input type="number" id="default-labor-installment" min="2" step="1" value="2">
-            </label>
-            <button type="button" class="btn" id="btn-apply-labor-method">기본값을 전체 인력에 적용</button>
           </div>
           <div id="labor-rows-wrap"></div>
           <div class="inline-help">남자/여자, 인원수, 단가, 지급방법, 비고를 한 줄씩 입력합니다.</div>
@@ -1233,7 +1212,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}?v=11"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=7"></script>
 
 
 

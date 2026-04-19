@@ -39,8 +39,7 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    recentQuickVisible: false,
-    favoriteWorks: []
+    recentQuickVisible: false
   };
 
   const el = {};
@@ -71,13 +70,14 @@
 
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
-      stabilizeTopActionButtons();
+      stabilizeWorksFloatingButton();
       updateScrollJumpButtons();
     });
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
-    stabilizeTopActionButtons();
+    stabilizeWorksFloatingButton();
     updateScrollJumpButtons();
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function cacheElements() {
@@ -123,7 +123,7 @@
       'season_name','season_start_date','season_end_date','season_note','season_is_current',
       'btn-save-season','btn-reset-season','season-list','btn-scroll-top','btn-scroll-bottom',
 
-      'labor-rows-wrap','btn-add-labor-row','default-labor-method','default-labor-installment-wrap','default-labor-installment','btn-apply-labor-method',
+      'labor-rows-wrap','btn-add-labor-row',
 
       'has_money','money-box','money_method','money_installment_wrap','money_installment_months','money_note','other_cost',
       'money_labor_total','money_material_total','money_total_amount',
@@ -274,8 +274,6 @@
       filterChipOptions('pests', e.target.value || '');
     });
     on(el['btn-apply-material-method'], 'click', applyDefaultMaterialMethodToAll);
-    on(el['default-labor-method'], 'change', syncDefaultLaborInstallmentVisibility);
-    on(el['btn-apply-labor-method'], 'click', applyDefaultLaborMethodToAll);
 
     on(el['btn-add-labor-row'], 'click', () => addLaborRow());
 
@@ -286,7 +284,6 @@
       clearTaskSelection(false);
       renderTaskOptionsByCategory(el['task_category']?.value || '');
       updatePestSectionVisibility(true);
-      updateTaskAssistVisibility();
     });
     on(el['start_time'], 'change', () => syncWorkTimeFields('time'));
     on(el['end_time'], 'change', () => syncWorkTimeFields('time'));
@@ -523,8 +520,7 @@
       loadPlans(),
       loadMaterials(),
       loadOptions(),
-      loadSeasons(),
-      loadFavoriteWorks()
+      loadSeasons()
     ]);
   }
 
@@ -589,17 +585,6 @@
     }
   }
 
-
-  async function loadFavoriteWorks() {
-    try {
-      const rows = await apiGet('/api/favorite_works');
-      state.favoriteWorks = Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      console.error(e);
-      state.favoriteWorks = [];
-    }
-  }
-
   async function loadMoney() {
     try {
       const seasonId = el['money-season-filter']?.value || '';
@@ -636,39 +621,21 @@
     });
   }
 
-  function stabilizeTopActionButtons() {
-    const worksWrap = document.querySelector('#page-works .page-header-actions');
-    const materialWrap = document.querySelector('#page-materials .page-header-actions');
+  function stabilizeWorksFloatingButton() {
+    const wrap = document.querySelector('#page-works .works-floating-action');
+    const btn = el['btn-new-work'];
+    if (!wrap || !btn) return;
+
     const isMobile = window.innerWidth <= 900;
-    const blocking = isBlockingModalOpen();
-
-    if (worksWrap) {
-      worksWrap.style.position = 'fixed';
-      worksWrap.style.zIndex = '10030';
-      worksWrap.style.top = isMobile ? 'calc(env(safe-area-inset-top, 0px) + 122px)' : '18px';
-      worksWrap.style.right = isMobile ? '14px' : '20px';
-      worksWrap.style.left = 'auto';
-      worksWrap.style.display = state.currentPage === 'works' && !blocking ? 'flex' : 'none';
-      worksWrap.style.justifyContent = 'flex-end';
-      worksWrap.style.pointerEvents = 'none';
-      worksWrap.querySelectorAll('.btn').forEach(btn => {
-        btn.style.pointerEvents = 'auto';
-      });
-    }
-
-    if (materialWrap) {
-      materialWrap.style.position = 'fixed';
-      materialWrap.style.zIndex = '10030';
-      materialWrap.style.top = isMobile ? 'calc(env(safe-area-inset-top, 0px) + 122px)' : '18px';
-      materialWrap.style.right = isMobile ? '14px' : '20px';
-      materialWrap.style.left = 'auto';
-      materialWrap.style.display = state.currentPage === 'materials' && !blocking ? 'flex' : 'none';
-      materialWrap.style.justifyContent = 'flex-end';
-      materialWrap.style.pointerEvents = 'none';
-      materialWrap.querySelectorAll('.btn').forEach(btn => {
-        btn.style.pointerEvents = 'auto';
-      });
-    }
+    wrap.style.position = 'fixed';
+    wrap.style.zIndex = '9999';
+    wrap.style.bottom = isMobile ? '74px' : '18px';
+    wrap.style.right = isMobile ? '14px' : '20px';
+    wrap.style.left = isMobile ? 'auto' : '278px';
+    wrap.style.display = state.currentPage === 'works' && !isBlockingModalOpen() ? 'flex' : 'none';
+    wrap.style.justifyContent = 'flex-end';
+    wrap.style.pointerEvents = 'none';
+    btn.style.pointerEvents = 'auto';
   }
 
   function renderAll() {
@@ -706,7 +673,7 @@
       node.style.display = key === page ? '' : 'none';
     });
 
-    stabilizeTopActionButtons();
+    stabilizeWorksFloatingButton();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -1093,7 +1060,6 @@
     renderRecentQuickPicks();
     updatePestSectionVisibility(false);
     clearTaskSelection(false);
-    updateTaskAssistVisibility();
 
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
@@ -1113,7 +1079,6 @@
     renderRecentQuickPicks();
     updatePestSectionVisibility(false);
     syncTaskNameDatalist(el.task_category?.value || '');
-    updateTaskAssistVisibility();
     removeHidden(el['work-modal']);
     if (!options.skipHistory) {
       pushHistoryState(state.currentPage, 'work');
@@ -1139,19 +1104,38 @@
     if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
     updateEndDateFromRepeatDays();
 
-    if (!state.editingWorkId) {
-      state.editingWorkId = null;
-      if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
-    } else if (el['work-modal-title']) {
-      el['work-modal-title'].textContent = '작업 수정';
-    }
+    state.editingWorkId = null;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
     state.recentQuickVisible = true;
     renderRecentQuickPicks();
   }
 
 
+  function getFavoriteWorkStorageKey() {
+    return 'worklog_favorite_works_v1';
+  }
+
   function getFavoriteWorks() {
-    return Array.isArray(state.favoriteWorks) ? state.favoriteWorks : [];
+    try {
+      const raw = localStorage.getItem(getFavoriteWorkStorageKey()) || '[]';
+      const rows = JSON.parse(raw);
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  }
+
+
+  function setFavoriteWorks(rows) {
+    try {
+      localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
+      return true;
+    } catch (e) {
+      console.error(e);
+      showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
+      return false;
+    }
   }
 
   function showFavoriteWorkStatus(message) {
@@ -1183,10 +1167,6 @@
     const hasSelection = !!(el['favorite-work-select']?.value || '');
     if (el['btn-load-favorite-work']) el['btn-load-favorite-work'].disabled = !hasSelection;
     if (el['btn-delete-favorite-work']) el['btn-delete-favorite-work'].disabled = !hasSelection;
-  }
-
-  function getSelectedChips(type) {
-    return getSelectedChipValues(type);
   }
 
   function buildWorkTemplateFromForm() {
@@ -1239,6 +1219,7 @@
     setChipSelections('pests', template.pests || []);
     setChipSelections('machines', template.machines || []);
     updatePestSectionVisibility(false);
+    updatePestSectionVisibility(false);
     renderRecommendedMaterials();
 
     state.selectedMaterialsDetailed = Array.isArray(template.materials)
@@ -1263,10 +1244,9 @@
     updateEndDateFromRepeatDays();
     syncWorkTimeFields('time');
     updateMoneySummary();
-    updateTaskAssistVisibility();
   }
 
-  async function saveCurrentWorkAsFavorite() {
+  function saveCurrentWorkAsFavorite() {
     const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
     const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
     if (name == null) return;
@@ -1277,20 +1257,21 @@
       return;
     }
 
-    try {
-      await apiPost('/api/favorite_works', {
-        name: trimmed,
-        template: buildWorkTemplateFromForm()
-      });
-      await loadFavoriteWorks();
-      const saved = getFavoriteWorks()[0];
-      renderFavoriteWorkSelect(saved ? String(saved.id) : '');
-      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-      alert('즐겨찾기로 저장했습니다.');
-    } catch (e) {
-      console.error(e);
-      alert(`즐겨찾기 저장 실패: ${e.message || e}`);
+    const rows = getFavoriteWorks();
+    const newItem = {
+      id: `${Date.now()}`,
+      name: trimmed,
+      template: buildWorkTemplateFromForm()
+    };
+    rows.push(newItem);
+    const ok = setFavoriteWorks(rows);
+    if (!ok) {
+      alert('즐겨찾기 저장 실패');
+      return;
     }
+    renderFavoriteWorkSelect(newItem.id);
+    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+    alert('즐겨찾기로 저장했습니다.');
   }
 
   function loadFavoriteWorkIntoForm() {
@@ -1307,15 +1288,13 @@
       return;
     }
 
-    const keepEditing = !!state.editingWorkId;
-    const currentEditingId = state.editingWorkId;
     applyWorkTemplateToForm(item.template || {});
-    state.editingWorkId = keepEditing ? currentEditingId : null;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = keepEditing ? '작업 수정' : '작업 입력';
+    state.editingWorkId = null;
+    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
     showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
-  async function deleteFavoriteWork() {
+  function deleteFavoriteWork() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('삭제할 즐겨찾기를 선택하세요.');
@@ -1323,15 +1302,14 @@
     }
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
-    try {
-      await apiDelete(`/api/favorite_works/${selectedId}`);
-      await loadFavoriteWorks();
-      renderFavoriteWorkSelect('');
-      showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
-    } catch (e) {
-      console.error(e);
-      alert(`즐겨찾기 삭제 실패: ${e.message || e}`);
+    const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
+    const ok = setFavoriteWorks(rows);
+    if (!ok) {
+      alert('즐겨찾기 삭제 실패');
+      return;
     }
+    renderFavoriteWorkSelect('');
+    showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
   }
 
   function closeWorkModal() {
@@ -1623,25 +1601,6 @@ function renderRecentQuickPicks() {
   renderRecentMaterialPicks();
 }
 
-
-function hasSelectedTaskName() {
-  return !!String(el.task_name?.value || '').trim();
-}
-
-function updateTaskAssistVisibility() {
-  const selected = hasSelectedTaskName();
-  const searchField = el['task-name-search']?.closest('.field');
-  if (searchField) searchField.classList.toggle('hidden', selected);
-  const optionsBox = el['task-name-options'];
-  if (optionsBox) {
-    optionsBox.classList.toggle('hidden', selected || !optionsBox.innerHTML.trim());
-  }
-  if (selected) {
-    if (el['recent-task-picks']) el['recent-task-picks'].classList.add('hidden');
-    if (el['task-recommend-wrap']) el['task-recommend-wrap'].classList.add('hidden');
-  }
-}
-
 function getRecentWorkQuickRows() {
   const works = Array.isArray(state.works) ? [...state.works] : [];
   return works
@@ -1721,12 +1680,8 @@ function applyRecentWorkQuickPick(workId) {
   if (el.repeat_days) el.repeat_days.value = currentRepeatDays || 1;
   updateEndDateFromRepeatDays();
 
-  if (!state.editingWorkId) {
-    state.editingWorkId = null;
-    if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
-  } else if (el['work-modal-title']) {
-    el['work-modal-title'].textContent = '작업 수정';
-  }
+  state.editingWorkId = null;
+  if (el['work-modal-title']) el['work-modal-title'].textContent = '작업 입력';
   showFavoriteWorkStatus(`최근 작업 불러옴: ${getRecentWorkQuickLabel(work)}`);
 }
 
@@ -1754,7 +1709,6 @@ function clearTaskSelection() {
   renderTaskQuickOptions(currentCategory, '');
   renderTaskCategoryRecommendations(currentCategory);
   renderTaskMaterialRecommendations('');
-  updateTaskAssistVisibility();
 }
 
 function syncTaskNameDatalist(categoryName = '') {
@@ -1779,7 +1733,6 @@ function selectTaskNameValue(value, syncSearch = false) {
     if (syncSearch && el['task-name-search']) el['task-name-search'].value = '';
     renderTaskQuickOptions(el.task_category?.value || '', '');
     renderTaskMaterialRecommendations('');
-    updateTaskAssistVisibility();
     return;
   }
 
@@ -1797,7 +1750,6 @@ function selectTaskNameValue(value, syncSearch = false) {
   }
   renderTaskQuickOptions(el.task_category?.value || '', target);
   renderTaskMaterialRecommendations(target);
-  updateTaskAssistVisibility();
 }
 
 function renderTaskQuickOptions(categoryName = '', keyword = '') {
@@ -1847,7 +1799,6 @@ function renderTaskQuickOptions(categoryName = '', keyword = '') {
 
   if (!chips.length) {
     box.innerHTML = `<div class="task-option-empty">표시할 세부작업이 없습니다. 검색어를 바꾸거나 직접입력하세요.</div>`;
-    updateTaskAssistVisibility();
     return;
   }
 
@@ -1858,7 +1809,6 @@ function renderTaskQuickOptions(categoryName = '', keyword = '') {
       selectTaskNameValue(value, true);
     });
   });
-  updateTaskAssistVisibility();
 }
 
 function syncTaskNameSearchToSelect(keyword) {
@@ -1924,10 +1874,9 @@ function renderTaskCategoryRecommendations(categoryName = '') {
   if (!wrap || !box) return;
 
   const names = getTaskRecommendationNames(categoryName).filter(name => name !== String(el.task_name?.value || '').trim());
-  if (!categoryName || !names.length || hasSelectedTaskName()) {
+  if (!categoryName || !names.length) {
     wrap.classList.add('hidden');
     box.innerHTML = '';
-    updateTaskAssistVisibility();
     return;
   }
 
@@ -1942,7 +1891,6 @@ function renderTaskCategoryRecommendations(categoryName = '') {
       selectTaskNameValue(value, true);
     });
   });
-  updateTaskAssistVisibility();
 }
 
 function getTaskMaterialRecommendationNames(taskName = '') {
@@ -2177,49 +2125,12 @@ function filterChipOptions(type, keyword) {
     wrap.innerHTML = '';
   }
 
-  function syncDefaultLaborInstallmentVisibility() {
-    const wrap = el['default-labor-installment-wrap'];
-    const method = el['default-labor-method']?.value || '';
-    if (!wrap) return;
-    wrap.style.display = method === '카드할부' ? '' : 'none';
-    if (method !== '카드할부' && el['default-labor-installment']) {
-      el['default-labor-installment'].value = '2';
-    }
-  }
-
-  function getDefaultLaborMethod() {
-    return String(el['default-labor-method']?.value || '').trim();
-  }
-
-  function getDefaultLaborInstallmentMonths() {
-    if (getDefaultLaborMethod() !== '카드할부') return '';
-    return String(el['default-labor-installment']?.value || '').trim();
-  }
-
-  function applyDefaultLaborMethodToAll() {
-    const rows = Array.from(el['labor-rows-wrap']?.querySelectorAll('.labor-row') || []);
-    if (!rows.length) return;
-    const method = getDefaultLaborMethod();
-    const installment = getDefaultLaborInstallmentMonths();
-    rows.forEach(row => {
-      const methodEl = row.querySelector('.labor-method');
-      const installmentEl = row.querySelector('.labor-installment');
-      if (methodEl) methodEl.value = method;
-      if (installmentEl) {
-        const isCard = method === '카드할부';
-        installmentEl.classList.toggle('hidden', !isCard);
-        installmentEl.value = isCard ? installment : '';
-      }
-    });
-    updateMoneySummary();
-  }
-
   function addLaborRow(row = null) {
     const wrap = el['labor-rows-wrap'];
     if (!wrap) return;
 
-    const methodValue = String(row?.method || getDefaultLaborMethod() || '');
-    const installmentValue = String(row?.installment_months || row?.installment || getDefaultLaborInstallmentMonths() || '');
+    const methodValue = String(row?.method || '');
+    const installmentValue = String(row?.installment_months || row?.installment || '');
     const item = {
       type: row?.type || '남자',
       count: Number(row?.count || 0),
@@ -3772,13 +3683,13 @@ function filterChipOptions(type, keyword) {
   function removeHidden(node) {
     if (!node) return;
     node.classList.remove('hidden');
-    stabilizeTopActionButtons();
+    stabilizeWorksFloatingButton();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
-    stabilizeTopActionButtons();
+    stabilizeWorksFloatingButton();
   }
 
   function fmtDate(date) {
@@ -4064,30 +3975,6 @@ function filterChipOptions(type, keyword) {
     return !(workEnd < seasonStart || workStart > seasonEnd);
   }
 
-
-  function getWorkDisplayDates(work) {
-    const start = String(work?.start_date || '').trim();
-    const end = String(work?.end_date || work?.start_date || '').trim();
-    if (!start) return [];
-    const startParts = start.split('-').map(Number);
-    const endParts = end.split('-').map(Number);
-    if (startParts.length !== 3 || endParts.length !== 3) return [start];
-
-    const startDate = new Date(Date.UTC(startParts[0], startParts[1] - 1, startParts[2]));
-    const endDate = new Date(Date.UTC(endParts[0], endParts[1] - 1, endParts[2]));
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
-      return [start];
-    }
-
-    const dates = [];
-    const cursor = new Date(startDate.getTime());
-    while (cursor <= endDate) {
-      dates.push(cursor.toISOString().slice(0, 10));
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
-    }
-    return dates;
-  }
-
   function renderWorks() {
     const wrap = el['works-list'];
     if (!wrap) return;
@@ -4132,11 +4019,9 @@ function filterChipOptions(type, keyword) {
 
     const grouped = {};
     filtered.forEach(work => {
-      const dates = getWorkDisplayDates(work);
-      dates.forEach(date => {
-        if (!grouped[date]) grouped[date] = [];
-        grouped[date].push(work);
-      });
+      const date = work.start_date || '';
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(work);
     });
 
     const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));

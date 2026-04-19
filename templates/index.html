@@ -68,12 +68,12 @@
     .option-mobile-tabs{display:none; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
     .option-mobile-tabs .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .btn[disabled]{opacity:.5; cursor:not-allowed;}
-    .season-panel{margin-top:4px;}
+    .season-panel{margin-top:16px;}
     @media (max-width: 1700px){ .options-grid{grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;} .option-panel h3{font-size:22px;} }
     @media (max-width: 1500px){ .options-grid{grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;} }
     @media (max-width: 1200px){ .options-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;} }
     .season-form-grid{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
-    .season-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:4px;}
+    .season-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px;}
     .season-card{border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fff;}
     .season-card.current{border-color:#2563eb; background:#eff6ff;}
     .season-card-title{font-weight:800; margin-bottom:6px;}
@@ -84,7 +84,7 @@
     .season-panel-toggle{display:inline-flex; align-items:center; gap:6px; border:1px solid #cbd5e1; background:#fff; border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; color:#334155;}
     .season-panel-toggle .arrow{transition:transform .18s ease;}
     .season-panel.collapsed .season-panel-toggle .arrow{transform:rotate(-90deg);}
-    .season-panel-body{margin-top:4px;}
+    .season-panel-body{margin-top:12px;}
     .season-panel.collapsed .season-panel-body{display:none;}
     .season-panel-summary{display:none; margin-top:10px; color:#475569; font-size:13px; line-height:1.5;}
     .season-panel.collapsed .season-panel-summary{display:block;}
@@ -211,11 +211,11 @@
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
     #page-works,
-    #page-materials{padding-top:0px;}
+    #page-materials{padding-top:12px;}
     #page-works .page-header-actions,
     #page-materials .page-header-actions{
       position:fixed;
-      top:4px;
+      top:16px;
       right:20px;
       z-index:300;
       background:transparent;
@@ -231,7 +231,7 @@
     }
 
     .works-search-box{padding:14px 16px;}
-    .task-entry-stack{display:grid; gap:12px; margin-top:4px;}
+    .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
     .task-search-input{width:100%; padding:12px 14px; border:1px solid #cbd5e1; border-radius:12px; font-size:16px;}
     .task-chip-wrap, .task-option-chip-wrap{display:flex; flex-wrap:wrap; gap:8px;}
     .task-quick-section-title{font-size:13px; font-weight:700; color:#475569; margin-bottom:8px;}
@@ -244,16 +244,16 @@
     .works-filter-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;}
     .works-filter-item{min-width:0;}
     .works-filter-item.works-filter-full{grid-column:1 / -1;}
-    .works-filter-actions{display:flex; justify-content:flex-end; margin-top:4px;}
+    .works-filter-actions{display:flex; justify-content:flex-end; margin-top:12px;}
     .works-filter-grid input,.works-filter-grid select{width:100%;}
     @media (max-width: 1200px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
       #page-works,
-      #page-materials{padding-top:0px;}
+      #page-materials{padding-top:10px;}
       #page-works .page-header-actions,
-      #page-materials .page-header-actions{top:4px; right:14px;}
+      #page-materials .page-header-actions{top:12px; right:14px;}
       #page-works .page-header-actions .btn,
       #page-materials .page-header-actions .btn{width:auto; justify-content:center; padding:12px 16px;}
       .grid.two.task-grid{grid-template-columns:1fr;}
@@ -267,7 +267,7 @@
     .labor-row input,.labor-row select{width:100%;}
     .labor-row .labor-installment{min-width:0;}
     .hidden{display:none !important;}
-    .calendar-detail-group{margin-bottom:4px;}
+    .calendar-detail-group{margin-bottom:16px;}
     .calendar-detail-group h4{margin:0 0 10px; font-size:16px;}
     .calendar-detail-card{border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:12px; margin-bottom:8px;}
     .calendar-detail-title{font-weight:700; margin-bottom:6px;}
@@ -295,7 +295,7 @@
     .mobile-menu-row{display:flex; flex-direction:column; gap:12px;}
     .mobile-menu-row::-webkit-scrollbar{height:6px;}
     .mobile-menu-row::-webkit-scrollbar-thumb{background:#94a3b8; border-radius:999px;}
-    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:4px;}
+    .calendar-compare-wrap{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;}
     .calendar-mobile-toggle{display:none; gap:8px; margin-bottom:12px;}
     .calendar-mobile-toggle .btn.active{background:#2563eb; color:#fff; border-color:#2563eb;}
     .calendar-panel-title{font-size:18px; font-weight:800; margin-bottom:10px;}
@@ -670,7 +670,7 @@
             </table>
           </div>
 
-          <div class="panel" style="margin-top:4px;">
+          <div class="panel" style="margin-top:12px;">
             <h3 style="margin:0 0 10px;">외상 상세</h3>
             <div id="money-credit-list" class="empty-msg">외상 내역 없음</div>
           </div>
@@ -702,7 +702,7 @@
               <label class="field"><span>종료일</span><input type="date" id="season_end_date"></label>
               <label class="field"><span>현재시즌</span><select id="season_is_current"><option value="0">아니오</option><option value="1">예</option></select></label>
             </div>
-            <label class="field" style="margin-top:4px;"><span>비고</span><input type="text" id="season_note"></label>
+            <label class="field" style="margin-top:12px;"><span>비고</span><input type="text" id="season_note"></label>
             <div class="item-actions">
               <button id="btn-save-season" class="btn primary">저장</button>
               <button id="btn-reset-season" class="btn">초기화</button>
@@ -779,7 +779,7 @@
             <button id="btn-download-excel-all" class="btn primary">전체 엑셀 다운로드</button>
             <button id="btn-download-excel-current-season" class="btn">현재시즌 엑셀 다운로드</button>
           </div>
-          <div class="inline-help" style="margin-top:4px;">
+          <div class="inline-help" style="margin-top:12px;">
             작업일지 / 금전내역 / 월별정산 / 시즌정산 시트가 하나의 엑셀 파일로 내려받아집니다.
           </div>
         </div>
@@ -798,9 +798,9 @@
             <button id="btn-import-old-db" class="btn primary">기존 DB 가져오기</button>
           </div>
 
-          <div id="backup-import-status" class="inline-help" style="margin-top:4px;"></div>
+          <div id="backup-import-status" class="inline-help" style="margin-top:12px;"></div>
 
-          <div class="panel" style="margin-top:4px; background:#f8fafc;">
+          <div class="panel" style="margin-top:16px; background:#f8fafc;">
             <p class="placeholder-title" style="margin-bottom:8px;">주의</p>
             <p class="placeholder-text" style="margin:0;">가져오기를 실행하면 현재 작업일지/자재/옵션 데이터는 기존 DB 데이터로 교체됩니다. 작업계획(plans)은 유지됩니다.</p>
           </div>
@@ -1034,7 +1034,7 @@
             </label>
           </div>
 
-          <div class="grid three" style="margin-top:4px;">
+          <div class="grid three" style="margin-top:12px;">
             <div class="field">
               <span>인건비 합계</span>
               <div class="readonly-money" id="money_labor_total">0</div>

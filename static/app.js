@@ -181,9 +181,30 @@
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
+    const scrollingEl = document.scrollingElement || document.documentElement || document.body;
+    const scrollTop = Number(scrollingEl.scrollTop || window.pageYOffset || 0);
+    const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
+    const scrollHeight = Number(Math.max(
+      scrollingEl.scrollHeight || 0,
+      document.documentElement.scrollHeight || 0,
+      document.body.scrollHeight || 0
+    ));
+    const canScroll = scrollHeight > viewportHeight + 10;
+    const nearTop = scrollTop <= 20;
+    const nearBottom = scrollTop + viewportHeight >= scrollHeight - 20;
 
-    topBtn.classList.toggle('hidden', !shouldShow || hideForModal);
-    bottomBtn.classList.toggle('hidden', !shouldShow || hideForModal);
+    if (!shouldShow || hideForModal || !canScroll) {
+      topBtn.classList.add('hidden');
+      bottomBtn.classList.add('hidden');
+      topBtn.style.display = 'none';
+      bottomBtn.style.display = 'none';
+      return;
+    }
+
+    topBtn.classList.toggle('hidden', nearTop);
+    bottomBtn.classList.toggle('hidden', nearBottom);
+    topBtn.style.display = nearTop ? 'none' : 'flex';
+    bottomBtn.style.display = nearBottom ? 'none' : 'flex';
   }
 
   function bindCalendarButtons() {
@@ -697,6 +718,8 @@
     }
 
     updateScrollJumpButtons();
+    setTimeout(updateScrollJumpButtons, 0);
+    setTimeout(updateScrollJumpButtons, 120);
   }
 
   function renderMenuState() {

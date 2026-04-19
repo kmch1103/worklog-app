@@ -210,8 +210,25 @@
     .modal-footer{border-bottom:0; border-top:1px solid #eef2f7; justify-content:flex-end;}
     .modal-body{padding:18px;}
     .page-header-actions{display:flex; gap:8px;}
+    #page-works,
+    #page-materials{padding-top:74px;}
     #page-works .page-header-actions,
-    #page-materials .page-header-actions{position:sticky; top:0; z-index:40; background:#f8fafc; padding:8px 0 10px;}
+    #page-materials .page-header-actions{
+      position:fixed;
+      top:16px;
+      right:20px;
+      z-index:300;
+      background:transparent;
+      padding:0;
+      display:none;
+      justify-content:flex-end;
+    }
+    #page-works .page-header-actions .btn,
+    #page-materials .page-header-actions .btn{
+      border-radius:999px;
+      padding:14px 18px;
+      box-shadow:0 10px 24px rgba(37,99,235,.22);
+    }
 
     .works-search-box{padding:14px 16px;}
     .task-entry-stack{display:grid; gap:12px; margin-top:12px;}
@@ -233,8 +250,12 @@
     @media (max-width: 700px){ .works-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;} .works-filter-item.works-filter-full{grid-column:1 / -1;} .works-filter-actions{justify-content:stretch;} .works-filter-actions .btn{width:100%;} }
     .work-form-sticky-bar{display:none;}
     @media (max-width: 900px){
+      #page-works,
+      #page-materials{padding-top:68px;}
+      #page-works .page-header-actions,
+      #page-materials .page-header-actions{top:12px; right:14px;}
       #page-works .page-header-actions .btn,
-      #page-materials .page-header-actions .btn{width:100%; justify-content:center;}
+      #page-materials .page-header-actions .btn{width:auto; justify-content:center; padding:12px 16px;}
       .grid.two.task-grid{grid-template-columns:1fr;}
     }
 
@@ -453,22 +474,6 @@
       .mobile-quick-exit{bottom:calc(env(safe-area-inset-bottom, 0px) + 14px) !important;}
     }
 
-  
-    /* v3 fix: 상단 고정 액션 + 내용 가림 방지 */
-    #page-works, #page-materials{overflow:visible;}
-    #page-works .page-header,
-    #page-materials .page-header{position:sticky; top:0; z-index:60; background:#f8fafc; padding-bottom:10px; margin-bottom:12px;}
-    #page-works .page-header-actions,
-    #page-materials .page-header-actions{position:static; padding:0; background:transparent;}
-    .works-top-action, .materials-top-action{display:flex; justify-content:flex-end; align-items:center;}
-    .works-top-action .btn, .materials-top-action .btn{border-radius:999px; padding:12px 18px; box-shadow:0 8px 20px rgba(37,99,235,.18);}
-    @media (max-width: 900px){
-      #page-works .page-header,
-      #page-materials .page-header{top:112px;}
-      .works-top-action, .materials-top-action{justify-content:flex-end;}
-      .works-top-action .btn, .materials-top-action .btn{width:auto !important; padding:12px 16px;}
-    }
-
   </style>
 </head>
 <body>
@@ -537,7 +542,7 @@
       <section id="page-works" class="page">
         <div class="page-header">
           <h2>작업일지</h2>
-          <div class="page-header-actions works-top-action">
+          <div class="page-header-actions">
             <button id="btn-new-work" class="btn primary">+ 새 작업 입력</button>
           </div>
         </div>
@@ -547,7 +552,7 @@
       <section id="page-materials" class="page">
         <div class="page-header">
           <h2>자재관리</h2>
-          <div class="page-header-actions materials-top-action">
+          <div class="page-header-actions">
             <button id="btn-open-material-modal" class="btn primary">+ 자재 추가</button>
           </div>
         </div>

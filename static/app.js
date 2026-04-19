@@ -182,33 +182,30 @@
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
+    const scrollingEl = document.scrollingElement || document.documentElement || document.body;
+    const scrollTop = Number(scrollingEl.scrollTop || window.pageYOffset || 0);
+    const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
+    const scrollHeight = Number(Math.max(
+      scrollingEl.scrollHeight || 0,
+      document.documentElement.scrollHeight || 0,
+      document.body.scrollHeight || 0
+    ));
+    const canScroll = scrollHeight > viewportHeight + 10;
+    const nearTop = scrollTop <= 20;
+    const nearBottom = scrollTop + viewportHeight >= scrollHeight - 20;
 
-    const forceStyle = (btn, bottomPx) => {
-      btn.classList.remove('hidden');
-      btn.style.setProperty('display', 'flex', 'important');
-      btn.style.setProperty('visibility', 'visible', 'important');
-      btn.style.setProperty('opacity', '1', 'important');
-      btn.style.setProperty('pointer-events', 'auto', 'important');
-      btn.style.setProperty('position', 'fixed', 'important');
-      btn.style.setProperty('right', window.innerWidth <= 900 ? '14px' : '20px', 'important');
-      btn.style.setProperty('bottom', bottomPx, 'important');
-      btn.style.setProperty('z-index', '10050', 'important');
-    };
-
-    if (!shouldShow || hideForModal) {
+    if (!shouldShow || hideForModal || !canScroll) {
       topBtn.classList.add('hidden');
       bottomBtn.classList.add('hidden');
-      topBtn.style.setProperty('display', 'none', 'important');
-      bottomBtn.style.setProperty('display', 'none', 'important');
+      topBtn.style.display = 'none';
+      bottomBtn.style.display = 'none';
       return;
     }
 
-    const isMobile = window.innerWidth <= 900;
-    forceStyle(bottomBtn, isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 68px)' : '20px');
-    forceStyle(topBtn, isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 120px)' : '74px');
-
-    if (!document.body.contains(topBtn)) document.body.appendChild(topBtn);
-    if (!document.body.contains(bottomBtn)) document.body.appendChild(bottomBtn);
+    topBtn.classList.toggle('hidden', nearTop);
+    bottomBtn.classList.toggle('hidden', nearBottom);
+    topBtn.style.display = nearTop ? 'none' : 'flex';
+    bottomBtn.style.display = nearBottom ? 'none' : 'flex';
   }
 
   function bindCalendarButtons() {

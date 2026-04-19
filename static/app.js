@@ -70,12 +70,12 @@
 
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
-      stabilizeFloatingButtons();
+      stabilizeWorksFloatingButton();
       updateScrollJumpButtons();
     });
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
-    stabilizeFloatingButtons();
+    stabilizeWorksFloatingButton();
     updateScrollJumpButtons();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -175,7 +175,7 @@
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
 
-    const allowedPages = ['calendar', 'works', 'materials', 'money', 'options', 'excel', 'backup'];
+    const allowedPages = ['works', 'materials', 'money', 'options'];
     const activePage = document.querySelector('.page.active');
     const activePageId = activePage ? activePage.id.replace('page-', '') : '';
     const currentPage = state.currentPage || activePageId;
@@ -621,38 +621,17 @@
     });
   }
 
-  function stabilizeFloatingButtons() {
-    const isMobile = window.innerWidth <= 900;
-    const sidebarLeft = isMobile ? 'auto' : '278px';
-
+  function stabilizeWorksFloatingButton() {
     const configs = [
-      {
-        wrap: document.querySelector('#page-works .works-floating-action'),
-        btn: el['btn-new-work'],
-        visible: state.currentPage === 'works' && !isBlockingModalOpen(),
-        mobileBottom: '74px',
-        desktopBottom: '18px'
-      },
-      {
-        wrap: document.querySelector('#page-materials .materials-floating-action'),
-        btn: el['btn-open-material-modal'],
-        visible: state.currentPage === 'materials' && !isBlockingModalOpen(),
-        mobileBottom: '74px',
-        desktopBottom: '18px'
-      }
+      { wrap: document.querySelector('#page-works .works-top-action'), btn: el['btn-new-work'], visible: state.currentPage === 'works' && !isBlockingModalOpen() },
+      { wrap: document.querySelector('#page-materials .materials-top-action'), btn: el['btn-open-material-modal'], visible: state.currentPage === 'materials' && !isBlockingModalOpen() }
     ];
 
-    configs.forEach(({ wrap, btn, visible, mobileBottom, desktopBottom }) => {
-      if (!wrap || !btn) return;
-      wrap.style.position = 'fixed';
-      wrap.style.zIndex = '9999';
-      wrap.style.bottom = isMobile ? mobileBottom : desktopBottom;
-      wrap.style.right = isMobile ? '14px' : '20px';
-      wrap.style.left = sidebarLeft;
+    configs.forEach(({ wrap, btn, visible }) => {
+      if (!wrap) return;
       wrap.style.display = visible ? 'flex' : 'none';
-      wrap.style.justifyContent = 'flex-end';
-      wrap.style.pointerEvents = 'none';
-      btn.style.pointerEvents = 'auto';
+      wrap.style.pointerEvents = 'auto';
+      if (btn) btn.style.pointerEvents = 'auto';
     });
   }
 
@@ -691,7 +670,7 @@
       node.style.display = key === page ? '' : 'none';
     });
 
-    stabilizeFloatingButtons();
+    stabilizeWorksFloatingButton();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -3707,13 +3686,13 @@ function filterChipOptions(type, keyword) {
   function removeHidden(node) {
     if (!node) return;
     node.classList.remove('hidden');
-    stabilizeFloatingButtons();
+    stabilizeWorksFloatingButton();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
-    stabilizeFloatingButtons();
+    stabilizeWorksFloatingButton();
   }
 
   function fmtDate(date) {

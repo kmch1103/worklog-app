@@ -70,12 +70,12 @@
 
     window.addEventListener('resize', () => {
       updateMobileCalendarMode();
-      stabilizeWorksFloatingButton();
+      stabilizePageActionButtons();
       updateScrollJumpButtons();
     });
     window.addEventListener('scroll', updateScrollJumpButtons, { passive: true });
 
-    stabilizeWorksFloatingButton();
+    stabilizePageActionButtons();
     updateScrollJumpButtons();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -179,15 +179,11 @@
     const activePage = document.querySelector('.page.active');
     const activePageId = activePage ? activePage.id.replace('page-', '') : '';
     const currentPage = state.currentPage || activePageId;
-    const isWorksPage = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
-    const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
-    const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    const nearBottom = scrollTop + viewport >= docHeight - 40;
-    const canScroll = docHeight > viewport + 40;
+    const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
+    const hideForModal = isBlockingModalOpen();
 
-    topBtn.classList.toggle('hidden', !isWorksPage || scrollTop < 120);
-    bottomBtn.classList.toggle('hidden', !isWorksPage || nearBottom);
+    topBtn.classList.toggle('hidden', !shouldShow || hideForModal);
+    bottomBtn.classList.toggle('hidden', !shouldShow || hideForModal);
   }
 
   function bindCalendarButtons() {
@@ -621,18 +617,31 @@
     });
   }
 
-  function stabilizeWorksFloatingButton() {
-    const configs = [
-      { wrap: document.querySelector('#page-works .works-top-action'), btn: el['btn-new-work'], visible: state.currentPage === 'works' && !isBlockingModalOpen() },
-      { wrap: document.querySelector('#page-materials .materials-top-action'), btn: el['btn-open-material-modal'], visible: state.currentPage === 'materials' && !isBlockingModalOpen() }
-    ];
+  function stabilizePageActionButtons() {
+    const worksWrap = document.querySelector('#page-works .page-header-actions');
+    const materialsWrap = document.querySelector('#page-materials .page-header-actions');
+    const wraps = [worksWrap, materialsWrap].filter(Boolean);
+    const isMobile = window.innerWidth <= 900;
+    const hideForModal = isBlockingModalOpen();
 
-    configs.forEach(({ wrap, btn, visible }) => {
-      if (!wrap) return;
-      wrap.style.display = visible ? 'flex' : 'none';
+    wraps.forEach((wrap) => {
+      wrap.style.position = 'fixed';
+      wrap.style.top = isMobile ? '12px' : '16px';
+      wrap.style.right = isMobile ? '14px' : '20px';
+      wrap.style.left = 'auto';
+      wrap.style.bottom = 'auto';
+      wrap.style.zIndex = '300';
+      wrap.style.display = 'none';
+      wrap.style.justifyContent = 'flex-end';
       wrap.style.pointerEvents = 'auto';
-      if (btn) btn.style.pointerEvents = 'auto';
     });
+
+    if (!hideForModal && worksWrap && state.currentPage === 'works') {
+      worksWrap.style.display = 'flex';
+    }
+    if (!hideForModal && materialsWrap && state.currentPage === 'materials') {
+      materialsWrap.style.display = 'flex';
+    }
   }
 
   function renderAll() {
@@ -652,6 +661,7 @@
     if (!options.skipHistory) {
       pushHistoryState(page, '');
     }
+    window.scrollTo({ top: 0, behavior: 'auto' });
     renderMenuState();
 
     const pageMap = {
@@ -670,7 +680,7 @@
       node.style.display = key === page ? '' : 'none';
     });
 
-    stabilizeWorksFloatingButton();
+    stabilizePageActionButtons();
 
     if (page === 'calendar') {
       renderCalendar();
@@ -686,13 +696,7 @@
       renderOptions();
     }
 
-    window.scrollTo({ top: 0, behavior: 'auto' });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: 'auto' });
-      updateScrollJumpButtons();
-    });
+    updateScrollJumpButtons();
   }
 
   function renderMenuState() {
@@ -3686,13 +3690,13 @@ function filterChipOptions(type, keyword) {
   function removeHidden(node) {
     if (!node) return;
     node.classList.remove('hidden');
-    stabilizeWorksFloatingButton();
+    stabilizePageActionButtons();
   }
 
   function addHidden(node) {
     if (!node) return;
     node.classList.add('hidden');
-    stabilizeWorksFloatingButton();
+    stabilizePageActionButtons();
   }
 
   function fmtDate(date) {

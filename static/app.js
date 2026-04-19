@@ -183,18 +183,30 @@
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
 
+    const applyVisible = (node) => {
+      node.classList.remove('hidden');
+      node.style.display = 'flex';
+      node.style.visibility = 'visible';
+      node.style.opacity = '1';
+      node.style.pointerEvents = 'auto';
+    };
+
+    const applyHidden = (node) => {
+      node.classList.add('hidden');
+      node.style.display = 'none';
+      node.style.visibility = 'hidden';
+      node.style.opacity = '0';
+      node.style.pointerEvents = 'none';
+    };
+
     if (!shouldShow || hideForModal) {
-      topBtn.classList.add('hidden');
-      bottomBtn.classList.add('hidden');
-      topBtn.style.display = 'none';
-      bottomBtn.style.display = 'none';
+      applyHidden(topBtn);
+      applyHidden(bottomBtn);
       return;
     }
 
-    topBtn.classList.remove('hidden');
-    bottomBtn.classList.remove('hidden');
-    topBtn.style.display = 'flex';
-    bottomBtn.style.display = 'flex';
+    applyVisible(topBtn);
+    applyVisible(bottomBtn);
   }
 
   function bindCalendarButtons() {

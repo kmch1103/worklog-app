@@ -660,7 +660,7 @@
 
     wraps.forEach((wrap) => {
       wrap.style.position = 'fixed';
-      wrap.style.top = isMobile ? '12px' : '16px';
+      wrap.style.top = isMobile ? '8px' : '8px';
       wrap.style.right = isMobile ? '14px' : '20px';
       wrap.style.left = 'auto';
       wrap.style.bottom = 'auto';

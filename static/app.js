@@ -182,30 +182,25 @@
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
-    const scrollingEl = document.scrollingElement || document.documentElement || document.body;
-    const scrollTop = Number(scrollingEl.scrollTop || window.pageYOffset || 0);
-    const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
-    const scrollHeight = Number(Math.max(
-      scrollingEl.scrollHeight || 0,
-      document.documentElement.scrollHeight || 0,
-      document.body.scrollHeight || 0
-    ));
-    const canScroll = scrollHeight > viewportHeight + 10;
-    const nearTop = scrollTop <= 20;
-    const nearBottom = scrollTop + viewportHeight >= scrollHeight - 20;
 
-    if (!shouldShow || hideForModal || !canScroll) {
-      topBtn.classList.add('hidden');
-      bottomBtn.classList.add('hidden');
-      topBtn.style.display = 'none';
-      bottomBtn.style.display = 'none';
-      return;
-    }
-
-    topBtn.classList.toggle('hidden', nearTop);
-    bottomBtn.classList.toggle('hidden', nearBottom);
-    topBtn.style.display = nearTop ? 'none' : 'flex';
-    bottomBtn.style.display = nearBottom ? 'none' : 'flex';
+    [topBtn, bottomBtn].forEach((btn, idx) => {
+      if (btn.parentElement !== document.body) document.body.appendChild(btn);
+      btn.classList.remove('hidden');
+      btn.style.position = 'fixed';
+      btn.style.right = window.innerWidth <= 900 ? '14px' : '20px';
+      btn.style.bottom = window.innerWidth <= 900
+        ? (idx === 0 ? '120px' : '68px')
+        : (idx === 0 ? '74px' : '20px');
+      btn.style.zIndex = '10050';
+      btn.style.minWidth = window.innerWidth <= 900 ? '82px' : '86px';
+      btn.style.height = window.innerWidth <= 900 ? '42px' : '44px';
+      btn.style.display = (!shouldShow || hideForModal) ? 'none' : 'flex';
+      btn.style.visibility = (!shouldShow || hideForModal) ? 'hidden' : 'visible';
+      btn.style.opacity = (!shouldShow || hideForModal) ? '0' : '1';
+      btn.style.pointerEvents = (!shouldShow || hideForModal) ? 'none' : 'auto';
+      btn.style.alignItems = 'center';
+      btn.style.justifyContent = 'center';
+    });
   }
 
   function bindCalendarButtons() {

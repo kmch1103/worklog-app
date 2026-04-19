@@ -160,17 +160,74 @@
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
+  function ensureScrollJumpButtons() {
+    if (!el['btn-scroll-top']) {
+      const topBtn = document.createElement('button');
+      topBtn.id = 'btn-scroll-top';
+      topBtn.type = 'button';
+      topBtn.textContent = '↑ 맨위';
+      topBtn.className = 'scroll-jump-btn';
+      document.body.appendChild(topBtn);
+      el['btn-scroll-top'] = topBtn;
+    }
+
+    if (!el['btn-scroll-bottom']) {
+      const bottomBtn = document.createElement('button');
+      bottomBtn.id = 'btn-scroll-bottom';
+      bottomBtn.type = 'button';
+      bottomBtn.textContent = '↓ 맨아래';
+      bottomBtn.className = 'scroll-jump-btn';
+      document.body.appendChild(bottomBtn);
+      el['btn-scroll-bottom'] = bottomBtn;
+    }
+
+    [el['btn-scroll-top'], el['btn-scroll-bottom']].forEach((btn, index) => {
+      if (!btn) return;
+      if (btn.parentElement !== document.body) {
+        document.body.appendChild(btn);
+      }
+      btn.classList.remove('hidden');
+      btn.style.position = 'fixed';
+      btn.style.right = window.innerWidth <= 768 ? '14px' : '20px';
+      btn.style.bottom = index === 0
+        ? (window.innerWidth <= 768 ? '120px' : '74px')
+        : (window.innerWidth <= 768 ? '68px' : '20px');
+      btn.style.zIndex = '2147483647';
+      btn.style.minWidth = window.innerWidth <= 768 ? '82px' : '86px';
+      btn.style.height = window.innerWidth <= 768 ? '42px' : '44px';
+      btn.style.padding = '0 14px';
+      btn.style.border = 'none';
+      btn.style.borderRadius = '999px';
+      btn.style.background = '#1d4ed8';
+      btn.style.color = '#fff';
+      btn.style.fontSize = window.innerWidth <= 768 ? '13px' : '14px';
+      btn.style.fontWeight = '800';
+      btn.style.boxShadow = '0 10px 24px rgba(0,0,0,.18)';
+      btn.style.cursor = 'pointer';
+      btn.style.alignItems = 'center';
+      btn.style.justifyContent = 'center';
+      btn.style.pointerEvents = 'auto';
+    });
+  }
+
   function bindScrollJumpButtons() {
+    ensureScrollJumpButtons();
     on(el['btn-scroll-top'], 'click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     on(el['btn-scroll-bottom'], 'click', () => {
-      const target = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      const target = Math.max(
+        document.documentElement.scrollHeight || 0,
+        document.body.scrollHeight || 0,
+        document.documentElement.offsetHeight || 0,
+        document.body.offsetHeight || 0
+      );
       window.scrollTo({ top: target, behavior: 'smooth' });
     });
   }
 
   function updateScrollJumpButtons() {
+    ensureScrollJumpButtons();
     const topBtn = el['btn-scroll-top'];
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
@@ -181,19 +238,12 @@
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
+    const visible = shouldShow && !hideForModal;
 
-    if (!shouldShow || hideForModal) {
-      topBtn.classList.add('hidden');
-      bottomBtn.classList.add('hidden');
-      topBtn.style.display = 'none';
-      bottomBtn.style.display = 'none';
-      return;
-    }
-
-    topBtn.classList.remove('hidden');
-    bottomBtn.classList.remove('hidden');
-    topBtn.style.display = 'flex';
-    bottomBtn.style.display = 'flex';
+    topBtn.classList.toggle('hidden', !visible);
+    bottomBtn.classList.toggle('hidden', !visible);
+    topBtn.style.display = visible ? 'flex' : 'none';
+    bottomBtn.style.display = visible ? 'flex' : 'none';
   }
 
   function bindCalendarButtons() {

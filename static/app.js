@@ -39,7 +39,8 @@
     editingTaskOptionId: null,
     editingIncomeId: null,
     seasonPanelCollapsed: true,
-    recentQuickVisible: false
+    recentQuickVisible: false,
+    favoriteWorks: []
   };
 
   const el = {};
@@ -160,74 +161,17 @@
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
-  function ensureScrollJumpButtons() {
-    if (!el['btn-scroll-top']) {
-      const topBtn = document.createElement('button');
-      topBtn.id = 'btn-scroll-top';
-      topBtn.type = 'button';
-      topBtn.textContent = '↑ 맨위';
-      topBtn.className = 'scroll-jump-btn';
-      document.body.appendChild(topBtn);
-      el['btn-scroll-top'] = topBtn;
-    }
-
-    if (!el['btn-scroll-bottom']) {
-      const bottomBtn = document.createElement('button');
-      bottomBtn.id = 'btn-scroll-bottom';
-      bottomBtn.type = 'button';
-      bottomBtn.textContent = '↓ 맨아래';
-      bottomBtn.className = 'scroll-jump-btn';
-      document.body.appendChild(bottomBtn);
-      el['btn-scroll-bottom'] = bottomBtn;
-    }
-
-    [el['btn-scroll-top'], el['btn-scroll-bottom']].forEach((btn, index) => {
-      if (!btn) return;
-      if (btn.parentElement !== document.body) {
-        document.body.appendChild(btn);
-      }
-      btn.classList.remove('hidden');
-      btn.style.position = 'fixed';
-      btn.style.right = window.innerWidth <= 768 ? '14px' : '20px';
-      btn.style.bottom = index === 0
-        ? (window.innerWidth <= 768 ? '120px' : '74px')
-        : (window.innerWidth <= 768 ? '68px' : '20px');
-      btn.style.zIndex = '2147483647';
-      btn.style.minWidth = window.innerWidth <= 768 ? '82px' : '86px';
-      btn.style.height = window.innerWidth <= 768 ? '42px' : '44px';
-      btn.style.padding = '0 14px';
-      btn.style.border = 'none';
-      btn.style.borderRadius = '999px';
-      btn.style.background = '#1d4ed8';
-      btn.style.color = '#fff';
-      btn.style.fontSize = window.innerWidth <= 768 ? '13px' : '14px';
-      btn.style.fontWeight = '800';
-      btn.style.boxShadow = '0 10px 24px rgba(0,0,0,.18)';
-      btn.style.cursor = 'pointer';
-      btn.style.alignItems = 'center';
-      btn.style.justifyContent = 'center';
-      btn.style.pointerEvents = 'auto';
-    });
-  }
-
   function bindScrollJumpButtons() {
-    ensureScrollJumpButtons();
     on(el['btn-scroll-top'], 'click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     on(el['btn-scroll-bottom'], 'click', () => {
-      const target = Math.max(
-        document.documentElement.scrollHeight || 0,
-        document.body.scrollHeight || 0,
-        document.documentElement.offsetHeight || 0,
-        document.body.offsetHeight || 0
-      );
+      const target = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
       window.scrollTo({ top: target, behavior: 'smooth' });
     });
   }
 
   function updateScrollJumpButtons() {
-    ensureScrollJumpButtons();
     const topBtn = el['btn-scroll-top'];
     const bottomBtn = el['btn-scroll-bottom'];
     if (!topBtn || !bottomBtn) return;
@@ -238,12 +182,30 @@
     const currentPage = state.currentPage || activePageId;
     const shouldShow = allowedPages.includes(currentPage) || allowedPages.includes(activePageId);
     const hideForModal = isBlockingModalOpen();
-    const visible = shouldShow && !hideForModal;
+    const scrollingEl = document.scrollingElement || document.documentElement || document.body;
+    const scrollTop = Number(scrollingEl.scrollTop || window.pageYOffset || 0);
+    const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
+    const scrollHeight = Number(Math.max(
+      scrollingEl.scrollHeight || 0,
+      document.documentElement.scrollHeight || 0,
+      document.body.scrollHeight || 0
+    ));
+    const canScroll = scrollHeight > viewportHeight + 10;
+    const nearTop = scrollTop <= 20;
+    const nearBottom = scrollTop + viewportHeight >= scrollHeight - 20;
 
-    topBtn.classList.toggle('hidden', !visible);
-    bottomBtn.classList.toggle('hidden', !visible);
-    topBtn.style.display = visible ? 'flex' : 'none';
-    bottomBtn.style.display = visible ? 'flex' : 'none';
+    if (!shouldShow || hideForModal || !canScroll) {
+      topBtn.classList.add('hidden');
+      bottomBtn.classList.add('hidden');
+      topBtn.style.display = 'none';
+      bottomBtn.style.display = 'none';
+      return;
+    }
+
+    topBtn.classList.toggle('hidden', nearTop);
+    bottomBtn.classList.toggle('hidden', nearBottom);
+    topBtn.style.display = nearTop ? 'none' : 'flex';
+    bottomBtn.style.display = nearBottom ? 'none' : 'flex';
   }
 
   function bindCalendarButtons() {
@@ -576,7 +538,8 @@
       loadPlans(),
       loadMaterials(),
       loadOptions(),
-      loadSeasons()
+      loadSeasons(),
+      loadFavoriteWorks()
     ]);
   }
 
@@ -638,6 +601,17 @@
     } catch (e) {
       console.error(e);
       state.seasons = [];
+    }
+  }
+
+  async function loadFavoriteWorks() {
+    try {
+      const rows = await apiGet('/api/favorite-work-templates');
+      state.favoriteWorks = Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      console.error(e);
+      state.favoriteWorks = [];
+      showFavoriteWorkStatus('즐겨찾기 목록을 불러오지 못했습니다.');
     }
   }
 
@@ -1180,31 +1154,9 @@
   }
 
 
-  function getFavoriteWorkStorageKey() {
-    return 'worklog_favorite_works_v1';
-  }
 
   function getFavoriteWorks() {
-    try {
-      const raw = localStorage.getItem(getFavoriteWorkStorageKey()) || '[]';
-      const rows = JSON.parse(raw);
-      return Array.isArray(rows) ? rows : [];
-    } catch (e) {
-      console.error(e);
-      return [];
-    }
-  }
-
-
-  function setFavoriteWorks(rows) {
-    try {
-      localStorage.setItem(getFavoriteWorkStorageKey(), JSON.stringify(rows || []));
-      return true;
-    } catch (e) {
-      console.error(e);
-      showFavoriteWorkStatus('즐겨찾기 저장에 실패했습니다. 브라우저 저장공간을 확인하세요.');
-      return false;
-    }
+    return Array.isArray(state.favoriteWorks) ? state.favoriteWorks : [];
   }
 
   function showFavoriteWorkStatus(message) {
@@ -1315,7 +1267,7 @@
     updateMoneySummary();
   }
 
-  function saveCurrentWorkAsFavorite() {
+  async function saveCurrentWorkAsFavorite() {
     const baseName = (el.task_name?.value || el.task_category?.value || '').trim();
     const name = prompt('즐겨찾기 이름', baseName || '새 즐겨찾기');
     if (name == null) return;
@@ -1326,21 +1278,19 @@
       return;
     }
 
-    const rows = getFavoriteWorks();
-    const newItem = {
-      id: `${Date.now()}`,
-      name: trimmed,
-      template: buildWorkTemplateFromForm()
-    };
-    rows.push(newItem);
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
-      alert('즐겨찾기 저장 실패');
-      return;
+    try {
+      const created = await apiPost('/api/favorite-work-templates', {
+        name: trimmed,
+        template: buildWorkTemplateFromForm()
+      });
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect(created?.id || '');
+      showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
+      alert('즐겨찾기로 저장했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 저장 실패: ${e.message || e}`);
     }
-    renderFavoriteWorkSelect(newItem.id);
-    showFavoriteWorkStatus(`저장 완료: ${trimmed}`);
-    alert('즐겨찾기로 저장했습니다.');
   }
 
   function loadFavoriteWorkIntoForm() {
@@ -1363,7 +1313,7 @@
     showFavoriteWorkStatus(`불러옴: ${item.name || ''}`);
   }
 
-  function deleteFavoriteWork() {
+  async function deleteFavoriteWork() {
     const selectedId = el['favorite-work-select']?.value || '';
     if (!selectedId) {
       alert('삭제할 즐겨찾기를 선택하세요.');
@@ -1371,14 +1321,15 @@
     }
     if (!confirm('선택한 즐겨찾기를 삭제하시겠습니까?')) return;
 
-    const rows = getFavoriteWorks().filter(row => String(row.id) !== String(selectedId));
-    const ok = setFavoriteWorks(rows);
-    if (!ok) {
-      alert('즐겨찾기 삭제 실패');
-      return;
+    try {
+      await apiDelete(`/api/favorite-work-templates/${selectedId}`);
+      await loadFavoriteWorks();
+      renderFavoriteWorkSelect('');
+      showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
+    } catch (e) {
+      console.error(e);
+      alert(`즐겨찾기 삭제 실패: ${e.message || e}`);
     }
-    renderFavoriteWorkSelect('');
-    showFavoriteWorkStatus('즐겨찾기를 삭제했습니다.');
   }
 
   function closeWorkModal() {
